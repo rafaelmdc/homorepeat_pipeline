@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Workflow/debug artifacts
+.nextflow/
+tmp/
+runtime/cache/
+download_attempts.txt
