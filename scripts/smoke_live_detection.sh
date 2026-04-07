@@ -71,10 +71,10 @@ mkdir -p "$RUN_ROOT/internal/logs"
 printf '%s\n' "$RUN_STARTED_AT_UTC" > "$RUN_ROOT/run_started_at_utc.txt"
 printf '%s\n' "$SOURCE_ACQUISITION_DIR" > "$RUN_ROOT/source_acquisition_dir.txt"
 
-THRESHOLD_DIR="$RUN_ROOT/publish/calls/by_method/threshold/$SMOKE_REPEAT_RESIDUE"
-THRESHOLD_CODON_DIR="$RUN_ROOT/publish/calls_with_codons/threshold/$SMOKE_REPEAT_RESIDUE"
+THRESHOLD_DIR="$RUN_ROOT/publish/detection/raw/threshold/$SMOKE_REPEAT_RESIDUE"
+THRESHOLD_FINAL_DIR="$RUN_ROOT/publish/detection/finalized/threshold/$SMOKE_REPEAT_RESIDUE"
 
-mkdir -p "$THRESHOLD_DIR" "$THRESHOLD_CODON_DIR"
+mkdir -p "$THRESHOLD_DIR" "$THRESHOLD_FINAL_DIR"
 
 echo "smoke: running threshold detection"
 run_py -m homorepeat.cli.detect_threshold \
@@ -113,15 +113,16 @@ run_py -m homorepeat.cli.extract_repeat_codons \
   --calls-tsv "$THRESHOLD_DIR/threshold_calls.tsv" \
   --sequences-tsv "$SOURCE_ACQUISITION_DIR/sequences.tsv" \
   --cds-fasta "$SOURCE_ACQUISITION_DIR/cds.fna" \
-  --outdir "$THRESHOLD_CODON_DIR"
+  --outdir "$THRESHOLD_FINAL_DIR"
 
-assert_tsv_has_data_rows "$THRESHOLD_CODON_DIR/threshold_calls.tsv"
-assert_nonempty_file "$THRESHOLD_CODON_DIR/threshold_calls_codon_warnings.tsv"
+assert_tsv_has_data_rows "$THRESHOLD_FINAL_DIR/threshold_calls.tsv"
+assert_nonempty_file "$THRESHOLD_FINAL_DIR/threshold_calls_codon_warnings.tsv"
+assert_tsv_has_data_rows "$THRESHOLD_FINAL_DIR/threshold_calls_codon_usage.tsv"
 
-run_py - <<'PY' "$THRESHOLD_CODON_DIR/threshold_calls.tsv"
+run_py - <<'PY' "$THRESHOLD_FINAL_DIR/threshold_calls.tsv" "$THRESHOLD_FINAL_DIR/threshold_calls_codon_usage.tsv"
 import csv, sys
-path = sys.argv[1]
-with open(path, encoding="utf-8", newline="") as handle:
+calls_path, codon_usage_path = sys.argv[1], sys.argv[2]
+with open(calls_path, encoding="utf-8", newline="") as handle:
     rows = list(csv.DictReader(handle, delimiter="\t"))
 if not rows:
     raise SystemExit("threshold codon smoke output is empty")
@@ -136,6 +137,10 @@ for row in rows:
             raise SystemExit("threshold codon smoke found a length mismatch")
 if success_count < 1:
     raise SystemExit("threshold codon smoke did not produce any successful codon rows")
+with open(codon_usage_path, encoding="utf-8", newline="") as handle:
+    usage_rows = list(csv.DictReader(handle, delimiter="\t"))
+if not usage_rows:
+    raise SystemExit("threshold codon smoke did not produce codon usage rows")
 PY
 
 echo "smoke: completed successfully"

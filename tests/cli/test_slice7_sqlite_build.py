@@ -123,7 +123,64 @@ class SliceSevenSqliteBuildTest(unittest.TestCase):
             self.assertEqual(result.returncode, 3)
             self.assertIn("SQLite import failed integrity checks", result.stderr)
 
-    def _write_minimal_inputs(self, inputs_dir: Path, *, orphan_call_protein: bool = False) -> dict[str, Path]:
+    def test_build_sqlite_cli_accepts_seed_extend_repeat_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            inputs_dir = tmp / "inputs"
+            outdir = tmp / "sqlite"
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+
+            paths = self._write_minimal_inputs(inputs_dir, method="seed_extend")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.build_sqlite",
+                    "--taxonomy-tsv",
+                    str(paths["taxonomy"]),
+                    "--genomes-tsv",
+                    str(paths["genomes"]),
+                    "--sequences-tsv",
+                    str(paths["sequences"]),
+                    "--proteins-tsv",
+                    str(paths["proteins"]),
+                    "--call-tsv",
+                    str(paths["calls"]),
+                    "--run-params-tsv",
+                    str(paths["run_params"]),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"build_sqlite.py failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            sqlite_path = outdir / "homorepeat.sqlite"
+            connection = sqlite3.connect(sqlite_path)
+            try:
+                repeat_call = connection.execute(
+                    "SELECT method, repeat_residue, start, end, aa_sequence FROM repeat_calls"
+                ).fetchone()
+                self.assertEqual(repeat_call, ("seed_extend", "A", 2, 7, "AAAAAA"))
+            finally:
+                connection.close()
+
+    def _write_minimal_inputs(
+        self,
+        inputs_dir: Path,
+        *,
+        orphan_call_protein: bool = False,
+        method: str = "pure",
+    ) -> dict[str, Path]:
         taxonomy_path = inputs_dir / "taxonomy.tsv"
         genomes_path = inputs_dir / "genomes.tsv"
         sequences_path = inputs_dir / "sequences.tsv"
@@ -264,7 +321,7 @@ class SliceSevenSqliteBuildTest(unittest.TestCase):
             ],
         )
         call_row = build_call_row(
-            method="pure",
+            method=method,
             genome_id="genome_001",
             taxon_id="9606",
             sequence_id="seq_001",
@@ -279,7 +336,7 @@ class SliceSevenSqliteBuildTest(unittest.TestCase):
         write_tsv(calls_path, [call_row], fieldnames=CALL_FIELDNAMES)
         write_tsv(
             run_params_path,
-            [{"method": "pure", "param_name": "min_repeat_count", "param_value": 6}],
+            [{"method": method, "param_name": "min_repeat_count", "param_value": 6}],
             fieldnames=RUN_PARAM_FIELDNAMES,
         )
 

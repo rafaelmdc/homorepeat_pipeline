@@ -52,6 +52,18 @@ def parse_args() -> argparse.Namespace:
         default="datasets",
         help="Path to the NCBI datasets executable",
     )
+    parser.add_argument(
+        "--datasets-max-attempts",
+        type=int,
+        default=3,
+        help="Maximum retry attempts for transient datasets failures",
+    )
+    parser.add_argument(
+        "--datasets-retry-delay-seconds",
+        type=float,
+        default=5.0,
+        help="Delay between transient datasets retry attempts",
+    )
     return parser.parse_args()
 
 
@@ -84,6 +96,8 @@ def main() -> int:
         api_key=args.api_key,
         datasets_bin=args.datasets_bin,
         dehydrated=args.dehydrated,
+        max_attempts=args.datasets_max_attempts,
+        retry_delay_seconds=args.datasets_retry_delay_seconds,
     )
     unzip_package(archive_path, package_extract_dir)
     if args.rehydrate:
@@ -92,6 +106,8 @@ def main() -> int:
             api_key=args.api_key,
             datasets_bin=args.datasets_bin,
             max_workers=args.rehydrate_workers,
+            max_attempts=args.datasets_max_attempts,
+            retry_delay_seconds=args.datasets_retry_delay_seconds,
         )
 
     package_root = find_package_root(package_extract_dir)

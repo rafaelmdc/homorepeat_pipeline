@@ -58,7 +58,7 @@ PROTEINS_FIELDNAMES = [
     "gene_group",
     "protein_external_id",
 ]
-VALID_METHODS = {"pure", "threshold"}
+VALID_METHODS = {"pure", "threshold", "seed_extend"}
 
 
 def load_import_rows(path: Path | str, *, required_columns: Sequence[str]) -> list[dict[str, str]]:

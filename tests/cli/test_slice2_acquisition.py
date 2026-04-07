@@ -243,6 +243,154 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(merged_validation["scope"], "merged")
             self.assertEqual(merged_validation["status"], "warn")
 
+    def test_download_ncbi_packages_retries_transient_datasets_gateway_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            planning_dir = tmp / "planning"
+            outdir = tmp / "batches" / "batch_0001" / "raw"
+            fake_bin_dir = tmp / "fake_bin"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            selected_batches_path = planning_dir / "selected_batches.tsv"
+            write_tsv(
+                selected_batches_path,
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "request_id": "req_001",
+                        "assembly_accession": "GCF_000001405.40",
+                        "taxon_id": "9606",
+                        "batch_reason": "single_small_taxon_batch",
+                        "resolved_name": "Homo sapiens",
+                        "refseq_category": "reference genome",
+                        "assembly_level": "Chromosome",
+                        "annotation_status": "annotated:Updated annotation",
+                    },
+                    {
+                        "batch_id": "batch_0001",
+                        "request_id": "req_001",
+                        "assembly_accession": "GCF_222222222.1",
+                        "taxon_id": "9606",
+                        "batch_reason": "single_small_taxon_batch",
+                        "resolved_name": "Homo sapiens",
+                        "refseq_category": "representative genome",
+                        "assembly_level": "Scaffold",
+                        "annotation_status": "annotated:Full annotation",
+                    }
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "request_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "batch_reason",
+                    "resolved_name",
+                    "refseq_category",
+                    "assembly_level",
+                    "annotation_status",
+                ],
+            )
+
+            self._write_fake_datasets(fake_bin_dir / "datasets")
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+            env["HOMOREPEAT_FIXTURES_ROOT"] = str(FIXTURES_ROOT)
+            env["HOMOREPEAT_FAKE_DATASETS_FAIL_DOWNLOADS"] = "1"
+            env["HOMOREPEAT_FAKE_DATASETS_STATE_DIR"] = str(tmp / "fake_state")
+
+            self._run_cli(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.download_ncbi_packages",
+                    "--batch-manifest",
+                    str(selected_batches_path),
+                    "--batch-id",
+                    "batch_0001",
+                    "--outdir",
+                    str(outdir),
+                    "--datasets-max-attempts",
+                    "3",
+                    "--datasets-retry-delay-seconds",
+                    "0",
+                ],
+                env=env,
+            )
+
+            manifest_rows = read_tsv(outdir / "download_manifest.tsv")
+            self.assertEqual(len(manifest_rows), 2)
+            self.assertEqual({row["download_status"] for row in manifest_rows}, {"downloaded"})
+            self.assertTrue((outdir / "ncbi_package").exists())
+
+    def test_download_ncbi_packages_cleans_stale_zip_before_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            planning_dir = tmp / "planning"
+            outdir = tmp / "batches" / "batch_0001" / "raw"
+            fake_bin_dir = tmp / "fake_bin"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            selected_batches_path = planning_dir / "selected_batches.tsv"
+            write_tsv(
+                selected_batches_path,
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "request_id": "req_001",
+                        "assembly_accession": "GCF_000001405.40",
+                        "taxon_id": "9606",
+                        "batch_reason": "single_small_taxon_batch",
+                        "resolved_name": "Homo sapiens",
+                        "refseq_category": "reference genome",
+                        "assembly_level": "Chromosome",
+                        "annotation_status": "annotated:Updated annotation",
+                    }
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "request_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "batch_reason",
+                    "resolved_name",
+                    "refseq_category",
+                    "assembly_level",
+                    "annotation_status",
+                ],
+            )
+
+            self._write_fake_datasets(fake_bin_dir / "datasets")
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+            env["HOMOREPEAT_FIXTURES_ROOT"] = str(FIXTURES_ROOT)
+            env["HOMOREPEAT_FAKE_DATASETS_FAIL_INVALID_ZIP_DOWNLOADS"] = "1"
+            env["HOMOREPEAT_FAKE_DATASETS_REQUIRE_CLEAN_FILENAME_AFTER_FAILURE"] = "1"
+            env["HOMOREPEAT_FAKE_DATASETS_STATE_DIR"] = str(tmp / "fake_state")
+
+            self._run_cli(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.download_ncbi_packages",
+                    "--batch-manifest",
+                    str(selected_batches_path),
+                    "--batch-id",
+                    "batch_0001",
+                    "--outdir",
+                    str(outdir),
+                    "--datasets-max-attempts",
+                    "3",
+                    "--datasets-retry-delay-seconds",
+                    "0",
+                ],
+                env=env,
+            )
+
+            manifest_rows = read_tsv(outdir / "download_manifest.tsv")
+            self.assertEqual(len(manifest_rows), 1)
+            self.assertEqual({row["download_status"] for row in manifest_rows}, {"downloaded"})
+            self.assertTrue((outdir / "ncbi_package").exists())
+
     def test_normalize_deduplicates_identical_cds_records_and_keeps_distinct_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -472,12 +620,43 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
 
             args = sys.argv[1:]
             fixtures_root = pathlib.Path(os.environ["HOMOREPEAT_FIXTURES_ROOT"])
+            state_dir = pathlib.Path(os.environ.get("HOMOREPEAT_FAKE_DATASETS_STATE_DIR", "."))
+            state_dir.mkdir(parents=True, exist_ok=True)
 
             if args[:3] == ["download", "genome", "accession"]:
                 inputfile = pathlib.Path(args[args.index("--inputfile") + 1])
                 filename = pathlib.Path(args[args.index("--filename") + 1])
+                fail_downloads = int(os.environ.get("HOMOREPEAT_FAKE_DATASETS_FAIL_DOWNLOADS", "0"))
+                fail_invalid_zip_downloads = int(
+                    os.environ.get("HOMOREPEAT_FAKE_DATASETS_FAIL_INVALID_ZIP_DOWNLOADS", "0")
+                )
+                require_clean_filename = os.environ.get(
+                    "HOMOREPEAT_FAKE_DATASETS_REQUIRE_CLEAN_FILENAME_AFTER_FAILURE", ""
+                ) == "1"
+                counter_path = state_dir / "download_attempts.txt"
+                attempt_count = int(counter_path.read_text(encoding="utf-8")) if counter_path.exists() else 0
+                attempt_count += 1
+                counter_path.write_text(str(attempt_count), encoding="utf-8")
+                if attempt_count <= fail_downloads:
+                    print(
+                        'Error: [gateway] Post "https://api.ncbi.nlm.nih.gov/datasets/v2/genome/dataset_report": '
+                        "POST https://api.ncbi.nlm.nih.gov/datasets/v2/genome/dataset_report giving up after 11 attempt(s)",
+                        file=sys.stderr,
+                    )
+                    raise SystemExit(1)
+                if attempt_count <= fail_invalid_zip_downloads:
+                    filename.parent.mkdir(parents=True, exist_ok=True)
+                    filename.write_bytes(b"broken zip payload")
+                    print("Error: Internal error (invalid zip archive). Please try again", file=sys.stderr)
+                    raise SystemExit(1)
+                if require_clean_filename and filename.exists():
+                    print("stale output zip remains before retry", file=sys.stderr)
+                    raise SystemExit(1)
                 accessions = {line.strip() for line in inputfile.read_text(encoding="utf-8").splitlines() if line.strip()}
                 if accessions == {"GCF_000001405.40", "GCF_222222222.1"}:
+                    zip_tree(fixtures_root / "batch_a", filename)
+                    raise SystemExit(0)
+                if accessions == {"GCF_000001405.40"}:
                     zip_tree(fixtures_root / "batch_a", filename)
                     raise SystemExit(0)
                 if accessions == {"GCF_000001635.27"}:

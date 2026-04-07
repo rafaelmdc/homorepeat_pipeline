@@ -1,7 +1,7 @@
 process FINALIZE_CALL_CODONS {
     label 'detection'
     tag "${method}:${repeat_residue}"
-    publishDir({ "${params.output_dir}/calls/by_method/${method}/${repeat_residue}" }, mode: 'copy', saveAs: { filename ->
+    publishDir({ "${params.output_dir}/detection/finalized/${method}/${repeat_residue}" }, mode: 'copy', saveAs: { filename ->
         def prefix = "finalized_${method}_${repeat_residue}/"
         filename.startsWith(prefix) ? filename.substring(prefix.length()) : filename
     })

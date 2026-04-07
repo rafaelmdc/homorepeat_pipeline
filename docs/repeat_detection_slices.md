@@ -40,11 +40,11 @@ Expose the current `pure` and `threshold` tuning knobs through pipeline config, 
 - `tests/unit/test_slice4_threshold_detection.py`
 - `tests/cli/test_runtime_artifacts.py`
 
-## Slice 2: Add Seed-Extend PolyQ Detection Core
+## Slice 2: Add Seed-Extend Detection Core
 
 ### Goal
 
-Introduce a separate `seed_extend_polyq` library implementation with deterministic boundaries and method-specific tests.
+Introduce a separate `seed_extend` library implementation with deterministic boundaries and method-specific tests.
 
 ### Scope
 
@@ -53,7 +53,7 @@ Introduce a separate `seed_extend_polyq` library implementation with determinist
 
 ### Changes
 
-- add tract dataclass for `seed_extend_polyq`
+- add tract dataclass for `seed_extend`
 - implement seed discovery
 - implement left and right extension
 - merge overlapping or adjacent seed-extended candidates
@@ -61,7 +61,7 @@ Introduce a separate `seed_extend_polyq` library implementation with determinist
 
 ### Acceptance criteria
 
-- the method reports long interrupted polyQ tracts that `pure` misses
+- the method reports long interrupted tracts that `pure` misses
 - the method remains stricter than naive threshold-only merging
 - output coordinates are 1-based, inclusive, and deterministic
 
@@ -74,7 +74,7 @@ Introduce a separate `seed_extend_polyq` library implementation with determinist
   - rejection of weak Q-rich noise
   - trim behavior when seeds include flanking non-Q residues
 
-## Slice 3: Wire Seed-Extend PolyQ Into CLI and Workflow
+## Slice 3: Wire Seed-Extend Into CLI and Workflow
 
 ### Goal
 
@@ -90,13 +90,13 @@ Make the new method runnable end-to-end like the existing detection methods.
 
 ### Changes
 
-- add `homorepeat.cli.detect_seed_extend_polyq`
-- add `params.run_seed_extend_polyq`
+- add `homorepeat.cli.detect_seed_extend`
+- add `params.run_seed_extend`
 - add method-specific params:
   - `seed_extend_seed_window_size`
-  - `seed_extend_seed_min_q_count`
+  - `seed_extend_seed_min_target_count`
   - `seed_extend_extend_window_size`
-  - `seed_extend_extend_min_q_count`
+  - `seed_extend_extend_min_target_count`
   - `seed_extend_min_total_length`
 - emit finalized call tables and run params for the new method
 

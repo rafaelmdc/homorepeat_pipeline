@@ -33,6 +33,7 @@ When you do not need a full pipeline run:
 - `scripts/smoke_live_detection.sh`
 
 These are opt-in live checks. They are narrower than the full Nextflow smoke path.
+They currently stage direct CLI detection outputs under `publish/detection/raw/` and finalized codon-linked outputs under `publish/detection/finalized/`.
 
 ## Runtime expectations
 
@@ -44,10 +45,15 @@ These are opt-in live checks. They are narrower than the full Nextflow smoke pat
 
 Stable downstream outputs live under:
 - `runs/<run_id>/publish/acquisition/`
+- `runs/<run_id>/publish/detection/finalized/`
 - `runs/<run_id>/publish/calls/`
 - `runs/<run_id>/publish/database/sqlite/`
 - `runs/<run_id>/publish/reports/`
 - `runs/<run_id>/publish/manifest/run_manifest.json`
+
+Operational note:
+- `publish/detection/finalized/` contains method-specific finalized artifacts such as per-method call tables, run params, codon warnings, and codon-usage tables
+- `publish/calls/` contains the canonical merged `repeat_calls.tsv` and `run_params.tsv` used downstream
 
 Execution state lives under:
 - `runs/<run_id>/internal/`

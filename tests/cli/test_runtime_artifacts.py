@@ -166,6 +166,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             publish_root = run_root / "publish"
             (publish_root / "acquisition").mkdir(parents=True, exist_ok=True)
             (publish_root / "calls").mkdir(parents=True, exist_ok=True)
+            (publish_root / "detection" / "finalized" / "pure" / "Q").mkdir(parents=True, exist_ok=True)
             (publish_root / "database" / "sqlite").mkdir(parents=True, exist_ok=True)
             (publish_root / "reports").mkdir(parents=True, exist_ok=True)
             (run_root / "internal" / "nextflow").mkdir(parents=True, exist_ok=True)
@@ -248,6 +249,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             self.assertEqual(payload["artifacts"]["acquisition"]["genomes_tsv"], "publish/acquisition/genomes.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["repeat_calls_tsv"], "publish/calls/repeat_calls.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
+            self.assertEqual(payload["artifacts"]["detection"]["finalized_root"], "publish/detection/finalized")
             self.assertEqual(payload["artifacts"]["database"]["sqlite"], "publish/database/sqlite/homorepeat.sqlite")
             self.assertEqual(payload["artifacts"]["internal"]["trace_txt"], "internal/nextflow/trace.txt")
 

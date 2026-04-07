@@ -25,6 +25,9 @@ PUBLISHED_ARTIFACTS = {
         "repeat_calls_tsv": "calls/repeat_calls.tsv",
         "run_params_tsv": "calls/run_params.tsv",
     },
+    "detection": {
+        "finalized_root": "detection/finalized",
+    },
     "database": {
         "sqlite": "database/sqlite/homorepeat.sqlite",
         "sqlite_validation_json": "database/sqlite/sqlite_validation.json",

@@ -4,7 +4,7 @@
 
 This roadmap scopes the next detection and output changes:
 
-- add a new long-polyQ seed-extend method
+- add a new residue-aware seed-extend method
 - expose runtime parameters for the existing `pure` and `threshold` methods
 - clean up published pipeline outputs and workflow emits
 - add per-finding codon-usage statistics
@@ -14,7 +14,7 @@ The current gap is not one isolated bug. The codebase is still shaped around the
 - detection orchestration only wires `pure` and `threshold`
 - Nextflow params do not yet expose the main tuning knobs for each method
 - finalized call rows reserve codon metric fields but the implementation leaves them empty
-- method-level finalized outputs currently publish under `publish/calls/by_method/...`, while canonical merged outputs also live under `publish/calls/`
+- method-level finalized outputs now publish under `publish/detection/finalized/...`, while canonical merged outputs remain under `publish/calls/`
 
 ## Target outcome
 
@@ -22,7 +22,7 @@ After this work, one run should produce:
 
 - parameterized `pure` detection
 - parameterized `threshold` detection
-- a new `seed_extend_polyq` detection path for long glutamine tracts
+- a new `seed_extend` detection path for long interrupted tracts
 - a cleaner separation between method-specific detection outputs and canonical merged outputs
 - codon-usage outputs that report, for each finding, the fraction of each codon observed in the tract
 
@@ -59,37 +59,37 @@ Recorded threshold string:
 - `<residue><min_target_count>/<window_size>`
 - example: `Q6/8`
 
-### 3. New seed-extend long-polyQ method
+### 3. New seed-extend method
 
 This method should be introduced as a separate method rather than folding extra behavior into `threshold`.
 
 Recommended first implementation:
 
-- method name: `seed_extend_polyq`
-- scope: glutamine-only in the first implementation
+- method name: `seed_extend`
+- scope: residue-aware from the start
 - seed rule: find windows with strong Q density
 - extension rule: once a qualifying seed is found, extend left and right while the local tract remains above a looser density rule and still starts/ends on `Q`
 
 Recommended parameters:
 
 - `seed_extend_seed_window_size`
-- `seed_extend_seed_min_q_count`
+- `seed_extend_seed_min_target_count`
 - `seed_extend_extend_window_size`
-- `seed_extend_extend_min_q_count`
+- `seed_extend_extend_min_target_count`
 - `seed_extend_min_total_length`
 
 Recommended defaults:
 
 - `seed_extend_seed_window_size = 8`
-- `seed_extend_seed_min_q_count = 6`
+- `seed_extend_seed_min_target_count = 6`
 - `seed_extend_extend_window_size = 12`
-- `seed_extend_extend_min_q_count = 8`
+- `seed_extend_extend_min_target_count = 8`
 - `seed_extend_min_total_length = 10`
 
 Rationale:
 
 - the seed should be strict enough to avoid weak background Q density
-- the extension rule should be looser than the seed so interrupted but clearly polyQ-like tracts can grow
+- the extension rule should be looser than the seed so interrupted but clearly repeat-rich tracts can grow
 - `seed_extend` should remain distinct from `threshold`: seed finds candidate cores, extension turns those cores into long reported tracts
 
 Open design decision to confirm during implementation:
@@ -190,7 +190,7 @@ Files that will need contract updates:
 
 Main contract additions:
 
-- `method` allowed values must include `seed_extend_polyq`
+- `method` allowed values must include `seed_extend`
 - documented pipeline params for all detection methods
 - documented finalized detection output layout
 - new `codon_usage.tsv` contract

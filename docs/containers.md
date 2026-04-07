@@ -183,7 +183,7 @@ docker run --rm \
   --proteins-tsv runs/run_001/publish/acquisition/proteins.tsv \
   --proteins-fasta runs/run_001/publish/acquisition/proteins.faa \
   --repeat-residue Q \
-  --outdir runs/run_001/publish/calls/by_method/threshold/Q
+  --outdir runs/run_001/publish/detection/raw/threshold/Q
 ```
 
 ---

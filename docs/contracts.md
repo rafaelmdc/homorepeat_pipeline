@@ -32,7 +32,7 @@ Column names are part of the contract and should not change casually.
 Missing values must be encoded consistently as empty fields unless a documented sentinel is required.
 
 ### 6. Method outputs must be schema-compatible
-Pure and threshold outputs must share the same call schema.
+Pure, threshold, and seed-extend outputs must share the same call schema.
 
 ---
 
@@ -175,6 +175,7 @@ Optional columns:
 
 ### Outputs
 - `pure_calls.tsv`
+- `seed_extend_calls.tsv`
 - `threshold_calls.tsv`
 - `repeat_calls.tsv`
 
@@ -207,7 +208,7 @@ Optional but strongly recommended columns:
 - `source_file`
 
 ### Rules
-- `method` must be one of: `pure`, `threshold`
+- `method` must be one of: `pure`, `threshold`, `seed_extend`
 - `repeat_calls.tsv` is the canonical merged export for downstream database and app ingestion
 - `start` and `end` use the same coordinate system across all methods
 - `repeat_residue` is the targeted amino-acid residue for the call
@@ -216,6 +217,51 @@ Optional but strongly recommended columns:
 - `aa_sequence` must reflect the called tract sequence exactly
 - for `pure`, `aa_sequence` is expected to be a contiguous run of `repeat_residue`
 - for `threshold`, `window_definition` should record the qualifying sliding-window rule, such as `Q6/8`
+- for `seed_extend`, `window_definition` should record both seed and extend rules, such as `seed:Q6/8|extend:Q8/12`
+
+---
+
+## Finalized detection output contract
+
+Method-specific finalized outputs publish under:
+
+- `publish/detection/finalized/<method>/<repeat_residue>/`
+
+Expected finalized artifacts:
+- `final_<method>_<repeat_residue>_calls.tsv`
+- `final_<method>_<repeat_residue>_run_params.tsv`
+- `final_<method>_<repeat_residue>_codon_warnings.tsv`
+- `final_<method>_<repeat_residue>_codon_usage.tsv`
+
+Rules:
+- `publish/calls/` remains the canonical merged interface for downstream database and reporting stages
+- finalized method outputs are method-specific and may exist for multiple residues in the same run
+- finalized call tables must still satisfy the shared detection call contract
+
+---
+
+## Codon usage contract
+
+### Output: `codon_usage.tsv`
+
+One row per finalized call, amino acid, and codon.
+
+Required columns:
+- `call_id`
+- `method`
+- `repeat_residue`
+- `sequence_id`
+- `protein_id`
+- `amino_acid`
+- `codon`
+- `codon_count`
+- `codon_fraction`
+
+Rules:
+- `codon_fraction` is computed within each `call_id` plus `amino_acid` group
+- `codon_fraction` values within one `call_id` plus `amino_acid` group must sum to `1`
+- codon usage is derived only from validated `codon_sequence` values
+- `codon_metric_name` and `codon_metric_value` remain reserved compatibility fields on the main call row and may remain empty
 
 ---
 
@@ -258,6 +304,7 @@ Required top-level keys:
 Rules:
 - `params.detection` is derived from the canonical published `calls/run_params.tsv` when present
 - `enabled_methods` is the sorted list of methods present in `params.detection`
+- `artifacts.detection.finalized_root`, when present, points to `publish/detection/finalized`
 - `repeat_residues` is the sorted set of `repeat_residue` values present in the published run params
 - artifact paths are stored relative to the run root so the manifest remains portable inside `runs/<run_id>/`
 - `params.params_file_values` may be empty when no params file was provided or when the supplied file is not JSON
@@ -415,7 +462,7 @@ The initial v1 database schema owns the following tables:
 - `run_params`
 
 Rules:
-- `repeat_calls` is the unified import target for `pure_calls.tsv` and `threshold_calls.tsv`
+- `repeat_calls` is the unified import target for `pure_calls.tsv`, `threshold_calls.tsv`, and `seed_extend_calls.tsv`
 - flat files remain the canonical exchange artifacts even after import
 - table and index definitions live under `src/homorepeat/resources/sql/sqlite/`
 
@@ -472,6 +519,7 @@ Preferred names:
 - `sequences.tsv`
 - `proteins.tsv`
 - `pure_calls.tsv`
+- `seed_extend_calls.tsv`
 - `threshold_calls.tsv`
 - `run_params.tsv`
 - `summary_by_taxon.tsv`

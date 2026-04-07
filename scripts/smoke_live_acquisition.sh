@@ -78,8 +78,8 @@ PLANNING_DIR="$RUN_ROOT/internal/planning"
 BATCH_RAW_DIR="$RUN_ROOT/internal/batches/batch_0001/raw"
 BATCH_NORMALIZED_DIR="$RUN_ROOT/internal/batches/batch_0001/normalized"
 MERGED_DIR="$RUN_ROOT/publish/acquisition"
-DETECTION_DIR="$RUN_ROOT/publish/calls/by_method/pure/$SMOKE_REPEAT_RESIDUE"
-CODON_DIR="$RUN_ROOT/publish/calls_with_codons/pure/$SMOKE_REPEAT_RESIDUE"
+DETECTION_DIR="$RUN_ROOT/publish/detection/raw/pure/$SMOKE_REPEAT_RESIDUE"
+CODON_DIR="$RUN_ROOT/publish/detection/finalized/pure/$SMOKE_REPEAT_RESIDUE"
 SQLITE_DIR="$RUN_ROOT/publish/database/sqlite"
 REPORTS_DIR="$RUN_ROOT/publish/reports"
 
@@ -231,11 +231,12 @@ run_py -m homorepeat.cli.extract_repeat_codons \
 
 assert_tsv_has_data_rows "$CODON_DIR/pure_calls.tsv"
 assert_nonempty_file "$CODON_DIR/pure_calls_codon_warnings.tsv"
+assert_tsv_has_data_rows "$CODON_DIR/pure_calls_codon_usage.tsv"
 
-run_py - <<'PY' "$CODON_DIR/pure_calls.tsv"
+run_py - <<'PY' "$CODON_DIR/pure_calls.tsv" "$CODON_DIR/pure_calls_codon_usage.tsv"
 import csv, sys
-path = sys.argv[1]
-with open(path, encoding="utf-8", newline="") as handle:
+calls_path, codon_usage_path = sys.argv[1], sys.argv[2]
+with open(calls_path, encoding="utf-8", newline="") as handle:
     rows = list(csv.DictReader(handle, delimiter="\t"))
 if not rows:
     raise SystemExit("expected codon-enriched pure calls to be non-empty")
@@ -253,6 +254,10 @@ for row in rows:
             raise SystemExit("codon extraction length mismatch in smoke output")
 if success_count < 1:
     raise SystemExit("expected at least one successful codon extraction in smoke output")
+with open(codon_usage_path, encoding="utf-8", newline="") as handle:
+    usage_rows = list(csv.DictReader(handle, delimiter="\t"))
+if not usage_rows:
+    raise SystemExit("expected codon usage output to be non-empty")
 PY
 
 echo "smoke: building sqlite artifact"

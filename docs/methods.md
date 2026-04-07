@@ -220,12 +220,28 @@ Default rule:
 
 The default window definition is expected to be recorded in residue-aware form such as `<residue>6/8`.
 
+### Seed-extend method
+
+Intent:
+- capture long interrupted tracts that contain a strong repeat-rich core and can be extended by a looser density rule
+
+Default rule:
+- strict seed window size `8`
+- default target-residue count `6` inside the seed window
+- looser extend window size `12`
+- default target-residue count `8` inside the extend window
+- merge connected seed and extend windows into one reported tract
+- trim the final tract back to leading and trailing target residues
+- require final tract length `>= 10`
+
+The default window definition is recorded in residue-aware form such as `seed:Q6/8|extend:Q8/12`.
+
 ### Similarity method status
 
-Similarity-based detection is not part of the current v1 implementation scope.
+Similarity-based detection is not part of the current implementation scope.
 
 Current policy:
-- only `pure` and `threshold` are implemented and supported
+- `pure`, `threshold`, and `seed_extend` are implemented and supported
 - no similarity-method output is part of the current workflow contracts
 - if similarity-based detection is reintroduced later, it should return through a new explicit contract change rather than through hidden partial support
 
@@ -245,16 +261,24 @@ Rules:
   - no internal stop codons
   - no unsupported ambiguity that would yield unresolved amino acids
 - if codon slicing or downstream translation checks fail for a retained record, leave `codon_sequence` empty and emit a warning rather than guessing
-- keep residue-specific codon metric fields empty in the first residue-neutral release unless a later contract explicitly enables them
+- emit a normalized `codon_usage.tsv` companion artifact for validated codon slices
+- keep the legacy `codon_metric_name` and `codon_metric_value` fields reserved unless a later contract promotes a single derived metric into the main call row
 
-The first release remains residue-neutral even when codon sequence evidence is available.
-Codon extraction may still be retained as groundwork for later residue-specific analysis tracks.
+Codon extraction remains residue-neutral in the main call table while still exposing per-call codon usage in the companion artifact.
 
 Reported feature semantics:
 - `length` counts the full amino-acid tract after trimming termini
 - `repeat_count` counts only residues matching `repeat_residue`
 - `non_repeat_count = length - repeat_count`
 - `purity` is a decimal fraction in `[0, 1]`
+
+Finalized detection outputs publish under:
+
+- `publish/detection/finalized/<method>/<repeat_residue>/`
+
+Canonical merged downstream outputs remain under:
+
+- `publish/calls/`
 
 ---
 

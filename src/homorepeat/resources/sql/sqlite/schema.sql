@@ -71,7 +71,7 @@ CREATE TABLE run_params (
 
 CREATE TABLE repeat_calls (
     call_id TEXT PRIMARY KEY,
-    method TEXT NOT NULL CHECK (method IN ('pure', 'threshold')),
+    method TEXT NOT NULL CHECK (method IN ('pure', 'threshold', 'seed_extend')),
     genome_id TEXT NOT NULL,
     taxon_id TEXT NOT NULL,
     sequence_id TEXT NOT NULL,

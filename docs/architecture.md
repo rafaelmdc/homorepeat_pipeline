@@ -159,6 +159,7 @@ This stage extracts homorepeat calls from the prepared inputs.
 It contains the current implemented methods:
 - **pure**: contiguous homorepeat detection
 - **threshold**: sliding-window density-based detection
+- **seed_extend**: seed-and-extend density detection for longer interrupted tracts
 
 All methods must emit the same call schema.
 
