@@ -247,3 +247,95 @@ class SliceFourThresholdDetectionTest(unittest.TestCase):
                     ("min_target_count", "6"),
                 },
             )
+
+    def test_detect_threshold_cli_respects_overridden_window_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            inputs_dir = tmp / "merged" / "acquisition"
+            outdir = tmp / "merged" / "detection" / "threshold"
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+
+            proteins_tsv = inputs_dir / "proteins.tsv"
+            proteins_faa = inputs_dir / "proteins.faa"
+            write_tsv(
+                proteins_tsv,
+                [
+                    {
+                        "protein_id": "prot_threshold_override_1",
+                        "sequence_id": "seq_threshold_override_1",
+                        "genome_id": "genome_001",
+                        "protein_name": "threshold_override_example",
+                        "protein_length": 8,
+                        "protein_path": str(proteins_faa.resolve()),
+                        "gene_symbol": "GENE1",
+                        "translation_method": "local_cds_translation",
+                        "translation_status": "translated",
+                        "assembly_accession": "GCF_TEST_1.1",
+                        "taxon_id": "9606",
+                        "gene_group": "GENE1",
+                        "protein_external_id": "NP_TEST_THRESHOLD_OVERRIDE.1",
+                    }
+                ],
+                fieldnames=[
+                    "protein_id",
+                    "sequence_id",
+                    "genome_id",
+                    "protein_name",
+                    "protein_length",
+                    "protein_path",
+                    "gene_symbol",
+                    "translation_method",
+                    "translation_status",
+                    "assembly_accession",
+                    "taxon_id",
+                    "gene_group",
+                    "protein_external_id",
+                ],
+            )
+            proteins_faa.write_text(">prot_threshold_override_1\nMQQQQQQA\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.detect_threshold",
+                    "--proteins-tsv",
+                    str(proteins_tsv),
+                    "--proteins-fasta",
+                    str(proteins_faa),
+                    "--repeat-residue",
+                    "Q",
+                    "--window-size",
+                    "7",
+                    "--min-target-count",
+                    "6",
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"detect_threshold.py failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            call_rows = read_tsv(outdir / "threshold_calls.tsv")
+            param_rows = read_tsv(outdir / "run_params.tsv")
+
+            self.assertEqual(len(call_rows), 1)
+            self.assertEqual(call_rows[0]["start"], "2")
+            self.assertEqual(call_rows[0]["end"], "7")
+            self.assertEqual(call_rows[0]["window_definition"], "Q6/7")
+            self.assertEqual(
+                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {
+                    ("repeat_residue", "Q"),
+                    ("window_size", "7"),
+                    ("min_target_count", "6"),
+                },
+            )

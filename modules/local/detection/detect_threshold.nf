@@ -16,6 +16,8 @@ process DETECT_THRESHOLD {
       --proteins-tsv ${proteins_tsv} \
       --proteins-fasta ${proteins_fasta} \
       --repeat-residue ${repeat_residue} \
+      --window-size ${params.threshold_window_size} \
+      --min-target-count ${params.threshold_min_target_count} \
       --outdir detect_threshold_${repeat_residue}
 
     cp detect_threshold_${repeat_residue}/threshold_calls.tsv threshold_${repeat_residue}_calls.tsv

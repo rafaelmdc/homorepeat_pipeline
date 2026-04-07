@@ -16,6 +16,7 @@ process DETECT_PURE {
       --proteins-tsv ${proteins_tsv} \
       --proteins-fasta ${proteins_fasta} \
       --repeat-residue ${repeat_residue} \
+      --min-repeat-count ${params.pure_min_repeat_count} \
       --outdir detect_pure_${repeat_residue}
 
     cp detect_pure_${repeat_residue}/pure_calls.tsv pure_${repeat_residue}_calls.tsv

@@ -243,3 +243,89 @@ class SliceThreePureDetectionTest(unittest.TestCase):
                     ("min_repeat_count", "6"),
                 },
             )
+
+    def test_detect_pure_cli_respects_overridden_min_repeat_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            inputs_dir = tmp / "merged" / "acquisition"
+            outdir = tmp / "merged" / "detection" / "pure"
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+
+            proteins_tsv = inputs_dir / "proteins.tsv"
+            proteins_faa = inputs_dir / "proteins.faa"
+            write_tsv(
+                proteins_tsv,
+                [
+                    {
+                        "protein_id": "prot_override_1",
+                        "sequence_id": "seq_override_1",
+                        "genome_id": "genome_001",
+                        "protein_name": "override_example",
+                        "protein_length": 10,
+                        "protein_path": str(proteins_faa.resolve()),
+                        "gene_symbol": "GENE1",
+                        "translation_method": "local_cds_translation",
+                        "translation_status": "translated",
+                        "assembly_accession": "GCF_TEST_1.1",
+                        "taxon_id": "9606",
+                        "gene_group": "GENE1",
+                        "protein_external_id": "NP_TEST_OVERRIDE.1",
+                    }
+                ],
+                fieldnames=[
+                    "protein_id",
+                    "sequence_id",
+                    "genome_id",
+                    "protein_name",
+                    "protein_length",
+                    "protein_path",
+                    "gene_symbol",
+                    "translation_method",
+                    "translation_status",
+                    "assembly_accession",
+                    "taxon_id",
+                    "gene_group",
+                    "protein_external_id",
+                ],
+            )
+            proteins_faa.write_text(">prot_override_1\nMCAAAAAAGP\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.detect_pure",
+                    "--proteins-tsv",
+                    str(proteins_tsv),
+                    "--proteins-fasta",
+                    str(proteins_faa),
+                    "--repeat-residue",
+                    "A",
+                    "--min-repeat-count",
+                    "7",
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"detect_pure.py failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            call_rows = read_tsv(outdir / "pure_calls.tsv")
+            param_rows = read_tsv(outdir / "run_params.tsv")
+
+            self.assertEqual(call_rows, [])
+            self.assertEqual(
+                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {
+                    ("repeat_residue", "A"),
+                    ("min_repeat_count", "7"),
+                },
+            )
