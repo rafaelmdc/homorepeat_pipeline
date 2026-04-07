@@ -1,0 +1,13 @@
+.git
+__pycache__/
+.pytest_cache/
+.nextflow*
+work/
+runs/
+runtime/cache/
+.venv/
+dist/
+build/
+*.pyc
+*.pyo
+*.pyd

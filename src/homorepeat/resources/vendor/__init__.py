@@ -1,0 +1,1 @@
+"""Packaged vendor assets."""

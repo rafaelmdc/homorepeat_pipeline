@@ -1,0 +1,14 @@
+services:
+  pipeline-acquisition:
+    build:
+      context: .
+      dockerfile: containers/acquisition.Dockerfile
+    image: homorepeat-acquisition:dev
+    command: ["python", "--version"]
+
+  pipeline-detection:
+    build:
+      context: .
+      dockerfile: containers/detection.Dockerfile
+    image: homorepeat-detection:dev
+    command: ["python", "--version"]
