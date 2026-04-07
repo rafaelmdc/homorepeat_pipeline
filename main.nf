@@ -3,22 +3,27 @@ nextflow.enable.dsl = 2
 include { ACQUISITION_FROM_ACCESSIONS } from './workflows/acquisition_from_accessions'
 include { DETECTION_FROM_ACQUISITION } from './workflows/detection_from_acquisition'
 include { DATABASE_REPORTING } from './workflows/database_reporting'
+include { BUILD_ACCESSION_STATUS } from './modules/local/reporting/build_accession_status'
 
 workflow {
   acquisition = ACQUISITION_FROM_ACCESSIONS()
   detection = DETECTION_FROM_ACQUISITION(
-    acquisition.sequences_tsv,
-    acquisition.cds_fasta,
-    acquisition.proteins_tsv,
-    acquisition.proteins_fasta,
+    acquisition.batch_rows,
+  )
+  statusBuild = BUILD_ACCESSION_STATUS(
+    acquisition.batch_table,
+    acquisition.batch_rows.map { rows -> rows.collect { row -> row[1] } },
+    detection.call_tsvs,
+    detection.detect_status_jsons,
+    detection.finalize_status_jsons,
   )
   reporting = DATABASE_REPORTING(
     acquisition.taxonomy_tsv,
     acquisition.genomes_tsv,
     acquisition.sequences_tsv,
     acquisition.proteins_tsv,
-    detection.call_tsv,
-    detection.run_params_tsv,
+    detection.call_tsvs,
+    detection.run_params_tsvs,
   )
 
   emit:
@@ -30,4 +35,6 @@ workflow {
   summary_by_taxon = reporting.summary_by_taxon
   regression_input = reporting.regression_input
   echarts_report = reporting.echarts_report
+  accession_status = statusBuild.accession_status_tsv
+  status_summary = statusBuild.status_summary_json
 }

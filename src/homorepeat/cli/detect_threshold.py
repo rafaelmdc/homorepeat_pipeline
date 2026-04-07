@@ -12,6 +12,7 @@ from homorepeat.io.fasta_io import read_fasta  # noqa: E402
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, build_call_row  # noqa: E402
 from homorepeat.contracts.run_params import write_run_params  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
+from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
 PROTEINS_REQUIRED = [
@@ -31,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--proteins-fasta", required=True, help="Path to canonical proteins.faa")
     parser.add_argument("--repeat-residue", required=True, help="Target amino-acid residue")
     parser.add_argument("--outdir", required=True, help="Output directory for threshold detection artifacts")
+    parser.add_argument("--batch-id", default="", help="Optional batch identifier for stage-status output")
     parser.add_argument("--window-size", type=int, default=8, help="Sliding window size")
     parser.add_argument(
         "--min-target-count",
@@ -39,11 +41,26 @@ def parse_args() -> argparse.Namespace:
         help="Minimum target count inside a qualifying sliding window",
     )
     parser.add_argument("--log-file", help="Reserved log file path")
+    parser.add_argument("--fail-soft", action="store_true", help="Write empty outputs and return success on errors")
+    parser.add_argument("--status-out", help="Optional stage-status JSON path")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    try:
+        _run(args)
+    except Exception as exc:
+        if not args.fail_soft:
+            raise
+        _write_failed_outputs(args)
+        _write_status(args, status="failed", message=str(exc))
+        return 0
+    _write_status(args, status="success")
+    return 0
+
+
+def _run(args: argparse.Namespace) -> None:
     repeat_residue = args.repeat_residue.strip().upper()
     if len(repeat_residue) != 1:
         raise ContractError(f"--repeat-residue must be one amino-acid symbol: {args.repeat_residue!r}")
@@ -106,7 +123,37 @@ def main() -> int:
             "min_target_count": args.min_target_count,
         },
     )
-    return 0
+
+
+def _write_failed_outputs(args: argparse.Namespace) -> None:
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    write_tsv(outdir / "threshold_calls.tsv", [], fieldnames=CALL_FIELDNAMES)
+    write_run_params(
+        outdir / "run_params.tsv",
+        "threshold",
+        {
+            "repeat_residue": args.repeat_residue.strip().upper(),
+            "window_size": args.window_size,
+            "min_target_count": args.min_target_count,
+        },
+    )
+
+
+def _write_status(args: argparse.Namespace, *, status: str, message: str = "") -> None:
+    if not args.status_out:
+        return
+    write_stage_status(
+        args.status_out,
+        build_stage_status(
+            stage="detect",
+            status=status,
+            batch_id=args.batch_id,
+            method="threshold",
+            repeat_residue=args.repeat_residue.strip().upper(),
+            message=message,
+        ),
+    )
 
 
 if __name__ == "__main__":

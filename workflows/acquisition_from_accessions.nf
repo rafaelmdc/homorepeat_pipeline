@@ -26,10 +26,15 @@ workflow ACQUISITION_FROM_ACCESSIONS {
     downloaded = DOWNLOAD_NCBI_BATCH(batchManifestCh)
     normalized = NORMALIZE_CDS_BATCH(downloaded.raw_batch, Channel.value(taxonomyDb))
     translated = TRANSLATE_CDS_BATCH(normalized.normalized_batch)
-    translatedBatchDirs = translated.translated_batch.map { batch_id, translated_batch_dir -> translated_batch_dir }.collect()
+    translatedBatchRows = translated.translated_batch.toList()
+    translatedBatchDirs = translatedBatchRows.map { rows ->
+        rows.collect { row -> row[1] }
+    }
     merged = MERGE_ACQUISITION_BATCHES(translatedBatchDirs)
 
     emit:
+    batch_table = planning.batch_table
+    batch_rows = translatedBatchRows
     genomes_tsv = merged.genomes_tsv
     taxonomy_tsv = merged.taxonomy_tsv
     sequences_tsv = merged.sequences_tsv

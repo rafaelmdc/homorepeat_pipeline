@@ -42,6 +42,10 @@ PUBLISHED_ARTIFACTS = {
         "nextflow_timeline_html": "reports/nextflow_timeline.html",
         "nextflow_dag_html": "reports/nextflow_dag.html",
     },
+    "status": {
+        "accession_status_tsv": "status/accession_status.tsv",
+        "status_summary_json": "status/status_summary.json",
+    },
     "internal": {
         "trace_txt": "internal/nextflow/trace.txt",
     },
@@ -67,7 +71,7 @@ def build_run_manifest(
 
     return {
         "run_id": run_id,
-        "status": status,
+        "status": _resolved_run_status(publish_root=publish_root, fallback_status=status),
         "started_at_utc": started_at_utc,
         "finished_at_utc": finished_at_utc,
         "profile": profile,
@@ -144,6 +148,17 @@ def _manifest_params(*, publish_root: Path, params_file: Path | None, run_root: 
         except json.JSONDecodeError:
             payload["params_file_values"] = {}
     return payload
+
+
+def _resolved_run_status(*, publish_root: Path, fallback_status: str) -> str:
+    summary_path = publish_root / "status" / "status_summary.json"
+    if not summary_path.is_file():
+        return fallback_status
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return fallback_status
+    return str(payload.get("status", "")) or fallback_status
 
 
 def _enabled_methods(publish_root: Path) -> list[str]:

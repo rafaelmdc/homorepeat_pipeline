@@ -11,10 +11,7 @@ include {
 
 workflow DETECTION_FROM_ACQUISITION {
     take:
-    sequences_tsv
-    cds_fasta
-    proteins_tsv
-    proteins_fasta
+    translated_batch_rows
 
     main:
     if( !params.run_pure && !params.run_threshold && !params.run_seed_extend ) {
@@ -33,40 +30,89 @@ workflow DETECTION_FROM_ACQUISITION {
     }
 
     def finalizedCallCh = Channel.empty()
+    def detectStatusCh = Channel.empty()
+    def finalizeStatusCh = Channel.empty()
+    def batchDirLookup = {
+        translated_batch_rows.flatMap { rows ->
+            rows.collect { row -> tuple(row[0], row[1]) }
+        }
+    }
 
     if( params.run_pure ) {
-        repeatResidues.each { residue ->
-            pureDetection = DETECT_PURE(residue, proteins_tsv, proteins_fasta)
-            pureFinalize = FINALIZE_PURE_CALL_CODONS(pureDetection.calls, sequences_tsv, cds_fasta)
-            finalizedCallCh = finalizedCallCh.mix(pureFinalize.finalized_dir)
-        }
+        pureDetection = DETECT_PURE(
+            translated_batch_rows.flatMap { rows ->
+                rows.collectMany { row ->
+                    repeatResidues.collect { residue -> tuple(row[0], residue, row[1]) }
+                }
+            }
+        )
+        pureFinalize = FINALIZE_PURE_CALL_CODONS(
+            pureDetection.calls.join(batchDirLookup())
+        )
+        finalizedCallCh = finalizedCallCh.mix(pureFinalize.finalized_dir)
+        detectStatusCh = detectStatusCh.mix(pureDetection.stage_status)
+        finalizeStatusCh = finalizeStatusCh.mix(pureFinalize.stage_status)
     }
 
     if( params.run_threshold ) {
-        repeatResidues.each { residue ->
-            thresholdDetection = DETECT_THRESHOLD(residue, proteins_tsv, proteins_fasta)
-            thresholdFinalize = FINALIZE_THRESHOLD_CALL_CODONS(
-                thresholdDetection.calls,
-                sequences_tsv,
-                cds_fasta,
-            )
-            finalizedCallCh = finalizedCallCh.mix(thresholdFinalize.finalized_dir)
-        }
+        thresholdDetection = DETECT_THRESHOLD(
+            translated_batch_rows.flatMap { rows ->
+                rows.collectMany { row ->
+                    repeatResidues.collect { residue -> tuple(row[0], residue, row[1]) }
+                }
+            }
+        )
+        thresholdFinalize = FINALIZE_THRESHOLD_CALL_CODONS(
+            thresholdDetection.calls.join(batchDirLookup())
+        )
+        finalizedCallCh = finalizedCallCh.mix(thresholdFinalize.finalized_dir)
+        detectStatusCh = detectStatusCh.mix(thresholdDetection.stage_status)
+        finalizeStatusCh = finalizeStatusCh.mix(thresholdFinalize.stage_status)
     }
 
     if( params.run_seed_extend ) {
-        repeatResidues.each { residue ->
-            seedExtendDetection = DETECT_SEED_EXTEND(residue, proteins_tsv, proteins_fasta)
-            seedExtendFinalize = FINALIZE_SEED_EXTEND_CALL_CODONS(
-                seedExtendDetection.calls,
-                sequences_tsv,
-                cds_fasta,
-            )
-            finalizedCallCh = finalizedCallCh.mix(seedExtendFinalize.finalized_dir)
-        }
+        seedExtendDetection = DETECT_SEED_EXTEND(
+            translated_batch_rows.flatMap { rows ->
+                rows.collectMany { row ->
+                    repeatResidues.collect { residue -> tuple(row[0], residue, row[1]) }
+                }
+            }
+        )
+        seedExtendFinalize = FINALIZE_SEED_EXTEND_CALL_CODONS(
+            seedExtendDetection.calls.join(batchDirLookup())
+        )
+        finalizedCallCh = finalizedCallCh.mix(seedExtendFinalize.finalized_dir)
+        detectStatusCh = detectStatusCh.mix(seedExtendDetection.stage_status)
+        finalizeStatusCh = finalizeStatusCh.mix(seedExtendFinalize.stage_status)
     }
 
+    finalizedCallRows = finalizedCallCh.toList()
+    detectStatusRows = detectStatusCh.toList()
+    finalizeStatusRows = finalizeStatusCh.toList()
+
     emit:
-    call_tsv = finalizedCallCh.map { method, repeatResidue, finalizedDir -> finalizedDir.resolve("final_${method}_${repeatResidue}_calls.tsv") }
-    run_params_tsv = finalizedCallCh.map { method, repeatResidue, finalizedDir -> finalizedDir.resolve("final_${method}_${repeatResidue}_run_params.tsv") }
+    call_tsvs = finalizedCallRows.map { rows ->
+        rows.collect { row ->
+            def batch_id = row[0]
+            def method = row[1]
+            def repeatResidue = row[2]
+            def finalizedDir = row[3]
+            finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_calls.tsv")
+        }
+    }
+    run_params_tsvs = finalizedCallRows.map { rows ->
+        rows.collect { row ->
+            def batch_id = row[0]
+            def method = row[1]
+            def repeatResidue = row[2]
+            def finalizedDir = row[3]
+            finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_run_params.tsv")
+        }
+    }
+    detect_status_jsons = detectStatusRows.map { rows ->
+        rows.collect { row -> row[3] }
+    }
+    finalize_status_jsons = finalizeStatusRows.map { rows ->
+        rows.collect { row -> row[3] }
+    }
 }

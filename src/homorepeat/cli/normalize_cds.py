@@ -26,6 +26,7 @@ from homorepeat.acquisition.package_layout import (  # noqa: E402
 from homorepeat.taxonomy.ncbi import build_taxonomy_rows, get_build_version, inspect_lineage  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
+from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
 GENOMES_FIELDNAMES = [
@@ -69,6 +70,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outdir", required=True, help="Batch-local normalized output directory")
     parser.add_argument("--log-file", help="Reserved log file path")
     parser.add_argument("--warning-out", help="Optional explicit warning artifact path")
+    parser.add_argument("--fail-soft", action="store_true", help="Write empty outputs and return success on errors")
+    parser.add_argument("--stage-status-out", help="Optional stage-status JSON path")
     parser.add_argument(
         "--taxon-weaver-bin",
         default="taxon-weaver",
@@ -79,6 +82,19 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    try:
+        _run(args)
+    except Exception as exc:
+        if not args.fail_soft:
+            raise
+        _write_failed_outputs(args)
+        _write_stage_status_file(args, status="failed", message=str(exc))
+        return 0
+    _write_stage_status_file(args, status="success")
+    return 0
+
+
+def _run(args: argparse.Namespace) -> None:
     package_root = find_package_root(args.package_dir)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -279,7 +295,6 @@ def main() -> int:
     write_fasta(normalized_cds_path, normalized_cds_records)
     write_tsv(warning_path, warnings_rows, fieldnames=WARNING_FIELDNAMES)
     _copy_download_manifest(package_root, outdir)
-    return 0
 
 
 def _copy_download_manifest(package_root: Path, outdir: Path) -> None:
@@ -291,6 +306,44 @@ def _copy_download_manifest(package_root: Path, outdir: Path) -> None:
         if candidate.is_file():
             shutil.copyfile(candidate, outdir / "download_manifest.tsv")
             return
+
+
+def _copy_download_manifest_from_package_dir(package_dir: Path, outdir: Path) -> None:
+    candidate_paths = [
+        package_dir / "download_manifest.tsv",
+        package_dir.parent / "download_manifest.tsv",
+        package_dir.parent.parent / "download_manifest.tsv",
+    ]
+    for candidate in candidate_paths:
+        if candidate.is_file():
+            shutil.copyfile(candidate, outdir / "download_manifest.tsv")
+            return
+
+
+def _write_failed_outputs(args: argparse.Namespace) -> None:
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    warning_path = Path(args.warning_out) if args.warning_out else outdir / "normalization_warnings.tsv"
+    write_tsv(outdir / "genomes.tsv", [], fieldnames=GENOMES_FIELDNAMES)
+    write_tsv(outdir / "taxonomy.tsv", [], fieldnames=TAXONOMY_FIELDNAMES)
+    write_tsv(outdir / "sequences.tsv", [], fieldnames=SEQUENCES_FIELDNAMES)
+    write_fasta(outdir / "cds.fna", [])
+    write_tsv(warning_path, [], fieldnames=WARNING_FIELDNAMES)
+    _copy_download_manifest_from_package_dir(Path(args.package_dir), outdir)
+
+
+def _write_stage_status_file(args: argparse.Namespace, *, status: str, message: str = "") -> None:
+    if not args.stage_status_out:
+        return
+    write_stage_status(
+        args.stage_status_out,
+        build_stage_status(
+            stage="normalize",
+            status=status,
+            batch_id=args.batch_id,
+            message=message,
+        ),
+    )
 
 
 if __name__ == "__main__":

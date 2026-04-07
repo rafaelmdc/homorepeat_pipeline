@@ -14,6 +14,7 @@ from homorepeat.core.ids import stable_id  # noqa: E402
 from homorepeat.acquisition.translation import translate_cds as translate_sequence  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
+from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
 SEQUENCES_REQUIRED = ["sequence_id", "genome_id", "sequence_name", "sequence_length", "sequence_path"]
@@ -42,11 +43,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outdir", required=True, help="Batch-local normalized output directory")
     parser.add_argument("--log-file", help="Reserved log file path")
     parser.add_argument("--warning-out", help="Optional explicit warning artifact path")
+    parser.add_argument("--fail-soft", action="store_true", help="Write empty outputs and return success on errors")
+    parser.add_argument("--stage-status-out", help="Optional stage-status JSON path")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    try:
+        _run(args)
+    except Exception as exc:
+        if not args.fail_soft:
+            raise
+        _write_failed_outputs(args, str(exc))
+        _write_stage_status_file(args, status="failed", message=str(exc))
+        return 0
+    _write_stage_status_file(args, status="success")
+    return 0
+
+
+def _run(args: argparse.Namespace) -> None:
     outdir = Path(args.outdir)
     warning_path = Path(args.warning_out) if args.warning_out else outdir / "normalization_warnings.tsv"
     protein_fasta_path = outdir / "proteins.faa"
@@ -138,7 +154,53 @@ def main() -> int:
         download_manifest_rows=download_manifest_rows,
     )
     write_validation_json(outdir / "acquisition_validation.json", validation_payload)
-    return 0
+
+
+def _write_failed_outputs(args: argparse.Namespace, message: str) -> None:
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    warning_path = Path(args.warning_out) if args.warning_out else outdir / "normalization_warnings.tsv"
+    existing_warning_rows = read_tsv(warning_path) if warning_path.is_file() else []
+    sequences_rows = (
+        read_tsv(args.sequences_tsv, required_columns=SEQUENCES_REQUIRED)
+        if Path(args.sequences_tsv).is_file()
+        else []
+    )
+    genomes_rows = read_tsv(outdir / "genomes.tsv") if (outdir / "genomes.tsv").is_file() else []
+    download_manifest_rows = (
+        read_tsv(outdir / "download_manifest.tsv") if (outdir / "download_manifest.tsv").is_file() else []
+    )
+
+    write_tsv(outdir / "proteins.tsv", [], fieldnames=PROTEINS_FIELDNAMES)
+    write_fasta(outdir / "proteins.faa", [])
+    write_tsv(warning_path, existing_warning_rows, fieldnames=WARNING_FIELDNAMES)
+
+    validation_payload = build_acquisition_validation(
+        scope="batch",
+        batch_id=args.batch_id,
+        genomes_rows=genomes_rows,
+        sequences_rows=sequences_rows,
+        proteins_rows=[],
+        warning_rows=existing_warning_rows,
+        download_manifest_rows=download_manifest_rows,
+    )
+    validation_payload["status"] = "fail"
+    validation_payload.setdefault("notes", []).append(f"translate stage failed: {message}")
+    write_validation_json(outdir / "acquisition_validation.json", validation_payload)
+
+
+def _write_stage_status_file(args: argparse.Namespace, *, status: str, message: str = "") -> None:
+    if not args.stage_status_out:
+        return
+    write_stage_status(
+        args.stage_status_out,
+        build_stage_status(
+            stage="translate",
+            status=status,
+            batch_id=args.batch_id,
+            message=message,
+        ),
+    )
 
 
 def retain_one_isoform_per_gene(rows: list[dict[str, object]]) -> list[dict[str, object]]:

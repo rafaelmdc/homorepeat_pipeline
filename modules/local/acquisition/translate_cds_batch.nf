@@ -19,6 +19,8 @@ process TRANSLATE_CDS_BATCH {
       --sequences-tsv "\$outdir/sequences.tsv" \
       --cds-fasta "\$outdir/cds.fna" \
       --batch-id ${batch_id} \
+      --fail-soft \
+      --stage-status-out "\$outdir/translate_stage_status.json" \
       --outdir "\$outdir"
     """
 }

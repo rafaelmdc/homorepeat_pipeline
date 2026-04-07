@@ -12,11 +12,11 @@ workflow DATABASE_REPORTING {
     genomes_tsv
     sequences_tsv
     proteins_tsv
-    call_tsv
-    run_params_tsv
+    call_tsvs
+    run_params_tsvs
 
     main:
-    canonicalCalls = MERGE_CALL_TABLES(call_tsv.collect(), run_params_tsv.collect())
+    canonicalCalls = MERGE_CALL_TABLES(call_tsvs, run_params_tsvs)
     sqliteBuild = BUILD_SQLITE(
         taxonomy_tsv,
         genomes_tsv,

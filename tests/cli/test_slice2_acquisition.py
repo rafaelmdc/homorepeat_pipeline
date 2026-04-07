@@ -391,6 +391,94 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual({row["download_status"] for row in manifest_rows}, {"downloaded"})
             self.assertTrue((outdir / "ncbi_package").exists())
 
+    def test_download_ncbi_packages_fail_soft_writes_failed_manifest_and_stage_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            planning_dir = tmp / "planning"
+            outdir = tmp / "batches" / "batch_0001" / "raw"
+            fake_bin_dir = tmp / "fake_bin"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            selected_batches_path = planning_dir / "selected_batches.tsv"
+            write_tsv(
+                selected_batches_path,
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "request_id": "req_001",
+                        "assembly_accession": "GCF_000001405.40",
+                        "taxon_id": "9606",
+                        "batch_reason": "single_small_taxon_batch",
+                        "resolved_name": "Homo sapiens",
+                        "refseq_category": "reference genome",
+                        "assembly_level": "Chromosome",
+                        "annotation_status": "annotated:Updated annotation",
+                    },
+                    {
+                        "batch_id": "batch_0001",
+                        "request_id": "req_001",
+                        "assembly_accession": "GCF_222222222.1",
+                        "taxon_id": "9606",
+                        "batch_reason": "single_small_taxon_batch",
+                        "resolved_name": "Homo sapiens",
+                        "refseq_category": "representative genome",
+                        "assembly_level": "Scaffold",
+                        "annotation_status": "annotated:Full annotation",
+                    },
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "request_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "batch_reason",
+                    "resolved_name",
+                    "refseq_category",
+                    "assembly_level",
+                    "annotation_status",
+                ],
+            )
+
+            self._write_fake_datasets(fake_bin_dir / "datasets")
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+            env["HOMOREPEAT_FIXTURES_ROOT"] = str(FIXTURES_ROOT)
+            env["HOMOREPEAT_FAKE_DATASETS_FAIL_DOWNLOADS"] = "5"
+            env["HOMOREPEAT_FAKE_DATASETS_STATE_DIR"] = str(tmp / "fake_state")
+
+            self._run_cli(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.download_ncbi_packages",
+                    "--batch-manifest",
+                    str(selected_batches_path),
+                    "--batch-id",
+                    "batch_0001",
+                    "--fail-soft",
+                    "--stage-status-out",
+                    str(outdir / "download_stage_status.json"),
+                    "--outdir",
+                    str(outdir),
+                    "--datasets-max-attempts",
+                    "2",
+                    "--datasets-retry-delay-seconds",
+                    "0",
+                ],
+                env=env,
+            )
+
+            manifest_rows = read_tsv(outdir / "download_manifest.tsv")
+            self.assertEqual(len(manifest_rows), 2)
+            self.assertEqual({row["download_status"] for row in manifest_rows}, {"failed"})
+            self.assertTrue(all(row["notes"] for row in manifest_rows))
+
+            stage_status = json.loads((outdir / "download_stage_status.json").read_text(encoding="utf-8"))
+            self.assertEqual(stage_status["stage"], "download")
+            self.assertEqual(stage_status["status"], "failed")
+            self.assertEqual(stage_status["batch_id"], "batch_0001")
+            self.assertTrue(stage_status["message"])
+
     def test_normalize_deduplicates_identical_cds_records_and_keeps_distinct_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)

@@ -14,6 +14,7 @@ from homorepeat.acquisition.ncbi_datasets import (  # noqa: E402
 )
 from homorepeat.acquisition.package_layout import find_package_root, load_assembly_report  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, read_tsv, write_lines, write_tsv  # noqa: E402
+from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
 SELECTED_BATCHES_REQUIRED = ["batch_id", "assembly_accession"]
@@ -38,6 +39,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-id", required=True, help="Operational batch identifier")
     parser.add_argument("--outdir", required=True, help="Batch-local raw output directory")
     parser.add_argument("--log-file", help="Reserved log file path")
+    parser.add_argument("--fail-soft", action="store_true", help="Write failed manifests and return success on errors")
+    parser.add_argument("--stage-status-out", help="Optional stage-status JSON path")
     parser.add_argument("--api-key", help="NCBI API key")
     parser.add_argument("--cache-dir", help="Optional cache directory for downloaded archives")
     parser.add_argument("--dehydrated", action="store_true", help="Use dehydrated package mode")
@@ -69,6 +72,19 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    try:
+        _run(args)
+    except Exception as exc:
+        if not args.fail_soft:
+            raise
+        _write_failed_manifest(args, str(exc))
+        _write_stage_status_file(args, status="failed", message=str(exc))
+        return 0
+    _write_stage_status_file(args, status="success")
+    return 0
+
+
+def _run(args: argparse.Namespace) -> None:
     batch_rows = read_tsv(args.batch_manifest, required_columns=SELECTED_BATCHES_REQUIRED)
     selected_rows = [row for row in batch_rows if row.get("batch_id", "") == args.batch_id]
     if not selected_rows:
@@ -154,7 +170,45 @@ def main() -> int:
     write_tsv(outdir / "download_manifest.tsv", manifest_rows, fieldnames=DOWNLOAD_MANIFEST_FIELDNAMES)
     if not any(row["download_status"] in {"downloaded", "rehydrated"} for row in manifest_rows):
         raise ContractError(f"Batch {args.batch_id} produced no successful package records")
-    return 0
+
+
+def _write_failed_manifest(args: argparse.Namespace, message: str) -> None:
+    batch_rows = read_tsv(args.batch_manifest, required_columns=SELECTED_BATCHES_REQUIRED)
+    selected_rows = [row for row in batch_rows if row.get("batch_id", "") == args.batch_id]
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    package_mode = "dehydrated" if args.dehydrated else "direct_zip"
+    manifest_rows = [
+        {
+            "batch_id": args.batch_id,
+            "assembly_accession": row.get("assembly_accession", ""),
+            "download_status": "failed",
+            "package_mode": package_mode,
+            "download_path": "",
+            "rehydrated_path": "",
+            "checksum": "",
+            "file_size_bytes": "",
+            "download_started_at": "",
+            "download_finished_at": "",
+            "notes": message,
+        }
+        for row in selected_rows
+    ]
+    write_tsv(outdir / "download_manifest.tsv", manifest_rows, fieldnames=DOWNLOAD_MANIFEST_FIELDNAMES)
+
+
+def _write_stage_status_file(args: argparse.Namespace, *, status: str, message: str = "") -> None:
+    if not args.stage_status_out:
+        return
+    write_stage_status(
+        args.stage_status_out,
+        build_stage_status(
+            stage="download",
+            status=status,
+            batch_id=args.batch_id,
+            message=message,
+        ),
+    )
 
 
 if __name__ == "__main__":

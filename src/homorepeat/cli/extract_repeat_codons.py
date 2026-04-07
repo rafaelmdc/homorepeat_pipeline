@@ -16,6 +16,7 @@ from homorepeat.io.fasta_io import read_fasta  # noqa: E402
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, validate_call_row  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
+from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
 CALLS_REQUIRED = [
@@ -49,13 +50,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sequences-tsv", required=True, help="Path to canonical sequences.tsv")
     parser.add_argument("--cds-fasta", required=True, help="Path to canonical normalized cds.fna")
     parser.add_argument("--outdir", required=True, help="Output directory for codon-enriched artifacts")
+    parser.add_argument("--batch-id", default="", help="Optional batch identifier for stage-status output")
+    parser.add_argument("--method", default="", help="Optional method name for stage-status output")
+    parser.add_argument("--repeat-residue", default="", help="Optional repeat residue for stage-status output")
     parser.add_argument("--warning-out", help="Optional explicit warning artifact path")
     parser.add_argument("--log-file", help="Reserved log file path")
+    parser.add_argument("--fail-soft", action="store_true", help="Write empty outputs and return success on errors")
+    parser.add_argument("--status-out", help="Optional stage-status JSON path")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    try:
+        _run(args)
+    except Exception as exc:
+        if not args.fail_soft:
+            raise
+        _write_failed_outputs(args)
+        _write_status(args, status="failed", message=str(exc))
+        return 0
+    _write_status(args, status="success")
+    return 0
+
+
+def _run(args: argparse.Namespace) -> None:
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -154,7 +173,34 @@ def main() -> int:
     write_tsv(output_calls_path, enriched_rows, fieldnames=CALL_FIELDNAMES)
     write_tsv(warning_path, warning_rows, fieldnames=WARNING_FIELDNAMES)
     write_tsv(codon_usage_path, codon_usage_rows, fieldnames=CODON_USAGE_FIELDNAMES)
-    return 0
+
+
+def _write_failed_outputs(args: argparse.Namespace) -> None:
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    calls_path = Path(args.calls_tsv)
+    output_calls_path = outdir / calls_path.name
+    warning_path = Path(args.warning_out) if args.warning_out else outdir / f"{calls_path.stem}_codon_warnings.tsv"
+    codon_usage_path = outdir / f"{calls_path.stem}_codon_usage.tsv"
+    write_tsv(output_calls_path, [], fieldnames=CALL_FIELDNAMES)
+    write_tsv(warning_path, [], fieldnames=WARNING_FIELDNAMES)
+    write_tsv(codon_usage_path, [], fieldnames=CODON_USAGE_FIELDNAMES)
+
+
+def _write_status(args: argparse.Namespace, *, status: str, message: str = "") -> None:
+    if not args.status_out:
+        return
+    write_stage_status(
+        args.status_out,
+        build_stage_status(
+            stage="finalize",
+            status=status,
+            batch_id=args.batch_id,
+            method=args.method,
+            repeat_residue=args.repeat_residue,
+            message=message,
+        ),
+    )
 
 
 if __name__ == "__main__":

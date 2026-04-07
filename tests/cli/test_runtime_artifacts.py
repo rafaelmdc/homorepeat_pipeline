@@ -169,6 +169,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             (publish_root / "detection" / "finalized" / "pure" / "Q").mkdir(parents=True, exist_ok=True)
             (publish_root / "database" / "sqlite").mkdir(parents=True, exist_ok=True)
             (publish_root / "reports").mkdir(parents=True, exist_ok=True)
+            (publish_root / "status").mkdir(parents=True, exist_ok=True)
             (run_root / "internal" / "nextflow").mkdir(parents=True, exist_ok=True)
 
             for path in [
@@ -177,6 +178,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 publish_root / "calls" / "run_params.tsv",
                 publish_root / "database" / "sqlite" / "homorepeat.sqlite",
                 publish_root / "reports" / "summary_by_taxon.tsv",
+                publish_root / "status" / "accession_status.tsv",
                 run_root / "internal" / "nextflow" / "trace.txt",
             ]:
                 if path.name == "run_params.tsv":
@@ -186,8 +188,11 @@ class RuntimeArtifactsTest(unittest.TestCase):
                         "pure\tmin_repeat_count\t6\n",
                         encoding="utf-8",
                     )
+                elif path.name == "status_summary.json":
+                    path.write_text('{"status":"partial"}\n', encoding="utf-8")
                 else:
                     path.write_text("stub\n", encoding="utf-8")
+            (publish_root / "status" / "status_summary.json").write_text('{"status":"partial"}\n', encoding="utf-8")
 
             accessions_file = tmp / "accessions.txt"
             taxonomy_db = tmp / "taxonomy.sqlite"
@@ -242,7 +247,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run_id"], "run_001")
-            self.assertEqual(payload["status"], "success")
+            self.assertEqual(payload["status"], "partial")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["min_repeat_count"], "6")
@@ -251,6 +256,8 @@ class RuntimeArtifactsTest(unittest.TestCase):
             self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
             self.assertEqual(payload["artifacts"]["detection"]["finalized_root"], "publish/detection/finalized")
             self.assertEqual(payload["artifacts"]["database"]["sqlite"], "publish/database/sqlite/homorepeat.sqlite")
+            self.assertEqual(payload["artifacts"]["status"]["accession_status_tsv"], "publish/status/accession_status.tsv")
+            self.assertEqual(payload["artifacts"]["status"]["status_summary_json"], "publish/status/status_summary.json")
             self.assertEqual(payload["artifacts"]["internal"]["trace_txt"], "internal/nextflow/trace.txt")
 
 

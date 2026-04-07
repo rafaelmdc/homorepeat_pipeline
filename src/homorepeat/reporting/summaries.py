@@ -8,7 +8,6 @@ from statistics import mean, median
 from typing import Iterable, Sequence
 
 from homorepeat.contracts.repeat_features import validate_call_row
-from homorepeat.io.tsv_io import ContractError
 
 
 SUMMARY_FIELDNAMES = [
@@ -135,9 +134,6 @@ def build_echarts_options(
     regression_rows: Sequence[dict[str, str]],
 ) -> dict[str, object]:
     """Build one inspectable, renderer-neutral ECharts options bundle."""
-
-    if not summary_rows:
-        raise ContractError("summary_by_taxon.tsv is empty; cannot prepare report tables")
 
     overview_categories = [f"{row['taxon_name']} | {row['method']} | {row['repeat_residue']}" for row in summary_rows]
     overview_values = [int(row["n_calls"]) for row in summary_rows]

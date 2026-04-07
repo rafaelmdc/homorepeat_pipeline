@@ -1,0 +1,37 @@
+process BUILD_ACCESSION_STATUS {
+    label 'reporting'
+    publishDir "${params.output_dir}/status", mode: 'copy'
+
+    input:
+    path(batch_table)
+    val(batch_dirs)
+    val(call_tsvs)
+    val(detect_status_jsons)
+    val(finalize_status_jsons)
+
+    output:
+    path('accession_status.tsv'), emit: accession_status_tsv
+    path('status_summary.json'), emit: status_summary_json
+
+    script:
+    def batchInputs = batch_dirs instanceof List ? batch_dirs : [batch_dirs]
+    def callInputs = call_tsvs instanceof List ? call_tsvs : [call_tsvs]
+    def detectInputs = detect_status_jsons instanceof List ? detect_status_jsons : [detect_status_jsons]
+    def finalizeInputs = finalize_status_jsons instanceof List ? finalize_status_jsons : [finalize_status_jsons]
+    def batchArgs = batchInputs.collect { "--batch-dir '${it}'" }.join(' ')
+    def callArgs = callInputs.collect { "--call-tsv '${it}'" }.join(' ')
+    def detectArgs = detectInputs.collect { "--detect-status-json '${it}'" }.join(' ')
+    def finalizeArgs = finalizeInputs.collect { "--finalize-status-json '${it}'" }.join(' ')
+    """
+    ${params.python_bin} -m homorepeat.cli.build_accession_status \
+      --batch-table ${batch_table} \
+      ${batchArgs} \
+      ${callArgs} \
+      ${detectArgs} \
+      ${finalizeArgs} \
+      --outdir status_tmp
+
+    mv status_tmp/accession_status.tsv accession_status.tsv
+    mv status_tmp/status_summary.json status_summary.json
+    """
+}
