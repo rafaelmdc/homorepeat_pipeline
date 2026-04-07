@@ -19,10 +19,10 @@ class RuntimeArtifactsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             pure_calls = tmp / "pure_calls.tsv"
-            seed_extend_calls = tmp / "seed_extend_polyq_calls.tsv"
+            seed_extend_calls = tmp / "seed_extend_calls.tsv"
             threshold_calls = tmp / "threshold_calls.tsv"
             pure_params = tmp / "pure_run_params.tsv"
-            seed_extend_params = tmp / "seed_extend_polyq_run_params.tsv"
+            seed_extend_params = tmp / "seed_extend_run_params.tsv"
             threshold_params = tmp / "threshold_run_params.tsv"
             outdir = tmp / "publish" / "calls"
 
@@ -47,7 +47,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 seed_extend_calls,
                 [
                     build_call_row(
-                        method="seed_extend_polyq",
+                        method="seed_extend",
                         genome_id="genome_001",
                         taxon_id="9606",
                         sequence_id="seq_001",
@@ -87,13 +87,13 @@ class RuntimeArtifactsTest(unittest.TestCase):
             write_tsv(
                 seed_extend_params,
                 build_run_param_rows(
-                    "seed_extend_polyq",
+                    "seed_extend",
                     {
                         "repeat_residue": "Q",
                         "seed_window_size": 8,
-                        "seed_min_q_count": 6,
+                        "seed_min_target_count": 6,
                         "extend_window_size": 12,
-                        "extend_min_q_count": 8,
+                        "extend_min_target_count": 8,
                         "min_total_length": 10,
                     },
                 ),
@@ -141,18 +141,18 @@ class RuntimeArtifactsTest(unittest.TestCase):
             merged_calls = read_tsv(outdir / "repeat_calls.tsv")
             merged_params = read_tsv(outdir / "run_params.tsv")
 
-            self.assertEqual([row["method"] for row in merged_calls], ["pure", "seed_extend_polyq", "threshold"])
+            self.assertEqual([row["method"] for row in merged_calls], ["pure", "seed_extend", "threshold"])
             self.assertEqual(
                 [(row["method"], row["param_name"]) for row in merged_params],
                 [
                     ("pure", "min_repeat_count"),
                     ("pure", "repeat_residue"),
-                    ("seed_extend_polyq", "extend_min_q_count"),
-                    ("seed_extend_polyq", "extend_window_size"),
-                    ("seed_extend_polyq", "min_total_length"),
-                    ("seed_extend_polyq", "repeat_residue"),
-                    ("seed_extend_polyq", "seed_min_q_count"),
-                    ("seed_extend_polyq", "seed_window_size"),
+                    ("seed_extend", "extend_min_target_count"),
+                    ("seed_extend", "extend_window_size"),
+                    ("seed_extend", "min_total_length"),
+                    ("seed_extend", "repeat_residue"),
+                    ("seed_extend", "seed_min_target_count"),
+                    ("seed_extend", "seed_window_size"),
                     ("threshold", "min_target_count"),
                     ("threshold", "repeat_residue"),
                     ("threshold", "window_size"),

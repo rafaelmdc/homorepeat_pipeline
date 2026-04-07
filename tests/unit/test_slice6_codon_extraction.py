@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from homorepeat.detection.codon_extract import extract_call_codons
+from homorepeat.detection.codon_extract import build_codon_usage_rows, extract_call_codons
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, build_call_row, validate_call_row
 from homorepeat.io.tsv_io import read_tsv, write_tsv
 
@@ -37,6 +37,34 @@ class SliceSixCodonExtractionTest(unittest.TestCase):
         self.assertFalse(result.accepted)
         self.assertEqual(result.codon_sequence, "")
         self.assertEqual(result.warning_message, "codon slice translation does not match amino-acid tract")
+
+    def test_build_codon_usage_rows_reports_per_amino_acid_fractions(self) -> None:
+        call_row = build_call_row(
+            method="seed_extend",
+            genome_id="genome_001",
+            taxon_id="9606",
+            sequence_id="seq_001",
+            protein_id="prot_001",
+            repeat_residue="Q",
+            start=2,
+            end=7,
+            aa_sequence="QAQAQQ",
+        )
+        call_row["codon_sequence"] = "CAAGCTCAGGCTCAACAG"
+
+        usage_rows = build_codon_usage_rows(call_row, translation_table="1")
+
+        self.assertEqual(
+            [
+                (row["amino_acid"], row["codon"], row["codon_count"], row["codon_fraction"])
+                for row in usage_rows
+            ],
+            [
+                ("A", "GCT", 2, "1.0000000000"),
+                ("Q", "CAA", 2, "0.5000000000"),
+                ("Q", "CAG", 2, "0.5000000000"),
+            ],
+        )
 
     def test_extract_repeat_codons_cli_enriches_successful_rows_and_warns_on_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -151,6 +179,7 @@ class SliceSixCodonExtractionTest(unittest.TestCase):
 
             enriched_rows = read_tsv(outdir / "pure_calls.tsv")
             warning_rows = read_tsv(outdir / "pure_calls_codon_warnings.tsv")
+            codon_usage_rows = read_tsv(outdir / "pure_calls_codon_usage.tsv")
 
             self.assertEqual(len(enriched_rows), 2)
             for row in enriched_rows:
@@ -161,6 +190,13 @@ class SliceSixCodonExtractionTest(unittest.TestCase):
             self.assertEqual(enriched_rows[0]["codon_sequence"], "GCTGCTGCTGCTGCTGCT")
             self.assertEqual(len(enriched_rows[0]["codon_sequence"]), 18)
             self.assertEqual(enriched_rows[1]["codon_sequence"], "")
+
+            self.assertEqual(len(codon_usage_rows), 1)
+            self.assertEqual(codon_usage_rows[0]["call_id"], success_row["call_id"])
+            self.assertEqual(codon_usage_rows[0]["amino_acid"], "A")
+            self.assertEqual(codon_usage_rows[0]["codon"], "GCT")
+            self.assertEqual(codon_usage_rows[0]["codon_count"], "6")
+            self.assertEqual(codon_usage_rows[0]["codon_fraction"], "1.0000000000")
 
             self.assertEqual(len(warning_rows), 1)
             self.assertEqual(warning_rows[0]["warning_code"], "codon_slice_failed")

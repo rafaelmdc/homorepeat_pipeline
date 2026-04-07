@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from homorepeat.detection.detect_seed_extend_polyq import find_seed_extend_polyq_tracts
+from homorepeat.detection.detect_seed_extend import find_seed_extend_tracts
 from homorepeat.contracts.repeat_features import validate_call_row
 from homorepeat.io.tsv_io import read_tsv, write_tsv
 
@@ -14,44 +14,49 @@ from tests.test_support import CLI_ENV, REPO_ROOT
 
 
 class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
-    def test_find_seed_extend_polyq_tracts_reports_long_interrupted_polyq(self) -> None:
-        tracts = find_seed_extend_polyq_tracts("MQQQQQQAQQQQQQM")
+    def test_find_seed_extend_tracts_reports_long_interrupted_polyq(self) -> None:
+        tracts = find_seed_extend_tracts("MQQQQQQAQQQQQQM", "Q")
         self.assertEqual(len(tracts), 1)
         tract = tracts[0]
         self.assertEqual((tract.start, tract.end, tract.aa_sequence), (2, 14, "QQQQQQAQQQQQQ"))
 
-    def test_find_seed_extend_polyq_tracts_merges_overlapping_seed_windows(self) -> None:
-        tracts = find_seed_extend_polyq_tracts("MQQQQQQQQQQQQP")
+    def test_find_seed_extend_tracts_merges_overlapping_seed_windows(self) -> None:
+        tracts = find_seed_extend_tracts("MQQQQQQQQQQQQP", "Q")
         self.assertEqual(len(tracts), 1)
         self.assertEqual((tracts[0].start, tracts[0].end, tracts[0].aa_sequence), (2, 13, "QQQQQQQQQQQQ"))
 
-    def test_find_seed_extend_polyq_tracts_can_reach_sequence_edges(self) -> None:
-        tracts = find_seed_extend_polyq_tracts("QQQQQQAQQQQQQ")
+    def test_find_seed_extend_tracts_can_reach_sequence_edges(self) -> None:
+        tracts = find_seed_extend_tracts("QQQQQQAQQQQQQ", "Q")
         self.assertEqual(len(tracts), 1)
         self.assertEqual((tracts[0].start, tracts[0].end, tracts[0].aa_sequence), (1, 13, "QQQQQQAQQQQQQ"))
 
-    def test_find_seed_extend_polyq_tracts_rejects_weak_q_rich_noise_without_seed(self) -> None:
-        tracts = find_seed_extend_polyq_tracts("MQQAQAQAQQAQQP")
+    def test_find_seed_extend_tracts_supports_non_q_residues(self) -> None:
+        tracts = find_seed_extend_tracts("MAAAAAATAAAAAAM", "A")
+        self.assertEqual(len(tracts), 1)
+        self.assertEqual((tracts[0].start, tracts[0].end, tracts[0].aa_sequence), (2, 14, "AAAAAATAAAAAA"))
+
+    def test_find_seed_extend_tracts_rejects_weak_noise_without_seed(self) -> None:
+        tracts = find_seed_extend_tracts("MQQAQAQAQQAQQP", "Q")
         self.assertEqual(tracts, [])
 
-    def test_find_seed_extend_polyq_tracts_trims_non_q_flanks_from_qualifying_windows(self) -> None:
-        tracts = find_seed_extend_polyq_tracts("MQQQQQQAQQQQQQM")
+    def test_find_seed_extend_tracts_trims_non_target_flanks_from_qualifying_windows(self) -> None:
+        tracts = find_seed_extend_tracts("MQQQQQQAQQQQQQM", "Q")
         self.assertEqual(tracts[0].aa_sequence[0], "Q")
         self.assertEqual(tracts[0].aa_sequence[-1], "Q")
 
-    def test_find_seed_extend_polyq_tracts_rejects_seed_only_candidates_below_min_total_length(self) -> None:
-        tracts = find_seed_extend_polyq_tracts("QQQQQQQQ")
+    def test_find_seed_extend_tracts_rejects_seed_only_candidates_below_min_total_length(self) -> None:
+        tracts = find_seed_extend_tracts("QQQQQQQQ", "Q")
         self.assertEqual(tracts, [])
 
-    def test_find_seed_extend_polyq_tracts_validates_parameters(self) -> None:
-        with self.assertRaisesRegex(ValueError, "seed_min_q_count"):
-            find_seed_extend_polyq_tracts("QQQQQQQQQQ", seed_window_size=8, seed_min_q_count=9)
+    def test_find_seed_extend_tracts_validates_parameters(self) -> None:
+        with self.assertRaisesRegex(ValueError, "seed_min_target_count"):
+            find_seed_extend_tracts("QQQQQQQQQQ", "Q", seed_window_size=8, seed_min_target_count=9)
 
-    def test_detect_seed_extend_polyq_cli_writes_calls_and_run_params(self) -> None:
+    def test_detect_seed_extend_cli_writes_calls_and_run_params(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             inputs_dir = tmp / "merged" / "acquisition"
-            outdir = tmp / "merged" / "detection" / "seed_extend_polyq"
+            outdir = tmp / "merged" / "detection" / "seed_extend"
             inputs_dir.mkdir(parents=True, exist_ok=True)
 
             proteins_tsv = inputs_dir / "proteins.tsv"
@@ -115,11 +120,13 @@ class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable,
-                    "-m", "homorepeat.cli.detect_seed_extend_polyq",
+                    "-m", "homorepeat.cli.detect_seed_extend",
                     "--proteins-tsv",
                     str(proteins_tsv),
                     "--proteins-fasta",
                     str(proteins_faa),
+                    "--repeat-residue",
+                    "Q",
                     "--outdir",
                     str(outdir),
                 ],
@@ -131,18 +138,18 @@ class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
             )
             if result.returncode != 0:
                 self.fail(
-                    f"detect_seed_extend_polyq.py failed with exit code {result.returncode}\n"
+                    f"detect_seed_extend.py failed with exit code {result.returncode}\n"
                     f"stdout:\n{result.stdout}\n"
                     f"stderr:\n{result.stderr}"
                 )
 
-            call_rows = read_tsv(outdir / "seed_extend_polyq_calls.tsv")
+            call_rows = read_tsv(outdir / "seed_extend_calls.tsv")
             param_rows = read_tsv(outdir / "run_params.tsv")
 
             self.assertEqual(len(call_rows), 1)
             row = call_rows[0]
             validate_call_row(row)
-            self.assertEqual(row["method"], "seed_extend_polyq")
+            self.assertEqual(row["method"], "seed_extend")
             self.assertEqual(row["protein_id"], "prot_seed_extend_1")
             self.assertEqual(row["start"], "2")
             self.assertEqual(row["end"], "14")
@@ -159,18 +166,18 @@ class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
                 {
                     ("repeat_residue", "Q"),
                     ("seed_window_size", "8"),
-                    ("seed_min_q_count", "6"),
+                    ("seed_min_target_count", "6"),
                     ("extend_window_size", "12"),
-                    ("extend_min_q_count", "8"),
+                    ("extend_min_target_count", "8"),
                     ("min_total_length", "10"),
                 },
             )
 
-    def test_detect_seed_extend_polyq_cli_rejects_non_q_repeat_residue(self) -> None:
+    def test_detect_seed_extend_cli_accepts_non_q_repeat_residue(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             inputs_dir = tmp / "merged" / "acquisition"
-            outdir = tmp / "merged" / "detection" / "seed_extend_polyq"
+            outdir = tmp / "merged" / "detection" / "seed_extend"
             inputs_dir.mkdir(parents=True, exist_ok=True)
 
             proteins_tsv = inputs_dir / "proteins.tsv"
@@ -190,12 +197,12 @@ class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
                 ],
                 fieldnames=PROTEIN_TEST_FIELDNAMES,
             )
-            proteins_faa.write_text(">prot_seed_extend_1\nMQQQQQQAQQQQQQM\n", encoding="utf-8")
+            proteins_faa.write_text(">prot_seed_extend_1\nMAAAAAATAAAAAAM\n", encoding="utf-8")
 
             result = subprocess.run(
                 [
                     sys.executable,
-                    "-m", "homorepeat.cli.detect_seed_extend_polyq",
+                    "-m", "homorepeat.cli.detect_seed_extend",
                     "--proteins-tsv",
                     str(proteins_tsv),
                     "--proteins-fasta",
@@ -212,8 +219,18 @@ class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
                 check=False,
             )
 
-            self.assertEqual(result.returncode, 3)
-            self.assertIn("--repeat-residue must be 'Q'", result.stderr)
+            if result.returncode != 0:
+                self.fail(
+                    f"detect_seed_extend.py failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            call_rows = read_tsv(outdir / "seed_extend_calls.tsv")
+            self.assertEqual(len(call_rows), 1)
+            self.assertEqual(call_rows[0]["method"], "seed_extend")
+            self.assertEqual(call_rows[0]["repeat_residue"], "A")
+            self.assertEqual(call_rows[0]["window_definition"], "seed:A6/8|extend:A8/12")
 
 
 PROTEIN_TEST_FIELDNAMES = [

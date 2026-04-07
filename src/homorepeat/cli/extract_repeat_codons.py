@@ -7,7 +7,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from homorepeat.detection.codon_extract import extract_call_codons  # noqa: E402
+from homorepeat.detection.codon_extract import (  # noqa: E402
+    CODON_USAGE_FIELDNAMES,
+    build_codon_usage_rows,
+    extract_call_codons,
+)
 from homorepeat.io.fasta_io import read_fasta  # noqa: E402
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, validate_call_row  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
@@ -62,6 +66,7 @@ def main() -> int:
         if args.warning_out
         else outdir / f"{calls_path.stem}_codon_warnings.tsv"
     )
+    codon_usage_path = outdir / f"{calls_path.stem}_codon_usage.tsv"
 
     call_rows = read_tsv(calls_path, required_columns=CALLS_REQUIRED)
     sequence_rows = read_tsv(args.sequences_tsv, required_columns=SEQUENCES_REQUIRED)
@@ -70,6 +75,7 @@ def main() -> int:
     sequence_rows_by_id = {row.get("sequence_id", ""): row for row in sequence_rows}
     enriched_rows: list[dict[str, object]] = []
     warning_rows: list[dict[str, object]] = []
+    codon_usage_rows: list[dict[str, object]] = []
 
     for row in call_rows:
         output_row = {field: row.get(field, "") for field in CALL_FIELDNAMES}
@@ -121,6 +127,12 @@ def main() -> int:
         )
         if result.accepted:
             output_row["codon_sequence"] = result.codon_sequence
+            codon_usage_rows.extend(
+                build_codon_usage_rows(
+                    output_row,
+                    translation_table=sequence_row.get("translation_table", "1"),
+                )
+            )
         else:
             warning_rows.append(
                 build_warning_row(
@@ -141,6 +153,7 @@ def main() -> int:
 
     write_tsv(output_calls_path, enriched_rows, fieldnames=CALL_FIELDNAMES)
     write_tsv(warning_path, warning_rows, fieldnames=WARNING_FIELDNAMES)
+    write_tsv(codon_usage_path, codon_usage_rows, fieldnames=CODON_USAGE_FIELDNAMES)
     return 0
 
 
