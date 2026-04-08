@@ -1,61 +1,63 @@
-## Scale the Pipeline for ~900 Genomes on One Docker Host
+# Scale Guide
 
-  ### Summary
+## Current scaling model
 
-  - Current state: the pipeline is already capable of parallel batch acquisition, because workflows/acquisition_from_accessions.nf fans out batch manifests into separate download/normalize/translate tasks. Detection is not batch-
-    parallel today, because workflows/detection_from_acquisition.nf waits for the merged acquisition outputs and then scans one monolithic protein set per method/residue.
-  - Keep the published flat-file contracts unchanged. This is a workflow/config scaling change, not a schema change.
-  - Target runtime: one machine, docker profile.
-  - Chosen scaling policy: make acquisition and detection both batch-parallel, and change the default batch_size from 100 to 25 for better load balancing across ~900 genomes.
+The pipeline now parallelizes both major heavy phases:
+- acquisition fans out by planned batch
+- detection and codon finalization fan out by `batch_id x method x repeat_residue`
 
-  ### Key Changes
+Canonical outputs remain merged under `publish/acquisition/`, `publish/calls/`, `publish/database/`, and `publish/reports/`.
 
-  - In workflows/acquisition_from_accessions.nf, keep the existing merged outputs, but also emit the per-batch translated channel as an internal workflow interface for downstream detection.
-  - Refactor workflows/detection_from_acquisition.nf to consume per-batch inputs keyed by batch_id:
-      - Run DETECT_* per batch_id x method x repeat_residue.
-      - Run FINALIZE_CALL_CODONS per batch_id x method x repeat_residue.
-      - Merge all finalized call fragments and run-param fragments with the existing MERGE_CALL_TABLES step before reporting.
-  - Do not change call identity rules. Existing call_id generation is already stable across per-batch execution, so merged repeat_calls.tsv remains contract-compatible.
-  - In conf/base.config:
-      - Change params.batch_size default to 25.
-      - Add explicit maxForks controls by label:
-          - planning: 1
-          - acquisition_download: 2
-          - acquisition_normalize: 4
-          - acquisition_merge: 1
-          - detection: 4
-          - database: 1
-          - reporting: 1
-      - Keep cpus = 1 per task unless profiling shows a specific CLI benefits from internal multithreading later.
-  - Keep the wrapper unchanged. scripts/run_phase4_pipeline.sh already passes through extra Nextflow args, so -resume remains the operational recovery path for large runs.
-  - Add an operator note in docs that for large runs the intended shape is many small batch tasks plus -resume, not one giant merged detection pass.
+## Default concurrency
 
-  ### Public / Interface Changes
+The current defaults in [`conf/base.config`](../conf/base.config) are:
+- `params.batch_size = 25`
+- `planning.maxForks = 1`
+- `acquisition_download.maxForks = 2`
+- `acquisition_normalize.maxForks = 4`
+- `acquisition_merge.maxForks = 1`
+- `detection.maxForks = 4`
+- `database.maxForks = 1`
+- `reporting.maxForks = 1`
 
-  - No changes to published artifacts under publish/acquisition/, publish/calls/, publish/database/, or publish/reports/.
-  - Internal workflow interface change only:
-      - acquisition workflow emits per-batch translated outputs for detection.
-      - detection workflow consumes batch-keyed inputs instead of only merged acquisition tables.
-  - Config surface additions:
-      - new default batch_size = 25
-      - new per-label concurrency limits via maxForks
+Each task currently requests `cpus = 1`. Scaling today comes from more concurrent tasks, not from multithreaded Python CLIs.
 
-  ### Test Plan
+## Recommended shape for ~900 genomes
 
-  - Add/update workflow-level tests to confirm the pipeline still parses and that batch-parallel detection wiring composes correctly.
-  - Add a targeted CLI/workflow regression test that runs two small translated batches through detection/finalization and verifies:
-      - merged repeat_calls.tsv is identical to the old single-merged-input behavior for the same fixtures
-      - merged run_params.tsv remains de-duplicated and conflict-free
-  - Add a runtime/integration test that verifies multiple batch manifests produce multiple DOWNLOAD_NCBI_BATCH and NORMALIZE_CDS_BATCH tasks, and that detection now produces multiple finalized fragments before merge.
-  - Acceptance criteria for a real 900-genome run:
-      - Nextflow timeline shows concurrent download, normalize, and detection tasks
-      - final published outputs remain in the same locations and schemas
-      - rerunning with -resume skips completed batch tasks cleanly
+For a one-host Docker run:
+- keep the `docker` profile
+- keep batches small enough to balance uneven genomes and make `-resume` useful
+- prefer the default `batch_size = 25` unless host limits force a change
 
-  ### Assumptions
+The intended operational pattern is:
+1. prepare a plain-text accession list with one assembly accession per line
+2. run the wrapper with `HOMOREPEAT_PHASE4_PROFILE=docker`
+3. use `-resume` if the run is interrupted or if container images are rebuilt mid-run
+4. use `publish/status/accession_status.tsv` to identify accession-level failures instead of reconstructing them from Nextflow work dirs
 
-  - The main scaling bottleneck worth fixing first is workflow structure, not Python algorithm speed.
-  - One-host Docker is the target; no scheduler/cloud executor migration is included in this pass.
-  - Smaller batches (25) are preferred over 50 or 100 to maximize balancing and resumability for a 900-genome run.
-  - Official Nextflow behavior should be relied on for task-level concurrency under the local executor and for maxForks caps:
-      - https://nextflow.io/docs/stable/reference/process.html
+Example:
+
+```bash
+HOMOREPEAT_PHASE4_PROFILE=docker \
+HOMOREPEAT_PHASE4_RUN_ID=run_900_genomes \
+bash scripts/run_phase4_pipeline.sh path/to/accessions.txt -resume
+```
+
+## What is published for recovery
+
+Large runs now publish a stable operational ledger under `publish/status/`:
+- `accession_status.tsv`: one row per requested accession
+- `accession_call_counts.tsv`: one row per accession x method x repeat residue
+- `status_summary.json`: run-level counts and final status
+
+This complements Nextflow caching:
+- `-resume` knows which tasks do not need to rerun
+- the status ledger tells you which accessions succeeded, failed, or produced no calls
+
+## What was verified
+
+As of April 8, 2026:
+- real Docker smoke runs on 5 live NCBI accessions completed successfully
+- batch fan-out was observed in the Nextflow trace
+- multi-residue runs (`Q,N`) now merge correctly into canonical `repeat_calls.tsv` and residue-scoped `run_params.tsv`
+- accession status and per-method/per-residue call counts were published correctly

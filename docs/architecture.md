@@ -22,11 +22,10 @@ Python scripts and small reusable libraries are responsible for:
 
 The goal is to keep the workflow easy to rerun and the scientific logic easy to test independently.
 
-The current development runtime is also split into two operator-facing surfaces:
-- a Nextflow pipeline app under `pipeline/`
-- a product-local Django stack under `web/compose.yaml`
-
-For the intended long-term production structure, see `docs/production_architecture.md`.
+The current development runtime is container-first and centered on the repo root:
+- the Nextflow workflow lives at the top level of this repository
+- the runtime images are built from `compose.yaml` and `containers/*.Dockerfile`
+- published runs live under `runs/<run_id>/`
 
 ---
 
@@ -105,6 +104,7 @@ Every process must consume and emit predictable files with documented columns an
 The retained detection methods are independent strategies:
 - pure
 - threshold
+- seed_extend
 
 They should be implemented as parallel modules with the same output schema.
 
@@ -122,10 +122,8 @@ Figures and summary tables should be generated only from finalized analysis-read
 ### 6. Simplicity over cleverness
 Prefer explicit modules, explicit file contracts, and small subworkflows over deeply clever channel logic.
 
-### 7. Compose is for app/runtime services, not workflow logic
-The monorepo uses product-local compose files:
-- `pipeline/compose.yaml` builds the pipeline runtime images expected by the Nextflow `docker` profile
-- `web/compose.yaml` starts the Django development server plus PostgreSQL
+### 7. Compose is for runtime images, not workflow logic
+This repository ships one root-level [`compose.yaml`](../compose.yaml) for building the pipeline runtime images expected by the Nextflow `docker` profile.
 
 It should not become a second workflow orchestrator.
 Scientific execution still belongs to Nextflow plus the package-backed CLIs.
@@ -162,6 +160,7 @@ It contains the current implemented methods:
 - **seed_extend**: seed-and-extend density detection for longer interrupted tracts
 
 All methods must emit the same call schema.
+Detection and codon finalization currently fan out by batch, method, and repeat residue before merging into canonical downstream tables.
 
 ### Database assembly
 This stage imports validated flat outputs into SQLite.
@@ -189,11 +188,11 @@ Responsibilities:
 
 ### Workflow layer
 Owns:
-- `pipeline/main.nf`
-- `pipeline/nextflow.config`
-- `pipeline/conf/*.config`
-- `pipeline/modules/local/*.nf`
-- `pipeline/workflows/*.nf`
+- `main.nf`
+- `nextflow.config`
+- `conf/*.config`
+- `modules/local/*.nf`
+- `workflows/*.nf`
 
 Responsibilities:
 - orchestration
@@ -204,8 +203,8 @@ Responsibilities:
 - resumability
 
 Current validated runtime note:
-- on April 6, 2026, the `docker` profile completed a smoke run end-to-end on `examples/accessions/smoke_human.txt`
-- the validated run root is `runs/phase4_pipeline_2026-04-06_12-03-46Z`
+- on April 8, 2026, the `docker` profile completed a live smoke run end-to-end on 5 real NCBI accessions
+- the validated run root is `runs/smoke_contract_cleanup_live`
 
 ### Script layer
 Owns:
@@ -251,34 +250,28 @@ Responsibilities:
 - repo conventions
 - local agent instructions
 
-### Compose and web layer
+### Compose layer
 Owns:
-- `web/compose.yaml`
-- `web/containers/web.Dockerfile`
-- `web/`
+- `compose.yaml`
+- `containers/*.Dockerfile`
 
 Responsibilities:
-- Django development runtime
-- local PostgreSQL service
-- future frontend integration against published run artifacts or Postgres tables derived from them
 - convenient image builds for the pipeline Docker profile
+- separation of acquisition and detection toolchains
 
 ---
 
 ## Recommended repository structure
 
-text
-homorepeat/
+```text
+homorepeat_pipeline/
 ├── README.md
-├── apps/
-│   ├── pipeline/
-│   │   ├── main.nf
-│   │   ├── nextflow.config
-│   │   ├── conf/
-│   │   ├── modules/
-│   │   ├── workflows/
-│   │   └── scripts/
-│   └── web/
+├── main.nf
+├── nextflow.config
+├── conf/
+├── modules/
+├── workflows/
+├── scripts/
 ├── src/
 │   └── homorepeat/
 ├── docs/
@@ -286,10 +279,13 @@ homorepeat/
 ├── runtime/
 ├── runs/
 ├── tests/
-└── containers/
+├── containers/
+└── compose.yaml
+```
 
 Workflow boundaries
-pipeline/workflows/acquisition_from_accessions.nf
+
+`workflows/acquisition_from_accessions.nf`
 
 Inputs:
 
@@ -300,7 +296,8 @@ Outputs:
 normalized sequence inputs
 normalized metadata
 taxonomy-linked records
-pipeline/workflows/detection_from_acquisition.nf
+
+`workflows/detection_from_acquisition.nf`
 
 Inputs:
 
@@ -311,7 +308,8 @@ Outputs:
 
 pure_calls.tsv
 threshold_calls.tsv
-pipeline/workflows/database_reporting.nf
+
+`workflows/database_reporting.nf`
 
 Inputs:
 
@@ -384,6 +382,7 @@ Examples:
 
 pure_calls.tsv
 threshold_calls.tsv
+seed_extend_calls.tsv
 
 These are the most important portable workflow artifacts.
 
@@ -401,7 +400,7 @@ This design fits the scientific workflow already established in the current proj
 
 data retrieval
 contamination/taxonomy handling
-two detection strategies
+peer detection strategies
 SQLite integration
 downstream statistical summaries and visualizations
 

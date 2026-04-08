@@ -30,7 +30,7 @@ What it contains:
 What it does not contain:
 - the taxonomy SQLite database
 - downloaded NCBI package caches
-- checked-out workflow scripts from `pipeline/`
+- checked-out workflow scripts from the repo root
 
 Those are runtime artifacts or repo-owned orchestration files and should stay outside the image.
 
@@ -47,7 +47,7 @@ What it contains:
 What it does not contain:
 - `taxon-weaver`
 - NCBI `datasets`
-- checked-out workflow scripts from `pipeline/`
+- checked-out workflow scripts from the repo root
 
 This split is intentional.
 Acquisition and detection have different external toolchains, and later Nextflow process labels should be able to pin different images without carrying unnecessary binaries into every task.
@@ -81,19 +81,12 @@ So the practical model is:
 Fast path from the repo root:
 
 ```bash
-bash pipeline/scripts/build_dev_containers.sh
+bash scripts/build_dev_containers.sh
 ```
 
 That helper builds the image tags expected by the pipeline today:
 - `homorepeat-acquisition:dev`
 - `homorepeat-detection:dev`
-
-Build the web image and Postgres-backed dev stack from the repo root:
-
-```bash
-docker compose build web
-docker compose up web postgres
-```
 
 Equivalent manual commands:
 
@@ -169,7 +162,7 @@ docker run --rm \
   -e TAXONOMY_DB_PATH=/data/taxonomy/ncbi_taxonomy.sqlite \
   -e NCBI_API_KEY="$NCBI_API_KEY" \
   homorepeat-acquisition:dev \
-  bash pipeline/scripts/smoke_live_acquisition.sh
+  bash scripts/smoke_live_acquisition.sh
 ```
 
 To run threshold detection inside the detection image:
@@ -191,8 +184,8 @@ docker run --rm \
 ## Nextflow wiring
 
 The repo now has a Phase 4 Nextflow layer and a `docker` profile:
-- [nextflow.config](../pipeline/nextflow.config)
-- [docker.config](../pipeline/conf/docker.config)
+- [nextflow.config](../nextflow.config)
+- [docker.config](../conf/docker.config)
 
 Current label-to-image mapping:
 - `planning` -> acquisition image
@@ -207,10 +200,10 @@ Important runtime detail:
 - the images bake the installable `homorepeat` package into the image
 - Nextflow mounts task work directories and required inputs at runtime, so the Docker profile does not need an extra repo checkout bind mount
 
-Verified on April 6, 2026:
-- `cd pipeline && docker compose build pipeline-acquisition pipeline-detection` succeeded
-- `cd web && docker compose up web postgres` started the Django plus Postgres stack successfully
-- the Nextflow `docker` profile completed a smoke pipeline run after removing an invalid duplicate repo mount from `pipeline/conf/docker.config`
+Verified on April 8, 2026:
+- `bash scripts/build_dev_containers.sh` succeeded
+- the Nextflow `docker` profile completed a live smoke pipeline run on 5 real NCBI accessions
+- the current verified live run root is `runs/smoke_contract_cleanup_live`
 
 Why this layer exists now:
 - lock the external toolchains

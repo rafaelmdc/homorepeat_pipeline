@@ -22,7 +22,7 @@ The first rebuild targets general homorepeat detection rather than a single resi
 The workflow must support:
 - acquisition of CDS and annotation data, with proteins derived locally when needed
 - one retained isoform per gene
-- two peer detection strategies: `pure` and `threshold`
+- three implemented detection strategies: `pure`, `threshold`, and optional `seed_extend`
 - configurable repeat residue targets
 - codon-aware feature extraction when CDS is available
 - SQLite assembly from flat files
@@ -93,7 +93,7 @@ Current implementation details and ignore rules live in:
 
 ### Local acquisition
 
-Local mode is planned to accept CDS FASTA and optional annotation GFF paths directly from the manifest.
+Local mode accepts CDS FASTA and optional annotation GFF paths directly from the manifest.
 Protein FASTA may still be accepted as a smoke-test bypass, but it is not the preferred scientific path.
 
 This mode must:
@@ -103,7 +103,7 @@ This mode must:
 
 ### Taxonomy handling
 
-Taxonomy metadata is planned to be normalized into `taxonomy.tsv`.
+Taxonomy metadata is normalized into `taxonomy.tsv`.
 
 For v1:
 - `taxon_id` is the stable reporting identifier
@@ -135,12 +135,13 @@ Settled v1 policy:
 
 ### Normalized FASTA outputs
 
-Acquisition is planned to write normalized FASTA files so downstream scripts do not rely on source-specific headers.
+Acquisition writes normalized FASTA files so downstream scripts do not rely on source-specific headers.
 
 Rules:
 - CDS FASTA headers become `sequence_id`
 - translated protein FASTA headers become `protein_id`
-- normalized rows point to those normalized FASTA paths
+- canonical FASTA artifacts live at stable published paths under `publish/acquisition/`
+- canonical TSV rows do not repeat stable artifact paths such as `sequence_path` or `protein_path`
 
 ### CDS normalization and translation
 
@@ -171,7 +172,7 @@ Derived-protein policy:
 
 ### Isoform selection
 
-The workflow is planned to keep one isoform per gene per genome.
+The workflow keeps one isoform per gene per genome.
 
 v1 selection rule:
 - group by `gene_symbol` when present
@@ -185,7 +186,7 @@ This rule is deterministic and easy to validate, even if it does not recover all
 
 ## Detection methods
 
-All methods are planned to emit the shared call contract.
+All methods emit the shared call contract.
 
 Coordinates are 1-based and inclusive in amino-acid space.
 All methods must trim leading and trailing non-target residues from the final called tract.
@@ -249,7 +250,7 @@ Current policy:
 
 ## Codon extraction and repeat features
 
-Codon extraction is planned to be attempted only when a CDS sequence can be linked to the detected protein.
+Codon extraction is attempted only when a CDS sequence can be linked to the detected protein.
 
 Rules:
 - derive codon coordinates directly from amino-acid coordinates
@@ -286,7 +287,7 @@ Canonical merged downstream outputs remain under:
 
 ## Database assembly
 
-SQLite is planned to be assembled only after metadata and call files validate.
+SQLite is assembled only after metadata and call files validate.
 
 v1 rules:
 - create schema from `assets/sql/schema.sql`
@@ -345,7 +346,7 @@ v1 reporting outputs:
 Rules:
 - report generation depends only on finalized tables or SQLite
 - chart configuration is emitted as JSON for inspection and reuse
-- the HTML report may load a pinned ECharts runtime from CDN in v1
+- the HTML report ships with a local `echarts.min.js` bundle so the report works offline
 
 ---
 

@@ -19,6 +19,19 @@ Typical entrypoints:
 
 ```bash
 python3 -m pip install -e .
-docker compose build pipeline-acquisition pipeline-detection
+bash scripts/build_dev_containers.sh
 bash scripts/run_phase4_pipeline.sh examples/accessions/smoke_human.txt
 ```
+
+For Docker-backed runs:
+
+```bash
+HOMOREPEAT_PHASE4_PROFILE=docker \
+bash scripts/run_phase4_pipeline.sh examples/accessions/smoke_human.txt
+```
+
+Published run artifacts live under `runs/<run_id>/publish/`, including:
+- canonical acquisition outputs in `publish/acquisition/`
+- canonical merged calls in `publish/calls/`
+- accession status ledgers in `publish/status/`
+- the stable run manifest in `publish/manifest/run_manifest.json`
