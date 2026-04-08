@@ -16,7 +16,7 @@ from homorepeat.io.fasta_io import (  # noqa: E402
     write_fasta,
 )
 from homorepeat.acquisition.gff_norm import first_nonempty, build_gff_index, resolve_linkage  # noqa: E402
-from homorepeat.core.ids import stable_id  # noqa: E402
+from homorepeat.core.ids import text_id  # noqa: E402
 from homorepeat.acquisition.package_layout import (  # noqa: E402
     build_allowed_primary_sequence_accessions,
     find_annotation_file,
@@ -65,9 +65,8 @@ DOWNLOAD_MANIFEST_REQUIRED = ["assembly_accession", "download_status"]
 def _build_primary_sequence_id(
     accession: str,
     primary_key: str,
-    sequence: str,
 ) -> str:
-    return stable_id("seq", accession, primary_key, sequence)
+    return text_id(accession, primary_key)
 
 
 def _build_primary_sequence_key(
@@ -90,17 +89,16 @@ def _build_disambiguated_sequence_id(
     protein_external_id: str,
     gene_symbol: str,
     record_id: str,
-    sequence: str,
+    header: str,
 ) -> str:
-    return stable_id(
-        "seq",
+    record_identity = first_nonempty(record_id, header)
+    return text_id(
         accession,
         transcript_id,
         source_record_id,
         protein_external_id,
         gene_symbol,
-        record_id,
-        sequence,
+        record_identity,
     )
 
 
@@ -175,7 +173,7 @@ def _run(args: argparse.Namespace) -> None:
             if expected_accessions and accession not in expected_accessions:
                 continue
             taxon_id = str(organism.get("taxId", ""))
-            genome_id = stable_id("genome", accession, taxon_id)
+            genome_id = text_id(accession)
             genomes_rows.append(
                 {
                     "genome_id": genome_id,
@@ -292,12 +290,11 @@ def _run(args: argparse.Namespace) -> None:
                     record_id=metadata_record_id,
                     header=header,
                 )
-                source_sequence_key = stable_id("source_seq", accession, primary_key)
+                source_sequence_key = text_id(accession, primary_key)
                 previous_source_sequence = seen_source_sequences.get(source_sequence_key)
                 sequence_id = _build_primary_sequence_id(
                     accession,
                     primary_key,
-                    sequence,
                 )
                 gene_group = first_nonempty(gene_symbol, transcript_id, sequence_id)
                 sequence_name = first_nonempty(transcript_id, source_record_id, metadata.get("record_id", ""))
@@ -348,7 +345,7 @@ def _run(args: argparse.Namespace) -> None:
                         protein_external_id,
                         gene_symbol,
                         metadata_record_id,
-                        sequence,
+                        header,
                     )
                     if disambiguated_sequence_id == sequence_id:
                         raise ContractError(

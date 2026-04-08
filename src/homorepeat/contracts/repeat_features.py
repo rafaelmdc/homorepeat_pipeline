@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homorepeat.core.ids import stable_id
+from homorepeat.core.ids import text_id
 from homorepeat.io.tsv_io import ContractError
 
 
@@ -68,14 +68,11 @@ def build_call_row(
     repeat_count = sum(1 for residue in sequence if residue == normalized_residue)
     non_repeat_count = length - repeat_count
     purity = repeat_count / length if length else 0.0
-    call_id = stable_id(
-        "call",
+    call_id = text_id(
         method,
         protein_id,
         normalized_residue,
-        start,
-        end,
-        sequence,
+        f"{start}-{end}",
     )
 
     row = {

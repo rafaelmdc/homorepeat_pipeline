@@ -152,6 +152,9 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertNotIn("download_path", batch_one_genomes[0])
             self.assertNotIn("sequence_path", batch_one_sequences[0])
             self.assertNotIn("protein_path", batch_one_proteins[0])
+            self.assertEqual(batch_one_genomes[0]["genome_id"], "GCF_000001405.40")
+            self.assertTrue(all(row["sequence_id"].startswith("GCF_000001405.40::") for row in batch_one_sequences))
+            self.assertTrue(all(row["protein_id"].endswith("::protein") for row in batch_one_proteins))
             self.assertEqual(sorted(row["gene_symbol"] for row in batch_one_proteins), ["ABC1", "XYZ1"])
             self.assertEqual(batch_one_warnings, [])
             self.assertEqual(batch_one_validation["status"], "pass")
@@ -1000,7 +1003,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(len(proteins_rows), 1)
             self.assertEqual(proteins_rows[0]["gene_symbol"], "ND1")
             self.assertEqual(proteins_rows[0]["protein_length"], "2")
-            self.assertIn(">prot_", (outdir / "proteins.faa").read_text(encoding="utf-8"))
+            self.assertIn(f">{proteins_rows[0]['protein_id']}", (outdir / "proteins.faa").read_text(encoding="utf-8"))
             self.assertIn("\nMW\n", (outdir / "proteins.faa").read_text(encoding="utf-8"))
 
     def test_translate_fails_when_no_accession_yields_retained_proteins(self) -> None:
@@ -1234,7 +1237,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(len({row["sequence_id"] for row in sequences}), 2)
             self.assertEqual(
                 [row["warning_code"] for row in warnings_rows],
-                ["conflicting_duplicate_cds_key"],
+                ["conflicting_duplicate_cds_key", "ambiguous_sequence_identity_resolved"],
             )
             self.assertEqual((outdir / "cds.fna").read_text(encoding="utf-8").count(">"), 2)
 
@@ -1317,6 +1320,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
 
             self.assertEqual(len(sequences), 2)
             self.assertEqual(len({row["sequence_id"] for row in sequences}), 2)
+            self.assertIn(f"{accession}::XM_SHARED.1", {row["sequence_id"] for row in sequences})
             self.assertEqual({row["gene_symbol"] for row in sequences}, {"LOC1", "LOC2"})
             self.assertEqual(
                 [row["warning_code"] for row in warnings_rows],

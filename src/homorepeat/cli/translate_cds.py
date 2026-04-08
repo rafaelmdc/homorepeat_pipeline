@@ -14,7 +14,7 @@ from homorepeat.acquisition.acquisition_validation import (  # noqa: E402
     write_validation_json,
 )
 from homorepeat.io.fasta_io import iter_fasta, write_fasta  # noqa: E402
-from homorepeat.core.ids import stable_id  # noqa: E402
+from homorepeat.core.ids import text_id  # noqa: E402
 from homorepeat.acquisition.translation import translate_cds as translate_sequence  # noqa: E402
 from homorepeat.io.tsv_io import ContractError, iter_tsv, read_tsv, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
@@ -133,7 +133,7 @@ def _run(args: argparse.Namespace) -> None:
             translation_warning_rows.append(warning_row)
             continue
 
-        protein_id = stable_id("prot", sequence_id)
+        protein_id = text_id(sequence_id, "protein")
         candidate = {
             "protein_id": protein_id,
             "sequence_id": sequence_id,
