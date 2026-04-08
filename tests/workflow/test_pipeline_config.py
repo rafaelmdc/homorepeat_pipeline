@@ -19,6 +19,10 @@ class PipelineConfigTest(unittest.TestCase):
         ]:
             self.assertTrue((REPO_ROOT / relative_path).exists(), relative_path)
 
+    def test_nextflow_version_is_pinned(self) -> None:
+        config_text = (REPO_ROOT / "nextflow.config").read_text(encoding="utf-8")
+        self.assertIn("nextflowVersion = '!25.10.4'", config_text)
+
     @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")
     def test_nextflow_config_parses(self) -> None:
         result = subprocess.run(

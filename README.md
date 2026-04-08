@@ -1,33 +1,51 @@
-# HomoRepeat Pipeline
+# HomoRepeat
 
-This product root owns the Nextflow workflow, package-backed CLIs, runtime images, tests, examples, runtime caches, and published run artifacts.
+HomoRepeat is a Nextflow pipeline for homorepeat acquisition, detection, codon-aware finalization, SQLite assembly, and downstream reporting.
 
-Key paths:
-- `main.nf`
-- `nextflow.config`
-- `conf/`
-- `modules/`
-- `workflows/`
-- `scripts/`
-- `src/homorepeat/`
-- `tests/`
-- `examples/`
-- `runtime/`
-- `runs/`
+Version `0.1` is the first release-focused rebuild of the project. It is scoped to:
+- acquisition from assembly accession lists
+- taxonomy-aware normalization
+- three homorepeat detection strategies: `pure`, `threshold`, and optional `seed_extend`
+- configurable repeat residues
+- canonical flat-file outputs plus a SQLite database
+- reproducible reporting artifacts under one run root
 
-## Docker Run
+The workflow orchestration lives in Nextflow. The scientific logic lives in package-backed Python CLIs under `src/homorepeat/`.
 
-Build the runtime images expected by the Nextflow `docker` profile:
+## Version 0.1 Scope
+
+This release is intended to be a usable, reproducible MVP rather than a broad platform release.
+
+Included in `0.1`:
+- accession-driven runs through `nextflow run .`
+- `docker` and `local` profiles
+- NCBI-backed acquisition using the runtime containers
+- merged canonical outputs under `runs/<run_id>/publish/`
+- run metadata and published Nextflow diagnostics
+
+Not included in `0.1`:
+- web applications or interactive front ends
+- domain enrichment or annotation-heavy downstream biology
+- broad compatibility across arbitrary Nextflow releases
+
+## Requirements
+
+- Nextflow `25.10.4`
+- Docker for the `docker` profile
+- the runtime images built from this repo
+- a taxonomy database at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`, unless overridden with `--taxonomy_db`
+
+The repo pins the supported Nextflow version in [nextflow.config](./nextflow.config).
+
+## Quick Start
+
+Build the runtime images expected by the `docker` profile:
 
 ```bash
 bash scripts/build_dev_containers.sh
 ```
 
-The pipeline expects an accession list file, one assembly accession per line.
-The default taxonomy DB path is `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`.
-Override it with `--taxonomy_db` when needed.
-
-Example accession file:
+Create an accession file with one assembly accession per line:
 
 ```text
 GCF_000001405.40
@@ -35,9 +53,9 @@ GCF_000001635.27
 GCF_000005845.2
 ```
 
-Comments and blank lines are allowed, and duplicate accession lines are ignored.
+Comments and blank lines are allowed. Duplicate accession lines are ignored.
 
-Run the pipeline in Docker mode:
+Run the pipeline:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -47,49 +65,40 @@ nextflow run . \
   --accessions_file examples/accessions/my_accessions.txt
 ```
 
-Recommended standard flags:
-- `-profile docker`
-- `--run_id my_run`
-- `--accessions_file path/to/accessions.txt`
-- `--taxonomy_db path/to/ncbi_taxonomy.sqlite` when not using the default
-- `-output-dir path/to/publish` when you want a Nextflow-native publish override
-- `-params-file path/to/params.json`
-- `-resume`
+The canonical operator interface is `nextflow run .`. There is no repo-specific wrapper script.
 
-By default:
-- `run_root` lands under the repo root at `runs/<run_id>`
-- `output_dir` lands under the repo root at `runs/<run_id>/publish`
-- `workDir` lands under the repo root at `runs/<run_id>/internal/nextflow/work`
+## Core Concepts
 
-Example with `-resume` and an explicit Nextflow log path:
+The pipeline is organized around four stages:
 
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow \
-  -log runs/my_run/internal/nextflow/nextflow.log \
-  run . \
-  -profile docker \
-  --run_id my_run \
-  --accessions_file examples/accessions/my_accessions.txt \
-  -resume
-```
+1. Acquisition
+2. Detection
+3. Database assembly
+4. Reporting
 
-## Choosing Methods
+Scientific behavior is implemented in Python. Nextflow is responsible for:
+- orchestration
+- task execution
+- profiles
+- caching and resume
+- resource settings
+- publication of run outputs
 
-The detection workflow exposes three method toggles:
+## Detection Methods
+
+Version `0.1` exposes three method toggles:
 - `run_pure`
 - `run_threshold`
 - `run_seed_extend`
 
-Current defaults are:
+Current defaults:
 - `run_pure = true`
 - `run_threshold = true`
 - `run_seed_extend = false`
 
-That means the default pipeline run already executes `pure` and `threshold`.
-To run all three methods, enable `run_seed_extend` as well.
+That means the default run already executes `pure` and `threshold`.
 
-Example using direct Nextflow param overrides:
+To run all three methods:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -102,7 +111,7 @@ nextflow run . \
   --run_seed_extend true
 ```
 
-You can also change the repeat residues in the same way:
+To target multiple residues:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -116,13 +125,15 @@ nextflow run . \
   --run_seed_extend true
 ```
 
-`repeat_residues` is a comma-separated list of one-letter amino acid residue codes.
+`repeat_residues` is a comma-separated list of one-letter amino-acid residue codes.
 
-## Changing Settings
+## Configuration
 
-There are two supported ways to change pipeline settings.
+The supported configuration paths are:
+- direct Nextflow parameter overrides
+- a JSON params file passed through `-params-file`
 
-Pass overrides directly to `nextflow run`:
+Direct override example:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -136,7 +147,7 @@ nextflow run . \
   --run_seed_extend true
 ```
 
-Or put settings in a params JSON file and pass it through `-params-file`:
+Params-file example:
 
 ```json
 {
@@ -167,13 +178,13 @@ nextflow run . \
   --accessions_file examples/accessions/my_accessions.txt
 ```
 
-See `examples/params/smoke_default.json` and `examples/params/multi_residue_qn.json` for checked-in examples.
+Checked-in examples:
+- `examples/params/smoke_default.json`
+- `examples/params/multi_residue_qn.json`
 
-## Available Settings
+### Supported Settings
 
-The current pipeline params exposed in `conf/base.config` are:
-
-Detection and biology settings:
+Detection and biology:
 - `repeat_residues`
 - `run_pure`
 - `pure_min_repeat_count`
@@ -187,7 +198,7 @@ Detection and biology settings:
 - `seed_extend_extend_min_target_count`
 - `seed_extend_min_total_length`
 
-Acquisition and batching settings:
+Acquisition and batching:
 - `batch_size`
 - `ncbi_api_key`
 - `ncbi_cache_dir`
@@ -195,7 +206,7 @@ Acquisition and batching settings:
 - `ncbi_rehydrate`
 - `ncbi_rehydrate_workers`
 
-Runtime and tool-path settings:
+Runtime and paths:
 - `accessions_file`
 - `taxonomy_db`
 - `run_id`
@@ -207,26 +218,139 @@ Runtime and tool-path settings:
 - `acquisition_container`
 - `detection_container`
 
-What the method-specific settings mean:
-- `pure_min_repeat_count`: minimum contiguous tract length for the `pure` method
-- `threshold_window_size`: sliding window size for the `threshold` method
-- `threshold_min_target_count`: minimum number of target residues required inside each threshold window
-- `seed_extend_seed_window_size`: seed window size for the `seed_extend` method
-- `seed_extend_seed_min_target_count`: minimum target residues required for a seed window
+Method parameter meanings:
+- `pure_min_repeat_count`: minimum contiguous tract length for `pure`
+- `threshold_window_size`: sliding-window size for `threshold`
+- `threshold_min_target_count`: minimum target count inside each threshold window
+- `seed_extend_seed_window_size`: seed window size for `seed_extend`
+- `seed_extend_seed_min_target_count`: minimum target count required for a seed window
 - `seed_extend_extend_window_size`: extension window size for `seed_extend`
-- `seed_extend_extend_min_target_count`: minimum target residues required while extending
+- `seed_extend_extend_min_target_count`: minimum target count required while extending
 - `seed_extend_min_total_length`: minimum final tract length after seed-and-extend merging
 
-Published run artifacts live under `runs/<run_id>/publish/`, including:
-- canonical acquisition outputs in `publish/acquisition/`
-- canonical merged calls in `publish/calls/`
-- method-level finalized call bundles in `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
-- SQLite outputs in `publish/database/`
-- summaries and ECharts assets in `publish/reports/`
-- accession status ledgers in `publish/status/`
-- run metadata in `publish/metadata/`
-- the stable run manifest in `publish/metadata/run_manifest.json`
+## Run Layout
 
-Metadata note:
-- `publish/metadata/nextflow/` exposes stable relative symlinks to the live files under `runs/<run_id>/internal/nextflow/`
-- native Nextflow failure state is the run-level source of truth; `publish/status/` remains a supplemental accession-level ledger when it is produced
+By default:
+- `run_root` is `runs/<run_id>`
+- `output_dir` is `runs/<run_id>/publish`
+- `workDir` is `runs/<run_id>/internal/nextflow/work`
+
+Published outputs live under `runs/<run_id>/publish/`:
+- `publish/acquisition/`
+- `publish/calls/`
+- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
+- `publish/database/`
+- `publish/reports/`
+- `publish/status/`
+- `publish/metadata/`
+
+Important published artifacts:
+- `publish/calls/repeat_calls.tsv`
+- `publish/calls/run_params.tsv`
+- `publish/database/homorepeat.sqlite`
+- `publish/metadata/run_manifest.json`
+- `publish/metadata/launch_metadata.json`
+
+`publish/metadata/nextflow/` exposes stable relative symlinks back to the live files under `runs/<run_id>/internal/nextflow/`.
+
+## Failure Behavior
+
+Version `0.1` uses native Nextflow task failure semantics.
+
+That means:
+- a real failed task should appear as failed in the Nextflow report
+- the run should exit nonzero on failure
+- `publish/metadata/nextflow/report.html` is the authoritative run-level failure surface
+- `publish/status/` is supplemental and may be absent or partial on failed runs
+
+DSL2 workflow `publish:` plus `output {}` is the canonical publication model for the repo.
+
+## Smoke Commands
+
+Success smoke:
+
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/smoke_human/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  -params-file examples/params/smoke_default.json \
+  --run_id smoke_human \
+  --accessions_file examples/accessions/smoke_human.txt
+```
+
+Intentional failure probe:
+
+```bash
+cat > /tmp/homorepeat_failure_probe.txt <<'EOF'
+GCF_000001405.40
+GCF_BOGUS_FAILURE_TEST.1
+EOF
+
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/failure_probe/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id failure_probe \
+  --batch_size 1 \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend false \
+  --accessions_file /tmp/homorepeat_failure_probe.txt
+```
+
+Expected failure-probe behavior:
+- `nextflow run` exits nonzero
+- `runs/failure_probe/internal/nextflow/report.html` shows the failed task
+- `runs/failure_probe/publish/metadata/run_manifest.json` reports `failed`
+
+## Repository Layout
+
+Main workflow paths:
+- `main.nf`
+- `nextflow.config`
+- `conf/`
+- `workflows/`
+- `modules/`
+
+Scientific implementation:
+- `src/homorepeat/`
+
+Supporting material:
+- `examples/`
+- `containers/`
+- `scripts/`
+- `tests/`
+- `docs/`
+- `runtime/`
+- `runs/`
+
+## Development
+
+The `docker` profile is the primary operator path.
+
+The `local` profile is mainly for:
+- tests
+- offline development
+- debugging without container execution
+
+Useful checks:
+
+```bash
+nextflow config .
+PYTHONPATH=src python3 -m unittest
+```
+
+## Documentation
+
+For more detail, see:
+- [docs/operations.md](./docs/operations.md)
+- [docs/methods.md](./docs/methods.md)
+- [docs/architecture.md](./docs/architecture.md)
+- [docs/contracts.md](./docs/contracts.md)
+
+## License
+
+See [LICENSE](./LICENSE).

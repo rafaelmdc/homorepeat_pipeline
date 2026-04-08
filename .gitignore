@@ -211,6 +211,7 @@ __marimo__/
 
 # Workflow/debug artifacts
 .nextflow/
+.nextflow.log*
 tmp/
 runtime/cache/
 download_attempts.txt

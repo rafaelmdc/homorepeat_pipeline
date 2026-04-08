@@ -8,6 +8,15 @@ Use it for:
 - building local runtime images
 - running the pipeline smoke path
 - knowing where stable outputs land
+- checking the supported runtime contract for this MVP
+
+## Supported runtime
+
+- supported Nextflow release: `25.10.4`
+- canonical operator entrypoint: `nextflow run .`
+- canonical publication model: DSL2 workflow `publish:` plus `output {}`
+- canonical failure surface: native Nextflow task failure and `publish/metadata/nextflow/report.html`
+- `publish/status/` remains a supplemental accession-level ledger when that reporting path completes
 
 ## Standard entrypoints
 
@@ -29,6 +38,32 @@ nextflow \
   --run_id smoke_human \
   --accessions_file examples/accessions/smoke_human.txt
 ```
+
+Run the intentional failure probe:
+
+```bash
+cat > /tmp/homorepeat_failure_probe.txt <<'EOF'
+GCF_000001405.40
+GCF_BOGUS_FAILURE_TEST.1
+EOF
+
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/failure_probe/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id failure_probe \
+  --batch_size 1 \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend false \
+  --accessions_file /tmp/homorepeat_failure_probe.txt
+```
+
+Expected result:
+- the run exits nonzero
+- `report.html` shows the failed task
+- `publish/metadata/run_manifest.json` reports `failed`
 
 ## Focused smoke scripts
 
