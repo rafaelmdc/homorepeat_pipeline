@@ -31,16 +31,16 @@ For a one-host Docker run:
 
 The intended operational pattern is:
 1. prepare a plain-text accession list with one assembly accession per line
-2. run the wrapper with `HOMOREPEAT_PHASE4_PROFILE=docker`
+2. run the wrapper with `HOMOREPEAT_PROFILE=docker`
 3. use `-resume` if the run is interrupted or if container images are rebuilt mid-run
 4. use `publish/status/accession_status.tsv` to identify accession-level failures instead of reconstructing them from Nextflow work dirs
 
 Example:
 
 ```bash
-HOMOREPEAT_PHASE4_PROFILE=docker \
-HOMOREPEAT_PHASE4_RUN_ID=run_900_genomes \
-bash scripts/run_phase4_pipeline.sh path/to/accessions.txt -resume
+HOMOREPEAT_PROFILE=docker \
+HOMOREPEAT_RUN_ID=run_900_genomes \
+bash scripts/run_pipeline.sh path/to/accessions.txt -resume
 ```
 
 ## What is published for recovery

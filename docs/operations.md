@@ -26,9 +26,9 @@ bash scripts/build_dev_containers.sh
 Run the checked-in pipeline smoke:
 
 ```bash
-HOMOREPEAT_PHASE4_PROFILE=docker \
+HOMOREPEAT_PROFILE=docker \
 HOMOREPEAT_PARAMS_FILE=examples/params/smoke_default.json \
-bash scripts/run_phase4_pipeline.sh examples/accessions/smoke_human.txt
+bash scripts/run_pipeline.sh examples/accessions/smoke_human.txt
 ```
 
 ## Focused smoke scripts

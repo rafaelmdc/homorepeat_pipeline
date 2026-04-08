@@ -183,7 +183,7 @@ docker run --rm \
 
 ## Nextflow wiring
 
-The repo now has a Phase 4 Nextflow layer and a `docker` profile:
+The repo now has a Nextflow pipeline layer and a `docker` profile:
 - [nextflow.config](../nextflow.config)
 - [docker.config](../conf/docker.config)
 
@@ -208,5 +208,5 @@ Verified on April 8, 2026:
 Why this layer exists now:
 - lock the external toolchains
 - keep acquisition and detection dependencies separate
-- stop Phase 4 execution from depending on undocumented host-installed binaries
+- stop pipeline execution from depending on undocumented host-installed binaries
 - make later cluster profiles a runtime concern rather than a workflow-graph refactor
