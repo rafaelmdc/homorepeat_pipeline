@@ -229,3 +229,4 @@ Published run artifacts live under `runs/<run_id>/publish/`, including:
 
 Metadata note:
 - `publish/metadata/nextflow/` exposes stable relative symlinks to the live files under `runs/<run_id>/internal/nextflow/`
+- native Nextflow failure state is the run-level source of truth; `publish/status/` remains a supplemental accession-level ledger when it is produced

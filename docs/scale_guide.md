@@ -52,7 +52,7 @@ nextflow run . \
 Large runs now publish a stable operational ledger under `publish/status/`:
 - `accession_status.tsv`: one row per requested accession
 - `accession_call_counts.tsv`: one row per accession x method x repeat residue
-- `status_summary.json`: run-level counts and final status
+- `status_summary.json`: accession-level outcome counts when the reporting path completes
 
 This complements Nextflow caching:
 - `-resume` knows which tasks do not need to rerun

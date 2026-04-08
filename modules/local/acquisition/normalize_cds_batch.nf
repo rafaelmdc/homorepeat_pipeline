@@ -16,7 +16,6 @@ process NORMALIZE_CDS_BATCH {
       --taxonomy-db ${taxonomy_db} \
       --taxon-weaver-bin ${params.taxon_weaver_bin} \
       --batch-id ${batch_id} \
-      --fail-soft \
       --stage-status-out normalized_batch/normalize_stage_status.json \
       --outdir normalized_batch
 

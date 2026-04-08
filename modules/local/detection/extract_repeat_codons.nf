@@ -26,7 +26,6 @@ process FINALIZE_CALL_CODONS {
       --batch-id ${batch_id} \
       --method ${method} \
       --repeat-residue ${repeat_residue} \
-      --fail-soft \
       --status-out ${batch_id}/finalize_status.json \
       --outdir ${batch_id}
 

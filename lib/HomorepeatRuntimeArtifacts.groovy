@@ -76,6 +76,7 @@ class HomorepeatRuntimeArtifacts {
         linkPublishedPath(internalDir.resolve('timeline.html'), publishedNextflowDir.resolve('timeline.html'))
         linkPublishedPath(internalDir.resolve('dag.html'), publishedNextflowDir.resolve('dag.html'))
         linkPublishedPath(internalDir.resolve('trace.txt'), publishedNextflowDir.resolve('trace.txt'))
+        cleanupWorkflowOutputPlaceholders(publishRoot)
 
         Path launchMetadataPath = metadataDir.resolve('launch_metadata.json')
         writeJson(
@@ -124,6 +125,14 @@ class HomorepeatRuntimeArtifacts {
         }
     }
 
+    private static void cleanupWorkflowOutputPlaceholders(Path publishRoot) {
+        Path placeholderDir = publishRoot.resolve('.nf_placeholders')
+        if (!Files.exists(placeholderDir, LinkOption.NOFOLLOW_LINKS)) {
+            return
+        }
+        placeholderDir.toFile().deleteDir()
+    }
+
     private static Map<String, Object> buildLaunchMetadata(Map ctx) {
         [
             run_id         : ctx.runId,
@@ -160,7 +169,7 @@ class HomorepeatRuntimeArtifacts {
 
         [
             run_id         : ctx.runId,
-            status         : resolvedRunStatus(publishRoot, ctx.status?.toString() ?: ''),
+            status         : ctx.status?.toString() ?: '',
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
@@ -257,21 +266,6 @@ class HomorepeatRuntimeArtifacts {
             payload[section] = sectionPayload
         }
         payload
-    }
-
-    private static String resolvedRunStatus(Path publishRoot, String fallbackStatus) {
-        Path summaryPath = publishRoot.resolve('status').resolve('status_summary.json')
-        if (!Files.isRegularFile(summaryPath)) {
-            return fallbackStatus
-        }
-
-        try {
-            def parsed = new JsonSlurper().parse(summaryPath.toFile())
-            String status = parsed instanceof Map ? parsed.get('status', '')?.toString() : ''
-            return status ?: fallbackStatus
-        } catch (Exception ignored) {
-            return fallbackStatus
-        }
     }
 
     private static List<Map<String, String>> readTsvRows(Path path) {

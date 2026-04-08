@@ -5,6 +5,46 @@ include { DETECTION_FROM_ACQUISITION } from './workflows/detection_from_acquisit
 include { DATABASE_REPORTING } from './workflows/database_reporting'
 include { BUILD_ACCESSION_STATUS } from './modules/local/reporting/build_accession_status'
 
+def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
+  "${projectDir}/runtime/output_placeholders/workflow_output_placeholder.txt",
+  checkIfExists: true,
+)
+def WORKFLOW_OUTPUT_PLACEHOLDER_DIR = file(
+  "${projectDir}/runtime/output_placeholders/finalized_placeholder",
+  checkIfExists: true,
+)
+def WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID = '__workflow_output_placeholder__'
+def WORKFLOW_OUTPUT_PLACEHOLDER_METHOD = '__workflow_output_placeholder__'
+def WORKFLOW_OUTPUT_PLACEHOLDER_RESIDUE = '__workflow_output_placeholder__'
+
+def publishablePathChannel = { channel ->
+  channel.mix(Channel.value(WORKFLOW_OUTPUT_PLACEHOLDER_FILE))
+}
+
+def publishableFinalizedChannel = { channel ->
+  channel.mix(Channel.value(
+    tuple(
+      WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID,
+      WORKFLOW_OUTPUT_PLACEHOLDER_METHOD,
+      WORKFLOW_OUTPUT_PLACEHOLDER_RESIDUE,
+      WORKFLOW_OUTPUT_PLACEHOLDER_DIR,
+    )
+  ))
+}
+
+def publishTarget = { targetDir, artifact ->
+  artifact?.toString() == WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName().toString() ||
+    artifact?.toString()?.endsWith("/${WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName()}")
+    ? ".nf_placeholders/${targetDir}"
+    : targetDir
+}
+
+def finalizedPublishTarget = { batchId, method, repeatResidue, finalizedDir ->
+  batchId == WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID
+    ? '.nf_placeholders/finalized'
+    : "calls/finalized/${method}/${repeatResidue}"
+}
+
 workflow {
   acquisition = ACQUISITION_FROM_ACCESSIONS()
   detection = DETECTION_FROM_ACQUISITION(
@@ -27,28 +67,28 @@ workflow {
   )
 
   publish:
-  acquisition_genomes = acquisition.genomes_tsv
-  acquisition_taxonomy = acquisition.taxonomy_tsv
-  acquisition_sequences = acquisition.sequences_tsv
-  acquisition_proteins = acquisition.proteins_tsv
-  acquisition_cds = acquisition.cds_fasta
-  acquisition_proteins_fasta = acquisition.proteins_fasta
-  acquisition_download_manifest = acquisition.download_manifest_tsv
-  acquisition_normalization_warnings = acquisition.normalization_warnings_tsv
-  acquisition_validation = acquisition.acquisition_validation
-  calls_repeat = reporting.repeat_calls
-  calls_params = reporting.run_params
-  calls_finalized = detection.finalized_dirs
-  database_sqlite = reporting.sqlite
-  database_sqlite_validation = reporting.sqlite_validation
-  reports_summary_by_taxon = reporting.summary_by_taxon
-  reports_regression_input = reporting.regression_input
-  reports_echarts_options = reporting.echarts_options
-  reports_echarts_html = reporting.echarts_report
-  reports_echarts_js = reporting.echarts_js
-  status_accession = statusBuild.accession_status_tsv
-  status_accession_call_counts = statusBuild.accession_call_counts_tsv
-  status_summary = statusBuild.status_summary_json
+  acquisition_genomes = publishablePathChannel(acquisition.genomes_tsv)
+  acquisition_taxonomy = publishablePathChannel(acquisition.taxonomy_tsv)
+  acquisition_sequences = publishablePathChannel(acquisition.sequences_tsv)
+  acquisition_proteins = publishablePathChannel(acquisition.proteins_tsv)
+  acquisition_cds = publishablePathChannel(acquisition.cds_fasta)
+  acquisition_proteins_fasta = publishablePathChannel(acquisition.proteins_fasta)
+  acquisition_download_manifest = publishablePathChannel(acquisition.download_manifest_tsv)
+  acquisition_normalization_warnings = publishablePathChannel(acquisition.normalization_warnings_tsv)
+  acquisition_validation = publishablePathChannel(acquisition.acquisition_validation)
+  calls_repeat = publishablePathChannel(reporting.repeat_calls)
+  calls_params = publishablePathChannel(reporting.run_params)
+  calls_finalized = publishableFinalizedChannel(detection.finalized_dirs)
+  database_sqlite = publishablePathChannel(reporting.sqlite)
+  database_sqlite_validation = publishablePathChannel(reporting.sqlite_validation)
+  reports_summary_by_taxon = publishablePathChannel(reporting.summary_by_taxon)
+  reports_regression_input = publishablePathChannel(reporting.regression_input)
+  reports_echarts_options = publishablePathChannel(reporting.echarts_options)
+  reports_echarts_html = publishablePathChannel(reporting.echarts_report)
+  reports_echarts_js = publishablePathChannel(reporting.echarts_js)
+  status_accession = publishablePathChannel(statusBuild.accession_status_tsv)
+  status_accession_call_counts = publishablePathChannel(statusBuild.accession_call_counts_tsv)
+  status_summary = publishablePathChannel(statusBuild.status_summary_json)
 
   emit:
   genomes_tsv = acquisition.genomes_tsv
@@ -76,30 +116,32 @@ workflow {
 }
 
 output {
-  acquisition_genomes { path 'acquisition' }
-  acquisition_taxonomy { path 'acquisition' }
-  acquisition_sequences { path 'acquisition' }
-  acquisition_proteins { path 'acquisition' }
-  acquisition_cds { path 'acquisition' }
-  acquisition_proteins_fasta { path 'acquisition' }
-  acquisition_download_manifest { path 'acquisition' }
-  acquisition_normalization_warnings { path 'acquisition' }
-  acquisition_validation { path 'acquisition' }
-  calls_repeat { path 'calls' }
-  calls_params { path 'calls' }
+  acquisition_genomes { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_taxonomy { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_sequences { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_proteins { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_cds { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_proteins_fasta { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_download_manifest { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_normalization_warnings { path { artifact -> publishTarget('acquisition', artifact) } }
+  acquisition_validation { path { artifact -> publishTarget('acquisition', artifact) } }
+  calls_repeat { path { artifact -> publishTarget('calls', artifact) } }
+  calls_params { path { artifact -> publishTarget('calls', artifact) } }
   calls_finalized {
-    path { batchId, method, repeatResidue, finalizedDir -> "calls/finalized/${method}/${repeatResidue}" }
+    path { batchId, method, repeatResidue, finalizedDir ->
+      finalizedPublishTarget(batchId, method, repeatResidue, finalizedDir)
+    }
   }
-  database_sqlite { path 'database' }
-  database_sqlite_validation { path 'database' }
-  reports_summary_by_taxon { path 'reports' }
-  reports_regression_input { path 'reports' }
-  reports_echarts_options { path 'reports' }
-  reports_echarts_html { path 'reports' }
-  reports_echarts_js { path 'reports' }
-  status_accession { path 'status' }
-  status_accession_call_counts { path 'status' }
-  status_summary { path 'status' }
+  database_sqlite { path { artifact -> publishTarget('database', artifact) } }
+  database_sqlite_validation { path { artifact -> publishTarget('database', artifact) } }
+  reports_summary_by_taxon { path { artifact -> publishTarget('reports', artifact) } }
+  reports_regression_input { path { artifact -> publishTarget('reports', artifact) } }
+  reports_echarts_options { path { artifact -> publishTarget('reports', artifact) } }
+  reports_echarts_html { path { artifact -> publishTarget('reports', artifact) } }
+  reports_echarts_js { path { artifact -> publishTarget('reports', artifact) } }
+  status_accession { path { artifact -> publishTarget('status', artifact) } }
+  status_accession_call_counts { path { artifact -> publishTarget('status', artifact) } }
+  status_summary { path { artifact -> publishTarget('status', artifact) } }
 }
 
 workflow.onComplete {

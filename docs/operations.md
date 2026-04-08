@@ -62,8 +62,9 @@ Stable downstream outputs live under:
 Operational note:
 - `publish/calls/finalized/` contains method-specific finalized artifacts such as per-method call tables, run params, codon warnings, and codon-usage tables, grouped by method, repeat residue, and batch
 - `publish/calls/` contains the canonical merged `repeat_calls.tsv` and `run_params.tsv` used downstream
-- `publish/status/` contains the accession-level operational ledger in `accession_status.tsv`, the per-method/per-residue breakdown in `accession_call_counts.tsv`, and run-level counts in `status_summary.json`
+- `publish/status/` contains the accession-level operational ledger in `accession_status.tsv`, the per-method/per-residue breakdown in `accession_call_counts.tsv`, and run-level counts in `status_summary.json` when the reporting path completes
 - `publish/metadata/` contains `run_manifest.json`, `launch_metadata.json`, and stable relative symlinks under `publish/metadata/nextflow/` pointing back to `internal/nextflow/`
+- native Nextflow run status and `publish/metadata/nextflow/report.html` are the authoritative failure surface
 
 Execution state lives under:
 - `runs/<run_id>/internal/`
@@ -75,7 +76,7 @@ Verified on April 8, 2026:
 - `bash scripts/build_dev_containers.sh`
 - full live Nextflow smoke run through the `docker` profile on 5 real NCBI accessions with `batch_size=2`
 - canonical outputs confirmed after the contract cleanup removing row-level `download_path`, `sequence_path`, `protein_path`, and `source_file`
-- one-accession Docker smoke run confirmed the workflow-output layout under `publish/`, including `publish/metadata/nextflow/` symlinks and `publish/calls/finalized/`
+- one-accession Docker smoke run confirmed the published layout under `publish/`, including `publish/metadata/nextflow/` symlinks and `publish/calls/finalized/`
 
 Latest verified run:
 - `runs/smoke_e2e_workflow_outputs_v3`

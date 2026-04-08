@@ -39,7 +39,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-id", required=True, help="Operational batch identifier")
     parser.add_argument("--outdir", required=True, help="Batch-local raw output directory")
     parser.add_argument("--log-file", help="Reserved log file path")
-    parser.add_argument("--fail-soft", action="store_true", help="Write failed manifests and return success on errors")
     parser.add_argument("--stage-status-out", help="Optional stage-status JSON path")
     parser.add_argument("--api-key", help="NCBI API key")
     parser.add_argument("--cache-dir", help="Optional cache directory for downloaded archives")
@@ -75,13 +74,21 @@ def main() -> int:
     try:
         _run(args)
     except Exception as exc:
-        if not args.fail_soft:
-            raise
-        _write_failed_manifest(args, str(exc))
-        _write_stage_status_file(args, status="failed", message=str(exc))
-        return 0
+        _write_failure_artifacts(args, str(exc))
+        raise
     _write_stage_status_file(args, status="success")
     return 0
+
+
+def _write_failure_artifacts(args: argparse.Namespace, message: str) -> None:
+    try:
+        _write_failed_manifest(args, message)
+    except Exception:
+        pass
+    try:
+        _write_stage_status_file(args, status="failed", message=message)
+    except Exception:
+        pass
 
 
 def _run(args: argparse.Namespace) -> None:

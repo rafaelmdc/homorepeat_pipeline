@@ -16,7 +16,6 @@ process DETECT_PURE {
       --proteins-fasta ${batch_dir}/proteins.faa \
       --repeat-residue ${repeat_residue} \
       --batch-id ${batch_id} \
-      --fail-soft \
       --status-out detect_pure_${repeat_residue}/detect_status.json \
       --min-repeat-count ${params.pure_min_repeat_count} \
       --outdir detect_pure_${repeat_residue}

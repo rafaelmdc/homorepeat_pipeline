@@ -20,7 +20,6 @@ process DOWNLOAD_NCBI_BATCH {
       --batch-manifest ${batch_manifest} \
       --batch-id ${batchId} \
       --datasets-bin ${params.datasets_bin} \
-      --fail-soft \
       --stage-status-out raw_batch/download_stage_status.json \
       ${apiKeyArg} \
       ${cacheDirArg} \

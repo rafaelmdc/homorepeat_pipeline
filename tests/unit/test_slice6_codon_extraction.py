@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -207,3 +208,67 @@ class SliceSixCodonExtractionTest(unittest.TestCase):
                 warning_rows[0]["warning_message"],
                 "codon slice translation does not match amino-acid tract",
             )
+
+    def test_extract_repeat_codons_cli_failure_writes_stage_status_and_exits_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            acquisition_dir = tmp / "merged" / "acquisition"
+            calls_dir = tmp / "merged" / "calls"
+            outdir = tmp / "merged" / "calls_with_codons"
+            acquisition_dir.mkdir(parents=True, exist_ok=True)
+            calls_dir.mkdir(parents=True, exist_ok=True)
+
+            calls_tsv = calls_dir / "pure_calls.tsv"
+            cds_fasta = acquisition_dir / "cds.fna"
+            status_path = outdir / "finalize_status.json"
+
+            build_row = build_call_row(
+                method="pure",
+                genome_id="genome_001",
+                taxon_id="9606",
+                sequence_id="seq_missing",
+                protein_id="prot_001",
+                repeat_residue="A",
+                start=2,
+                end=7,
+                aa_sequence="AAAAAA",
+            )
+            write_tsv(calls_tsv, [build_row], fieldnames=CALL_FIELDNAMES)
+            cds_fasta.write_text(">seq_missing\nATGGCTGCTGCTGCTGCTGCT\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.extract_repeat_codons",
+                    "--calls-tsv",
+                    str(calls_tsv),
+                    "--sequences-tsv",
+                    str(acquisition_dir / "missing_sequences.tsv"),
+                    "--cds-fasta",
+                    str(cds_fasta),
+                    "--batch-id",
+                    "batch_0001",
+                    "--method",
+                    "pure",
+                    "--repeat-residue",
+                    "A",
+                    "--status-out",
+                    str(status_path),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            stage_status = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(stage_status["stage"], "finalize")
+            self.assertEqual(stage_status["status"], "failed")
+            self.assertEqual(stage_status["batch_id"], "batch_0001")
+            self.assertEqual(stage_status["method"], "pure")
+            self.assertEqual(stage_status["repeat_residue"], "A")
+            self.assertTrue(stage_status["message"])

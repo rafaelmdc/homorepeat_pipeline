@@ -16,7 +16,6 @@ process DETECT_THRESHOLD {
       --proteins-fasta ${batch_dir}/proteins.faa \
       --repeat-residue ${repeat_residue} \
       --batch-id ${batch_id} \
-      --fail-soft \
       --status-out detect_threshold_${repeat_residue}/detect_status.json \
       --window-size ${params.threshold_window_size} \
       --min-target-count ${params.threshold_min_target_count} \

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -242,6 +243,74 @@ class SliceThreePureDetectionTest(unittest.TestCase):
                     ("A", "min_repeat_count", "6"),
                 },
             )
+
+    def test_detect_pure_cli_failure_writes_stage_status_and_exits_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            inputs_dir = tmp / "merged" / "acquisition"
+            outdir = tmp / "merged" / "detection" / "pure"
+            status_path = outdir / "detect_status.json"
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+
+            proteins_tsv = inputs_dir / "proteins.tsv"
+            proteins_faa = inputs_dir / "proteins.faa"
+            write_tsv(
+                proteins_tsv,
+                [
+                    {
+                        "protein_id": "prot_missing",
+                        "sequence_id": "seq_missing",
+                        "genome_id": "genome_001",
+                        "protein_name": "missing_fasta_row",
+                        "protein_length": 11,
+                        "protein_path": str(proteins_faa.resolve()),
+                        "taxon_id": "9606",
+                    }
+                ],
+                fieldnames=[
+                    "protein_id",
+                    "sequence_id",
+                    "genome_id",
+                    "protein_name",
+                    "protein_length",
+                    "protein_path",
+                    "taxon_id",
+                ],
+            )
+            proteins_faa.write_text(">different_id\nMCAAAAAAGP\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.detect_pure",
+                    "--proteins-tsv",
+                    str(proteins_tsv),
+                    "--proteins-fasta",
+                    str(proteins_faa),
+                    "--repeat-residue",
+                    "A",
+                    "--batch-id",
+                    "batch_0001",
+                    "--status-out",
+                    str(status_path),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            stage_status = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(stage_status["stage"], "detect")
+            self.assertEqual(stage_status["status"], "failed")
+            self.assertEqual(stage_status["batch_id"], "batch_0001")
+            self.assertEqual(stage_status["method"], "pure")
+            self.assertEqual(stage_status["repeat_residue"], "A")
+            self.assertTrue(stage_status["message"])
 
     def test_detect_pure_cli_respects_overridden_min_repeat_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

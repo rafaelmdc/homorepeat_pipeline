@@ -42,7 +42,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outdir", required=True, help="Batch-local normalized output directory")
     parser.add_argument("--log-file", help="Reserved log file path")
     parser.add_argument("--warning-out", help="Optional explicit warning artifact path")
-    parser.add_argument("--fail-soft", action="store_true", help="Write empty outputs and return success on errors")
     parser.add_argument("--stage-status-out", help="Optional stage-status JSON path")
     return parser.parse_args()
 
@@ -52,13 +51,21 @@ def main() -> int:
     try:
         _run(args)
     except Exception as exc:
-        if not args.fail_soft:
-            raise
-        _write_failed_outputs(args, str(exc))
-        _write_stage_status_file(args, status="failed", message=str(exc))
-        return 0
+        _write_failure_artifacts(args, str(exc))
+        raise
     _write_stage_status_file(args, status="success")
     return 0
+
+
+def _write_failure_artifacts(args: argparse.Namespace, message: str) -> None:
+    try:
+        _write_failed_outputs(args, message)
+    except Exception:
+        pass
+    try:
+        _write_stage_status_file(args, status="failed", message=message)
+    except Exception:
+        pass
 
 
 def _run(args: argparse.Namespace) -> None:

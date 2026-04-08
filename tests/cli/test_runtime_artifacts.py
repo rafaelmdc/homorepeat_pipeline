@@ -324,7 +324,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run_id"], "run_001")
-            self.assertEqual(payload["status"], "partial")
+            self.assertEqual(payload["status"], "success")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")

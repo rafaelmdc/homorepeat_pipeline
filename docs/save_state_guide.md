@@ -26,7 +26,7 @@ The pipeline now publishes:
 - `publish/status/accession_call_counts.tsv`
 - `publish/status/status_summary.json`
 
-These files are the operational source of truth after a run finishes.
+These files are supplemental operational diagnostics when the reporting path completes. Native Nextflow success or failure remains the run-level source of truth.
 
 ### `accession_status.tsv`
 
@@ -53,16 +53,16 @@ Useful columns include:
 
 ### `status_summary.json`
 
-Run-level summary used by the run manifest to distinguish:
+Run-level summary of accession outcomes:
 - `success`
 - `partial`
 - `failed`
 
 ## Recommended rerun workflow
 
-1. Check `publish/status/status_summary.json`.
-2. If the run is `success`, no recovery action is needed.
-3. If the run is `partial`, inspect `publish/status/accession_status.tsv`.
+1. Check the native Nextflow run status and `publish/metadata/nextflow/report.html`.
+2. If `publish/status/status_summary.json` exists, inspect it for accession-level outcome counts.
+3. If the run failed or `status_summary.json` is `partial`, inspect `publish/status/accession_status.tsv`.
 4. Build a new accession list from failed or skipped-upstream rows if you want a focused rerun.
 5. Use `-resume` when continuing the same run root.
 

@@ -16,7 +16,6 @@ process DETECT_SEED_EXTEND {
       --proteins-fasta ${batch_dir}/proteins.faa \
       --repeat-residue ${repeat_residue} \
       --batch-id ${batch_id} \
-      --fail-soft \
       --status-out detect_seed_extend_${repeat_residue}/detect_status.json \
       --seed-window-size ${params.seed_extend_seed_window_size} \
       --seed-min-target-count ${params.seed_extend_seed_min_target_count} \

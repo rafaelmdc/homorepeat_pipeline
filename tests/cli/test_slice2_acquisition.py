@@ -394,7 +394,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual({row["download_status"] for row in manifest_rows}, {"downloaded"})
             self.assertTrue((outdir / "ncbi_package").exists())
 
-    def test_download_ncbi_packages_fail_soft_writes_failed_manifest_and_stage_status(self) -> None:
+    def test_download_ncbi_packages_failure_writes_failed_manifest_and_stage_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             planning_dir = tmp / "planning"
@@ -450,7 +450,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             env["HOMOREPEAT_FAKE_DATASETS_FAIL_DOWNLOADS"] = "5"
             env["HOMOREPEAT_FAKE_DATASETS_STATE_DIR"] = str(tmp / "fake_state")
 
-            self._run_cli(
+            result = subprocess.run(
                 [
                     sys.executable,
                     "-m", "homorepeat.cli.download_ncbi_packages",
@@ -458,7 +458,6 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
                     str(selected_batches_path),
                     "--batch-id",
                     "batch_0001",
-                    "--fail-soft",
                     "--stage-status-out",
                     str(outdir / "download_stage_status.json"),
                     "--outdir",
@@ -468,8 +467,13 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
                     "--datasets-retry-delay-seconds",
                     "0",
                 ],
+                cwd=REPO_ROOT,
                 env=env,
+                capture_output=True,
+                text=True,
+                check=False,
             )
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
             manifest_rows = read_tsv(outdir / "download_manifest.tsv")
             self.assertEqual(len(manifest_rows), 2)
