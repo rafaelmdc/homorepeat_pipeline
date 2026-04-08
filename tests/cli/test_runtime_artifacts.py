@@ -273,11 +273,11 @@ class RuntimeArtifactsTest(unittest.TestCase):
 
             accessions_file = tmp / "accessions.txt"
             taxonomy_db = tmp / "taxonomy.sqlite"
-            nextflow_command = run_root / "internal" / "nextflow" / "nextflow_command.sh"
+            launch_metadata = run_root / "internal" / "nextflow" / "launch_metadata.json"
             manifest_path = publish_root / "manifest" / "run_manifest.json"
             accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
             taxonomy_db.write_text("", encoding="utf-8")
-            nextflow_command.write_text("nextflow run .\n", encoding="utf-8")
+            launch_metadata.write_text('{"run_id":"run_001"}\n', encoding="utf-8")
 
             result = subprocess.run(
                 [
@@ -298,8 +298,8 @@ class RuntimeArtifactsTest(unittest.TestCase):
                     str(accessions_file),
                     "--taxonomy-db",
                     str(taxonomy_db),
-                    "--nextflow-command",
-                    str(nextflow_command),
+                    "--launch-metadata",
+                    str(launch_metadata),
                     "--started-at-utc",
                     "2026-04-06T00:00:00Z",
                     "--finished-at-utc",
@@ -328,6 +328,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")
+            self.assertEqual(payload["paths"]["launch_metadata"], str(launch_metadata.resolve()))
             self.assertEqual(payload["artifacts"]["acquisition"]["genomes_tsv"], "publish/acquisition/genomes.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["repeat_calls_tsv"], "publish/calls/repeat_calls.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
@@ -354,11 +355,11 @@ class RuntimeArtifactsTest(unittest.TestCase):
             )
             accessions_file = tmp / "accessions.txt"
             taxonomy_db = tmp / "taxonomy.sqlite"
-            nextflow_command = run_root / "internal" / "nextflow" / "nextflow_command.sh"
+            launch_metadata = run_root / "internal" / "nextflow" / "launch_metadata.json"
             manifest_path = publish_root / "manifest" / "run_manifest.json"
             accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
             taxonomy_db.write_text("", encoding="utf-8")
-            nextflow_command.write_text("nextflow run .\n", encoding="utf-8")
+            launch_metadata.write_text('{"run_id":"run_002"}\n', encoding="utf-8")
             (run_root / "internal" / "nextflow" / "trace.txt").write_text("stub\n", encoding="utf-8")
 
             result = subprocess.run(
@@ -373,7 +374,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                     "--profile", "local",
                     "--accessions-file", str(accessions_file),
                     "--taxonomy-db", str(taxonomy_db),
-                    "--nextflow-command", str(nextflow_command),
+                    "--launch-metadata", str(launch_metadata),
                     "--started-at-utc", "2026-04-06T00:00:00Z",
                     "--finished-at-utc", "2026-04-06T00:05:00Z",
                     "--status", "success",

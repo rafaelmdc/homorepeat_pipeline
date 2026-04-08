@@ -11,12 +11,6 @@ Use it for:
 
 ## Standard entrypoints
 
-Install the package locally so the wrapper can write the final run manifest:
-
-```bash
-python3 -m pip install -e .
-```
-
 Build the runtime images expected by the Nextflow `docker` profile:
 
 ```bash
@@ -26,9 +20,14 @@ bash scripts/build_dev_containers.sh
 Run the checked-in pipeline smoke:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-HOMOREPEAT_PARAMS_FILE=examples/params/smoke_default.json \
-bash scripts/run_pipeline.sh examples/accessions/smoke_human.txt
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/smoke_human/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  -params-file examples/params/smoke_default.json \
+  --run_id smoke_human \
+  --accessions_file examples/accessions/smoke_human.txt
 ```
 
 ## Focused smoke scripts
@@ -44,7 +43,8 @@ They currently stage direct CLI detection outputs under `publish/detection/raw/`
 
 - taxonomy DB path defaults to `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`
 - the Nextflow `docker` profile expects `homorepeat-acquisition:dev` and `homorepeat-detection:dev`
-- the wrapper host interpreter still needs `homorepeat` importable because it writes the run manifest after Nextflow finishes
+- the canonical operator entrypoint is `nextflow run .`
+- the `local` profile still requires the repo CLIs and Python environment on the host; the `docker` profile keeps task execution inside the runtime images
 - batch planning defaults to `params.batch_size = 25`
 - task-level parallelism is controlled by Nextflow labels in `conf/base.config`
 
@@ -66,6 +66,7 @@ Operational note:
 
 Execution state lives under:
 - `runs/<run_id>/internal/`
+- `runs/<run_id>/internal/nextflow/launch_metadata.json` stores normalized launch metadata for the completed run
 
 ## Verified baseline
 

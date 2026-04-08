@@ -63,7 +63,7 @@ def build_run_manifest(
     accessions_file: Path,
     taxonomy_db: Path,
     params_file: Path | None,
-    nextflow_command: Path,
+    launch_metadata: Path,
     started_at_utc: str,
     finished_at_utc: str,
     status: str,
@@ -85,7 +85,7 @@ def build_run_manifest(
         "paths": {
             "run_root": _relative_or_absolute(run_root, repo_root),
             "publish_root": _relative_or_absolute(publish_root, repo_root),
-            "nextflow_command": _relative_or_absolute(nextflow_command, repo_root),
+            "launch_metadata": _relative_or_absolute(launch_metadata, repo_root),
         },
         "params": _manifest_params(publish_root=publish_root, params_file=params_file, run_root=run_root),
         "enabled_methods": _enabled_methods(publish_root),

@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--profile", required=True, help="Active Nextflow profile")
     parser.add_argument("--accessions-file", required=True, help="Accessions input file")
     parser.add_argument("--taxonomy-db", required=True, help="Taxonomy SQLite input")
-    parser.add_argument("--nextflow-command", required=True, help="Stored Nextflow command path")
+    parser.add_argument("--launch-metadata", required=True, help="Normalized Nextflow launch metadata path")
     parser.add_argument("--started-at-utc", required=True, help="Run start timestamp")
     parser.add_argument("--finished-at-utc", required=True, help="Run finish timestamp")
     parser.add_argument("--status", default="success", help="Final run status")
@@ -39,7 +39,7 @@ def main() -> int:
         accessions_file=Path(args.accessions_file),
         taxonomy_db=Path(args.taxonomy_db),
         params_file=Path(args.params_file) if args.params_file else None,
-        nextflow_command=Path(args.nextflow_command),
+        launch_metadata=Path(args.launch_metadata),
         started_at_utc=args.started_at_utc,
         finished_at_utc=args.finished_at_utc,
         status=args.status,

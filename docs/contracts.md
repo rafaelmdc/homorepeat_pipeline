@@ -365,6 +365,7 @@ Rules:
 - `params.detection` is derived from the canonical published `calls/run_params.tsv` when present
 - `params.detection` is shaped as `method -> repeat_residue -> param_name -> param_value`
 - `enabled_methods` is the sorted list of methods present in `params.detection`
+- `paths.launch_metadata`, when present, points to `runs/<run_id>/internal/nextflow/launch_metadata.json`
 - `artifacts.detection.finalized_root`, when present, points to `publish/detection/finalized`
 - `repeat_residues` is the sorted set of `repeat_residue` column values present in the published run params
 - `artifacts.status.accession_call_counts_tsv`, when present, points to `publish/status/accession_call_counts.tsv`

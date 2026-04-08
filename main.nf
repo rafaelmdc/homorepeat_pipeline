@@ -39,3 +39,23 @@ workflow {
   accession_call_counts = statusBuild.accession_call_counts_tsv
   status_summary = statusBuild.status_summary_json
 }
+
+workflow.onComplete {
+  HomorepeatRuntimeArtifacts.finalizeRun(
+    repoRoot: projectDir,
+    launchDir: workflow.launchDir,
+    runId: params.run_id,
+    runRoot: params.run_root,
+    publishRoot: params.output_dir,
+    accessionsFile: params.accessions_file,
+    taxonomyDb: params.taxonomy_db,
+    profile: workflow.profile,
+    commandLine: workflow.commandLine,
+    startedAt: workflow.start,
+    finishedAt: workflow.complete,
+    status: workflow.success ? 'success' : 'failed',
+    success: workflow.success,
+    runName: workflow.runName,
+    workDir: workflow.workDir,
+  )
+}

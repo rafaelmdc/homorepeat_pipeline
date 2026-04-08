@@ -17,20 +17,15 @@ Key paths:
 
 ## Docker Run
 
-Install the local package first so the wrapper can write the final run manifest:
-
-```bash
-python3 -m pip install -e .
-```
-
 Build the runtime images expected by the Nextflow `docker` profile:
 
 ```bash
 bash scripts/build_dev_containers.sh
 ```
 
-The wrapper expects a taxonomy DB file at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` unless you override it with `HOMOREPEAT_TAXONOMY_DB`.
-It also expects an accession list file, one assembly accession per line.
+The pipeline expects an accession list file, one assembly accession per line.
+The default taxonomy DB path is `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`.
+Override it with `--taxonomy_db` when needed.
 
 Example accession file:
 
@@ -45,29 +40,38 @@ Comments and blank lines are allowed, and duplicate accession lines are ignored.
 Run the pipeline in Docker mode:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  --run_id my_run \
+  --accessions_file examples/accessions/my_accessions.txt
 ```
 
-Useful wrapper environment variables:
-- `HOMOREPEAT_PROFILE`: `docker` for container-backed Nextflow tasks
-- `HOMOREPEAT_RUN_ID`: stable run name under `runs/`
-- `HOMOREPEAT_RUN_ROOT`: override the full run root
-- `HOMOREPEAT_OUTPUT_DIR`: override the publish directory
-- `HOMOREPEAT_PARAMS_FILE`: path to a Nextflow params JSON file
-- `HOMOREPEAT_ACCESSIONS_FILE`: alternative to passing the accessions file as the first positional argument
-- `HOMOREPEAT_TAXONOMY_DB`: taxonomy SQLite path override
-- `HOMOREPEAT_NXF_HOME`: Nextflow cache root override
+Recommended standard flags:
+- `-profile docker`
+- `--run_id my_run`
+- `--accessions_file path/to/accessions.txt`
+- `--taxonomy_db path/to/ncbi_taxonomy.sqlite` when not using the default
+- `-params-file path/to/params.json`
+- `-resume`
 
-Example with a fixed run ID and `-resume`:
+By default:
+- `run_root` lands under the repo root at `runs/<run_id>`
+- `output_dir` lands under the repo root at `runs/<run_id>/publish`
+- `workDir` lands under the repo root at `runs/<run_id>/internal/nextflow/work`
+
+Example with `-resume` and an explicit Nextflow log path:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-HOMOREPEAT_RUN_ID=my_run \
-bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt -resume
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/my_run/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id my_run \
+  --accessions_file examples/accessions/my_accessions.txt \
+  -resume
 ```
-
-The wrapper forwards any extra arguments after the accessions file directly to `nextflow run`.
 
 ## Choosing Methods
 
@@ -87,8 +91,11 @@ To run all three methods, enable `run_seed_extend` as well.
 Example using direct Nextflow param overrides:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt \
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  --run_id my_run \
+  --accessions_file examples/accessions/my_accessions.txt \
   --run_pure true \
   --run_threshold true \
   --run_seed_extend true
@@ -97,8 +104,11 @@ bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt \
 You can also change the repeat residues in the same way:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt \
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  --run_id my_run \
+  --accessions_file examples/accessions/my_accessions.txt \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -111,18 +121,21 @@ bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt \
 
 There are two supported ways to change pipeline settings.
 
-Pass overrides directly after the accessions file:
+Pass overrides directly to `nextflow run`:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt \
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  --run_id my_run \
+  --accessions_file examples/accessions/my_accessions.txt \
   --batch_size 10 \
   --threshold_window_size 10 \
   --threshold_min_target_count 7 \
   --run_seed_extend true
 ```
 
-Or put settings in a params JSON file and pass it through `HOMOREPEAT_PARAMS_FILE`:
+Or put settings in a params JSON file and pass it through `-params-file`:
 
 ```json
 {
@@ -145,9 +158,12 @@ Or put settings in a params JSON file and pass it through `HOMOREPEAT_PARAMS_FIL
 Run with that file:
 
 ```bash
-HOMOREPEAT_PROFILE=docker \
-HOMOREPEAT_PARAMS_FILE=path/to/params.json \
-bash scripts/run_pipeline.sh examples/accessions/my_accessions.txt
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  -params-file path/to/params.json \
+  --run_id my_run \
+  --accessions_file examples/accessions/my_accessions.txt
 ```
 
 See `examples/params/smoke_default.json` and `examples/params/multi_residue_qn.json` for checked-in examples.
@@ -181,6 +197,7 @@ Acquisition and batching settings:
 Runtime and tool-path settings:
 - `accessions_file`
 - `taxonomy_db`
+- `run_id`
 - `run_root`
 - `output_dir`
 - `python_bin`
