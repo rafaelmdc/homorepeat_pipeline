@@ -5,14 +5,18 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections import defaultdict
+from collections import Counter
 from pathlib import Path
 
-from homorepeat.acquisition.acquisition_validation import build_acquisition_validation, write_validation_json  # noqa: E402
-from homorepeat.io.fasta_io import read_fasta, write_fasta  # noqa: E402
+from homorepeat.acquisition.acquisition_validation import (  # noqa: E402
+    build_acquisition_validation,
+    build_acquisition_validation_from_summary,
+    write_validation_json,
+)
+from homorepeat.io.fasta_io import iter_fasta, write_fasta  # noqa: E402
 from homorepeat.core.ids import stable_id  # noqa: E402
 from homorepeat.acquisition.translation import translate_cds as translate_sequence  # noqa: E402
-from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
+from homorepeat.io.tsv_io import ContractError, iter_tsv, read_tsv, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
 from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
@@ -74,18 +78,29 @@ def _run(args: argparse.Namespace) -> None:
     protein_fasta_path = outdir / "proteins.faa"
     proteins_tsv_path = outdir / "proteins.tsv"
 
-    sequences_rows = read_tsv(args.sequences_tsv, required_columns=SEQUENCES_REQUIRED)
-    cds_records = dict(read_fasta(args.cds_fasta))
+    sequences_by_id: dict[str, dict[str, str]] = {}
+    sequence_ids: set[str] = set()
+    sequence_accessions: set[str] = set()
+    n_sequences = 0
+    for row in iter_tsv(args.sequences_tsv, required_columns=SEQUENCES_REQUIRED):
+        sequence_id = row.get("sequence_id", "")
+        sequences_by_id[sequence_id] = row
+        sequence_ids.add(sequence_id)
+        assembly_accession = row.get("assembly_accession", "")
+        if assembly_accession:
+            sequence_accessions.add(assembly_accession)
+        n_sequences += 1
+
     existing_warning_rows = read_tsv(warning_path) if warning_path.is_file() else []
     warning_rows = list(existing_warning_rows)
+    retained_by_gene: dict[tuple[str, str], dict[str, object]] = {}
+    seen_cds_sequence_ids: set[str] = set()
 
-    translated_candidates: list[dict[str, object]] = []
-    for row in sequences_rows:
-        sequence_id = row.get("sequence_id", "")
-        cds_sequence = cds_records.get(sequence_id)
-        if cds_sequence is None:
-            raise ContractError(f"Normalized CDS FASTA is missing sequence_id {sequence_id}")
-
+    for sequence_id, cds_sequence in iter_fasta(args.cds_fasta):
+        row = sequences_by_id.get(sequence_id)
+        if row is None:
+            continue
+        seen_cds_sequence_ids.add(sequence_id)
         if row.get("partial_status", "") == "partial":
             warning_rows.append(
                 build_warning_row(
@@ -118,28 +133,34 @@ def _run(args: argparse.Namespace) -> None:
             continue
 
         protein_id = stable_id("prot", sequence_id)
-        translated_candidates.append(
-            {
-                "protein_id": protein_id,
-                "sequence_id": sequence_id,
-                "genome_id": row.get("genome_id", ""),
-                "protein_name": row.get("protein_external_id", "") or row.get("sequence_name", ""),
-                "protein_length": len(result.protein_sequence),
-                "gene_symbol": row.get("gene_symbol", ""),
-                "translation_method": "local_cds_translation",
-                "translation_status": "translated",
-                "assembly_accession": row.get("assembly_accession", ""),
-                "taxon_id": row.get("taxon_id", ""),
-                "gene_group": row.get("gene_group", "") or row.get("gene_symbol", "") or sequence_id,
-                "protein_external_id": row.get("protein_external_id", ""),
-                "_protein_sequence": result.protein_sequence,
-            }
-        )
+        candidate = {
+            "protein_id": protein_id,
+            "sequence_id": sequence_id,
+            "genome_id": row.get("genome_id", ""),
+            "protein_name": row.get("protein_external_id", "") or row.get("sequence_name", ""),
+            "protein_length": len(result.protein_sequence),
+            "gene_symbol": row.get("gene_symbol", ""),
+            "translation_method": "local_cds_translation",
+            "translation_status": "translated",
+            "assembly_accession": row.get("assembly_accession", ""),
+            "taxon_id": row.get("taxon_id", ""),
+            "gene_group": row.get("gene_group", "") or row.get("gene_symbol", "") or sequence_id,
+            "protein_external_id": row.get("protein_external_id", ""),
+            "_protein_sequence": result.protein_sequence,
+        }
+        gene_key = (str(candidate.get("genome_id", "")), str(candidate.get("gene_group", "")))
+        winner = retained_by_gene.get(gene_key)
+        if winner is None or _candidate_sort_key(candidate) < _candidate_sort_key(winner):
+            retained_by_gene[gene_key] = candidate
 
-    retained_rows = retain_one_isoform_per_gene(translated_candidates)
+    missing_sequence_ids = sorted(sequence_ids - seen_cds_sequence_ids)
+    if missing_sequence_ids:
+        raise ContractError(f"Normalized CDS FASTA is missing sequence_id {missing_sequence_ids[0]}")
+
+    retained_rows = sorted(retained_by_gene.values(), key=lambda row: str(row.get("protein_id", "")))
     _validate_translated_accession_coverage(
         outdir / "download_manifest.tsv",
-        sequences_rows,
+        sequence_accessions,
         retained_rows,
         args.batch_id,
     )
@@ -155,14 +176,33 @@ def _run(args: argparse.Namespace) -> None:
     download_manifest_rows = (
         read_tsv(outdir / "download_manifest.tsv") if (outdir / "download_manifest.tsv").is_file() else []
     )
-    validation_payload = build_acquisition_validation(
+    genome_ids = {row.get("genome_id", "") for row in genomes_rows}
+    failed_accessions = [
+        row.get("assembly_accession", "")
+        for row in download_manifest_rows
+        if row.get("download_status") == "failed" and row.get("assembly_accession", "")
+    ]
+    warning_summary = Counter(row.get("warning_code", "") for row in warning_rows if row.get("warning_code", ""))
+    validation_payload = build_acquisition_validation_from_summary(
         scope="batch",
         batch_id=args.batch_id,
-        genomes_rows=genomes_rows,
-        sequences_rows=sequences_rows,
-        proteins_rows=[{field: str(row.get(field, "")) for field in PROTEINS_FIELDNAMES} for row in retained_rows],
-        warning_rows=warning_rows,
-        download_manifest_rows=download_manifest_rows,
+        n_selected_assemblies=len({row.get("assembly_accession", "") for row in download_manifest_rows}),
+        n_downloaded_packages=sum(
+            1 for row in download_manifest_rows if row.get("download_status") in {"downloaded", "rehydrated"}
+        ),
+        n_genomes=len(genomes_rows),
+        n_sequences=n_sequences,
+        n_proteins=len(retained_rows),
+        n_warning_rows=len(warning_rows),
+        checks={
+            "all_selected_accessions_accounted_for": bool(download_manifest_rows)
+            and all(row.get("assembly_accession", "") for row in download_manifest_rows),
+            "all_genomes_have_taxids": all(row.get("taxon_id", "") for row in genomes_rows),
+            "all_proteins_belong_to_genomes": all(row.get("genome_id", "") in genome_ids for row in retained_rows),
+            "all_retained_proteins_trace_to_cds": all(row.get("sequence_id", "") in sequence_ids for row in retained_rows),
+        },
+        failed_accessions=failed_accessions,
+        warning_summary=warning_summary,
     )
     write_validation_json(outdir / "acquisition_validation.json", validation_payload)
 
@@ -214,27 +254,13 @@ def _write_stage_status_file(args: argparse.Namespace, *, status: str, message: 
     )
 
 
-def retain_one_isoform_per_gene(rows: list[dict[str, object]]) -> list[dict[str, object]]:
-    """Keep the longest translated protein per genome/gene group."""
-
-    grouped: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
-    for row in rows:
-        key = (str(row.get("genome_id", "")), str(row.get("gene_group", "")))
-        grouped[key].append(row)
-
-    retained: list[dict[str, object]] = []
-    for _, candidates in sorted(grouped.items()):
-        winner = sorted(
-            candidates,
-            key=lambda row: (-int(row.get("protein_length", 0)), str(row.get("protein_id", ""))),
-        )[0]
-        retained.append(winner)
-    return sorted(retained, key=lambda row: str(row.get("protein_id", "")))
+def _candidate_sort_key(row: dict[str, object]) -> tuple[int, str]:
+    return (-int(row.get("protein_length", 0)), str(row.get("protein_id", "")))
 
 
 def _validate_translated_accession_coverage(
     download_manifest_path: Path,
-    sequences_rows: list[dict[str, str]],
+    sequence_accessions: set[str],
     retained_rows: list[dict[str, object]],
     batch_id: str,
 ) -> None:
@@ -248,11 +274,7 @@ def _validate_translated_accession_coverage(
             if row.get("download_status", "") in {"downloaded", "rehydrated"} and row.get("assembly_accession", "")
         }
     else:
-        expected_accessions = {
-            row.get("assembly_accession", "")
-            for row in sequences_rows
-            if row.get("assembly_accession", "")
-        }
+        expected_accessions = set(sequence_accessions)
     translated_accessions = {
         str(row.get("assembly_accession", ""))
         for row in retained_rows

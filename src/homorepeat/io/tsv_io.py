@@ -59,6 +59,15 @@ def iter_tsv(
             yield dict(row)
 
 
+def read_tsv_fieldnames(path: Path | str) -> list[str]:
+    """Read only the header row from a UTF-8 TSV file."""
+
+    file_path = Path(path)
+    with file_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        return list(reader.fieldnames or [])
+
+
 def write_tsv(
     path: Path | str,
     rows: Iterable[Mapping[str, object]],
