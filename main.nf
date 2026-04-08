@@ -52,7 +52,7 @@ workflow {
   )
   statusBuild = BUILD_ACCESSION_STATUS(
     acquisition.batch_table,
-    acquisition.batch_rows.map { rows -> rows.collect { row -> row[1] } },
+    acquisition.batch_inputs,
     detection.call_tsvs,
     detection.detect_status_jsons,
     detection.finalize_status_jsons,

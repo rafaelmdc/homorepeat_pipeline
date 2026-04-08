@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from .tsv_io import ensure_directory
 
@@ -12,8 +13,13 @@ from .tsv_io import ensure_directory
 def read_fasta(path: Path | str) -> list[tuple[str, str]]:
     """Read a FASTA file into ``(header, sequence)`` tuples."""
 
+    return list(iter_fasta(path))
+
+
+def iter_fasta(path: Path | str) -> Iterator[tuple[str, str]]:
+    """Yield ``(header, sequence)`` tuples from a FASTA file."""
+
     file_path = Path(path)
-    records: list[tuple[str, str]] = []
     header: str | None = None
     chunks: list[str] = []
     with file_path.open("r", encoding="utf-8") as handle:
@@ -23,26 +29,49 @@ def read_fasta(path: Path | str) -> list[tuple[str, str]]:
                 continue
             if line.startswith(">"):
                 if header is not None:
-                    records.append((header, "".join(chunks)))
+                    yield (header, "".join(chunks))
                 header = line[1:].strip()
                 chunks = []
                 continue
             chunks.append(line)
     if header is not None:
-        records.append((header, "".join(chunks)))
-    return records
+        yield (header, "".join(chunks))
 
 
 def write_fasta(path: Path | str, records: Iterable[tuple[str, str]], *, width: int = 80) -> None:
     """Write FASTA records with wrapped sequence lines."""
 
+    with open_fasta_writer(path, width=width) as writer:
+        writer.write_records(records)
+
+
+class FastaWriter:
+    def __init__(self, handle, *, width: int = 80) -> None:
+        self._handle = handle
+        self._width = width
+
+    def write_record(self, header: str, sequence: str) -> None:
+        self._handle.write(f">{header}\n")
+        for index in range(0, len(sequence), self._width):
+            self._handle.write(f"{sequence[index:index + self._width]}\n")
+
+    def write_records(self, records: Iterable[tuple[str, str]]) -> None:
+        for header, sequence in records:
+            self.write_record(header, sequence)
+
+
+@contextmanager
+def open_fasta_writer(
+    path: Path | str,
+    *,
+    width: int = 80,
+) -> Iterator[FastaWriter]:
+    """Open a FASTA writer for incremental record writes."""
+
     file_path = Path(path)
     ensure_directory(file_path)
     with file_path.open("w", encoding="utf-8", newline="") as handle:
-        for header, sequence in records:
-            handle.write(f">{header}\n")
-            for index in range(0, len(sequence), width):
-                handle.write(f"{sequence[index:index + width]}\n")
+        yield FastaWriter(handle, width=width)
 
 
 def parse_ncbi_fasta_header(header: str) -> dict[str, str]:

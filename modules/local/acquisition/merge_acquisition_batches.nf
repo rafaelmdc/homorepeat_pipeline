@@ -2,7 +2,7 @@ process MERGE_ACQUISITION_BATCHES {
     label 'acquisition_merge'
 
     input:
-    path(translated_batch_dirs, stageAs: 'batch??')
+    tuple val(batch_ids), path(normalized_batch_dirs, stageAs: 'normalized_batch??'), path(translated_batch_dirs, stageAs: 'translated_batch??')
 
     output:
     path("genomes.tsv"), emit: genomes_tsv
@@ -16,9 +16,32 @@ process MERGE_ACQUISITION_BATCHES {
     path("acquisition_validation.json"), emit: acquisition_validation
 
     script:
-    def batchInputs = translated_batch_dirs instanceof List ? translated_batch_dirs : [translated_batch_dirs]
-    def batchArgs = batchInputs.collect { "--batch-inputs '${it}'" }.join(' ')
+    def batchIdInputs = batch_ids instanceof List ? batch_ids : [batch_ids]
+    def normalizedInputs = normalized_batch_dirs instanceof List ? normalized_batch_dirs : [normalized_batch_dirs]
+    def translatedInputs = translated_batch_dirs instanceof List ? translated_batch_dirs : [translated_batch_dirs]
+    assert batchIdInputs.size() == normalizedInputs.size()
+    assert batchIdInputs.size() == translatedInputs.size()
+    def assembleBatchViews = batchIdInputs.indices.collect { idx ->
+        def batchId = batchIdInputs[idx]
+        def normalizedDir = normalizedInputs[idx]
+        def translatedDir = translatedInputs[idx]
+        """
+        mkdir -p "batch_views/${batchId}"
+        cp '${normalizedDir}/genomes.tsv' "batch_views/${batchId}/genomes.tsv"
+        cp '${normalizedDir}/taxonomy.tsv' "batch_views/${batchId}/taxonomy.tsv"
+        cp '${normalizedDir}/sequences.tsv' "batch_views/${batchId}/sequences.tsv"
+        cp '${normalizedDir}/download_manifest.tsv' "batch_views/${batchId}/download_manifest.tsv"
+        cp '${normalizedDir}/normalization_warnings.tsv' "batch_views/${batchId}/normalization_warnings.tsv"
+        ln '${normalizedDir}/cds.fna' "batch_views/${batchId}/cds.fna" || cp '${normalizedDir}/cds.fna' "batch_views/${batchId}/cds.fna"
+        cp '${translatedDir}/proteins.tsv' "batch_views/${batchId}/proteins.tsv"
+        ln '${translatedDir}/proteins.faa' "batch_views/${batchId}/proteins.faa" || cp '${translatedDir}/proteins.faa' "batch_views/${batchId}/proteins.faa"
+        """
+    }.join('\n')
+    def batchArgs = batchIdInputs.collect { "--batch-inputs 'batch_views/${it}'" }.join(' ')
     """
+    mkdir -p batch_views
+    ${assembleBatchViews}
+
     ${params.python_bin} -m homorepeat.cli.merge_acquisition_batches \
       ${batchArgs} \
       --outdir acquisition_artifacts

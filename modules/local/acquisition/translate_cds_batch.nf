@@ -13,7 +13,7 @@ process TRANSLATE_CDS_BATCH {
     outdir=translated_batch
 
     mkdir -p "\$outdir"
-    for filename in genomes.tsv taxonomy.tsv sequences.tsv download_manifest.tsv download_stage_status.json normalize_stage_status.json; do
+    for filename in genomes.tsv download_manifest.tsv; do
       if [ -f "${normalized_batch_dir}/\$filename" ]; then
         cp "${normalized_batch_dir}/\$filename" "\$outdir/\$filename"
       fi
@@ -23,13 +23,9 @@ process TRANSLATE_CDS_BATCH {
       cp "${normalized_batch_dir}/normalization_warnings.tsv" "\$outdir/normalization_warnings.tsv"
     fi
 
-    if [ -f "${normalized_batch_dir}/cds.fna" ]; then
-      ln "${normalized_batch_dir}/cds.fna" "\$outdir/cds.fna" || cp "${normalized_batch_dir}/cds.fna" "\$outdir/cds.fna"
-    fi
-
     ${params.python_bin} -m homorepeat.cli.translate_cds \
-      --sequences-tsv "\$outdir/sequences.tsv" \
-      --cds-fasta "\$outdir/cds.fna" \
+      --sequences-tsv "${normalized_batch_dir}/sequences.tsv" \
+      --cds-fasta "${normalized_batch_dir}/cds.fna" \
       --batch-id ${batch_id} \
       --stage-status-out "\$outdir/translate_stage_status.json" \
       --outdir "\$outdir"

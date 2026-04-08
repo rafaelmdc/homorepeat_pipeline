@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import csv
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Iterator, Mapping, Sequence
 
 
 class ContractError(ValueError):
@@ -39,12 +40,23 @@ def read_tsv(
 ) -> list[dict[str, str]]:
     """Read a UTF-8 TSV file into ordered row dictionaries."""
 
+    return list(iter_tsv(path, required_columns=required_columns))
+
+
+def iter_tsv(
+    path: Path | str,
+    *,
+    required_columns: Sequence[str] | None = None,
+) -> Iterator[dict[str, str]]:
+    """Yield ordered row dictionaries from a UTF-8 TSV file."""
+
     file_path = Path(path)
     with file_path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         if required_columns:
             require_columns(reader.fieldnames, required_columns, context=str(file_path))
-        return [dict(row) for row in reader]
+        for row in reader:
+            yield dict(row)
 
 
 def write_tsv(
@@ -55,19 +67,42 @@ def write_tsv(
 ) -> None:
     """Write ordered rows to a UTF-8 TSV file."""
 
-    file_path = Path(path)
-    ensure_directory(file_path)
-    with file_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(
+    with open_tsv_writer(path, fieldnames=fieldnames) as writer:
+        writer.write_rows(rows)
+
+
+class TsvWriter:
+    def __init__(self, handle, fieldnames: Sequence[str]) -> None:
+        self._fieldnames = list(fieldnames)
+        self._writer = csv.DictWriter(
             handle,
             delimiter="\t",
-            fieldnames=list(fieldnames),
+            fieldnames=self._fieldnames,
             extrasaction="ignore",
             lineterminator="\n",
         )
-        writer.writeheader()
+        self._writer.writeheader()
+
+    def write_row(self, row: Mapping[str, object]) -> None:
+        self._writer.writerow({name: _stringify_tsv_value(row.get(name, "")) for name in self._fieldnames})
+
+    def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
         for row in rows:
-            writer.writerow({name: _stringify_tsv_value(row.get(name, "")) for name in fieldnames})
+            self.write_row(row)
+
+
+@contextmanager
+def open_tsv_writer(
+    path: Path | str,
+    *,
+    fieldnames: Sequence[str],
+) -> Iterator[TsvWriter]:
+    """Open a TSV writer for incremental row writes."""
+
+    file_path = Path(path)
+    ensure_directory(file_path)
+    with file_path.open("w", encoding="utf-8", newline="") as handle:
+        yield TsvWriter(handle, fieldnames)
 
 
 def write_lines(path: Path | str, lines: Iterable[str]) -> None:

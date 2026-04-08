@@ -2,6 +2,7 @@
 
 For the redesign plan and implementation order, see:
 
+- [Benchmark Guide](./benchmark_guide.md)
 - [Pipeline Performance and Scalability Roadmap](./performance_roadmap.md)
 - [Pipeline Performance Implementation Slices](./performance_slices.md)
 

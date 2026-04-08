@@ -22,16 +22,18 @@ class DetectionWorkflowTest(unittest.TestCase):
     def test_detection_workflow_keeps_multi_residue_outputs_per_batch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            batch_dir = tmp / "batch_0001"
+            normalized_dir = tmp / "batch_0001" / "normalized"
+            translated_dir = tmp / "batch_0001" / "translated"
             publish_dir = tmp / "publish"
             work_dir = tmp / "work"
             workflow_path = tmp / "test_detection_workflow.nf"
 
-            batch_dir.mkdir(parents=True, exist_ok=True)
+            normalized_dir.mkdir(parents=True, exist_ok=True)
+            translated_dir.mkdir(parents=True, exist_ok=True)
             publish_dir.mkdir(parents=True, exist_ok=True)
             work_dir.mkdir(parents=True, exist_ok=True)
 
-            self._write_translated_batch_fixture(batch_dir)
+            self._write_batch_fixtures(normalized_dir, translated_dir)
             workflow_path.write_text(
                 textwrap.dedent(
                     f"""
@@ -42,8 +44,8 @@ class DetectionWorkflowTest(unittest.TestCase):
 
                     workflow {{
                       main:
-                      translated = Channel.value([ tuple('batch_0001', file(params.batch_dir)) ])
-                      detection = DETECTION_FROM_ACQUISITION(translated)
+                      batch_rows = Channel.value([ tuple('batch_0001', file(params.normalized_dir), file(params.translated_dir)) ])
+                      detection = DETECTION_FROM_ACQUISITION(batch_rows)
                       merged = MERGE_CALL_TABLES(detection.call_tsvs, detection.run_params_tsvs)
 
                       publish:
@@ -80,8 +82,10 @@ class DetectionWorkflowTest(unittest.TestCase):
                     str(publish_dir),
                     "-work-dir",
                     str(work_dir),
-                    "--batch_dir",
-                    str(batch_dir),
+                    "--normalized_dir",
+                    str(normalized_dir),
+                    "--translated_dir",
+                    str(translated_dir),
                     "--python_bin",
                     sys.executable,
                     "--repeat_residues",
@@ -145,12 +149,12 @@ class DetectionWorkflowTest(unittest.TestCase):
                 },
             )
 
-    def _write_translated_batch_fixture(self, batch_dir: Path) -> None:
-        proteins_faa = batch_dir / "proteins.faa"
-        cds_fna = batch_dir / "cds.fna"
+    def _write_batch_fixtures(self, normalized_dir: Path, translated_dir: Path) -> None:
+        proteins_faa = translated_dir / "proteins.faa"
+        cds_fna = normalized_dir / "cds.fna"
 
         write_tsv(
-            batch_dir / "proteins.tsv",
+            translated_dir / "proteins.tsv",
             [
                 {
                     "protein_id": "prot_q",
@@ -190,7 +194,7 @@ class DetectionWorkflowTest(unittest.TestCase):
         )
 
         write_tsv(
-            batch_dir / "sequences.tsv",
+            normalized_dir / "sequences.tsv",
             [
                 {
                     "sequence_id": "seq_q",

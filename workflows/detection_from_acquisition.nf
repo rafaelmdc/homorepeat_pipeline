@@ -11,7 +11,7 @@ include {
 
 workflow DETECTION_FROM_ACQUISITION {
     take:
-    translated_batch_rows
+    batch_rows
 
     main:
     if( !params.run_pure && !params.run_threshold && !params.run_seed_extend ) {
@@ -32,13 +32,13 @@ workflow DETECTION_FROM_ACQUISITION {
     def finalizedCallCh = Channel.empty()
     def detectStatusCh = Channel.empty()
     def finalizeStatusCh = Channel.empty()
-    def batchDirLookupByResidue = {
-        translated_batch_rows.flatMap { rows ->
+    def normalizedBatchDirLookupByResidue = {
+        batch_rows.flatMap { rows ->
             rows.collectMany { row ->
                 def batch_id = row[0]
-                def batch_dir = row[1]
+                def normalized_batch_dir = row[1]
                 repeatResidues.collect { repeatResidue ->
-                    tuple("${batch_id}::${repeatResidue}", batch_dir)
+                    tuple("${batch_id}::${repeatResidue}", normalized_batch_dir)
                 }
             }
         }
@@ -48,17 +48,17 @@ workflow DETECTION_FROM_ACQUISITION {
             .map { batch_id, method, repeatResidue, call_tsv, run_params_tsv ->
                 tuple("${batch_id}::${repeatResidue}", batch_id, method, repeatResidue, call_tsv, run_params_tsv)
             }
-            .join(batchDirLookupByResidue())
-            .map { composite_key, batch_id, method, repeatResidue, call_tsv, run_params_tsv, batch_dir ->
-                tuple(batch_id, method, repeatResidue, call_tsv, run_params_tsv, batch_dir)
+            .join(normalizedBatchDirLookupByResidue())
+            .map { composite_key, batch_id, method, repeatResidue, call_tsv, run_params_tsv, normalized_batch_dir ->
+                tuple(batch_id, method, repeatResidue, call_tsv, run_params_tsv, normalized_batch_dir)
             }
     }
 
     if( params.run_pure ) {
         pureDetection = DETECT_PURE(
-            translated_batch_rows.flatMap { rows ->
+            batch_rows.flatMap { rows ->
                 rows.collectMany { row ->
-                    repeatResidues.collect { residue -> tuple(row[0], residue, row[1]) }
+                    repeatResidues.collect { residue -> tuple(row[0], residue, row[2]) }
                 }
             }
         )
@@ -70,9 +70,9 @@ workflow DETECTION_FROM_ACQUISITION {
 
     if( params.run_threshold ) {
         thresholdDetection = DETECT_THRESHOLD(
-            translated_batch_rows.flatMap { rows ->
+            batch_rows.flatMap { rows ->
                 rows.collectMany { row ->
-                    repeatResidues.collect { residue -> tuple(row[0], residue, row[1]) }
+                    repeatResidues.collect { residue -> tuple(row[0], residue, row[2]) }
                 }
             }
         )
@@ -84,9 +84,9 @@ workflow DETECTION_FROM_ACQUISITION {
 
     if( params.run_seed_extend ) {
         seedExtendDetection = DETECT_SEED_EXTEND(
-            translated_batch_rows.flatMap { rows ->
+            batch_rows.flatMap { rows ->
                 rows.collectMany { row ->
-                    repeatResidues.collect { residue -> tuple(row[0], residue, row[1]) }
+                    repeatResidues.collect { residue -> tuple(row[0], residue, row[2]) }
                 }
             }
         )
