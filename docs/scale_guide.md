@@ -1,5 +1,10 @@
 # Scale Guide
 
+For the redesign plan and implementation order, see:
+
+- [Pipeline Performance and Scalability Roadmap](./performance_roadmap.md)
+- [Pipeline Performance Implementation Slices](./performance_slices.md)
+
 ## Current scaling model
 
 The pipeline now parallelizes both major heavy phases:

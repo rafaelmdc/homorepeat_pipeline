@@ -144,11 +144,23 @@ def resolve_accessions(
 
     for accession in accessions:
         if resolve_requested_accessions:
-            resolution_row = resolve_download_accession(
-                accession,
-                api_key=api_key,
-                datasets_bin=datasets_bin,
-            )
+            normalized_accession = accession.upper()
+            if normalized_accession.startswith("GCF_"):
+                resolution_row = {
+                    "requested_accession": accession,
+                    "resolved_accession": accession,
+                    "resolution_reason": "kept_refseq_accession",
+                    "source_database": "REFSEQ",
+                    "current_accession": accession,
+                    "paired_accession": "",
+                    "annotation_status": "",
+                }
+            else:
+                resolution_row = resolve_download_accession(
+                    accession,
+                    api_key=api_key,
+                    datasets_bin=datasets_bin,
+                )
         else:
             resolution_row = {
                 "requested_accession": accession,

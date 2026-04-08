@@ -63,14 +63,23 @@ DOWNLOAD_MANIFEST_REQUIRED = ["assembly_accession", "download_status"]
 
 def _build_primary_sequence_id(
     accession: str,
+    primary_key: str,
+    sequence: str,
+) -> str:
+    return stable_id("seq", accession, primary_key, sequence)
+
+
+def _build_primary_sequence_key(
+    *,
+    linkage_status: str,
     transcript_id: str,
     source_record_id: str,
     record_id: str,
     header: str,
-    sequence: str,
 ) -> str:
-    stable_key = first_nonempty(transcript_id, source_record_id, record_id, header)
-    return stable_id("seq", accession, stable_key, sequence)
+    if linkage_status == "gff_gene_segment_alias":
+        return first_nonempty(source_record_id, transcript_id, record_id, header)
+    return first_nonempty(transcript_id, source_record_id, record_id, header)
 
 
 def _build_disambiguated_sequence_id(
@@ -272,15 +281,18 @@ def _run(args: argparse.Namespace) -> None:
                     )
 
             metadata_record_id = metadata.get("record_id", "")
-            stable_key = first_nonempty(transcript_id, source_record_id, metadata_record_id, header)
-            source_sequence_key = stable_id("source_seq", accession, stable_key)
+            primary_key = _build_primary_sequence_key(
+                linkage_status=linkage_status,
+                transcript_id=transcript_id,
+                source_record_id=source_record_id,
+                record_id=metadata_record_id,
+                header=header,
+            )
+            source_sequence_key = stable_id("source_seq", accession, primary_key)
             previous_source_sequence = seen_source_sequences.get(source_sequence_key)
             sequence_id = _build_primary_sequence_id(
                 accession,
-                transcript_id,
-                source_record_id,
-                metadata_record_id,
-                header,
+                primary_key,
                 sequence,
             )
             gene_group = first_nonempty(gene_symbol, transcript_id, sequence_id)

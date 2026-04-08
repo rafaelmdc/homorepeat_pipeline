@@ -179,11 +179,11 @@ class PlanAccessionBatchesTest(unittest.TestCase):
                     {
                         "requested_accession": "GCF_000001405.40",
                         "resolved_accession": "GCF_000001405.40",
-                        "resolution_reason": "kept_requested_accession",
+                        "resolution_reason": "kept_refseq_accession",
                         "source_database": "REFSEQ",
                         "current_accession": "GCF_000001405.40",
                         "paired_accession": "",
-                        "annotation_status": "annotated:annotated",
+                        "annotation_status": "",
                     },
                 ],
             )

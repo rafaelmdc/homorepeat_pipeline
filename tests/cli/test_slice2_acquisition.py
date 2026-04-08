@@ -313,6 +313,8 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(len(manifest_rows), 2)
             self.assertEqual({row["download_status"] for row in manifest_rows}, {"downloaded"})
             self.assertTrue((outdir / "ncbi_package").exists())
+            self.assertFalse((outdir / "batch_0001_ncbi_dataset.zip").exists())
+            self.assertEqual({row["download_path"] for row in manifest_rows}, {""})
 
     def test_download_ncbi_packages_cleans_stale_zip_before_retry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -382,6 +384,77 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(len(manifest_rows), 1)
             self.assertEqual({row["download_status"] for row in manifest_rows}, {"downloaded"})
             self.assertTrue((outdir / "ncbi_package").exists())
+            self.assertFalse((outdir / "batch_0001_ncbi_dataset.zip").exists())
+            self.assertEqual({row["download_path"] for row in manifest_rows}, {""})
+
+    def test_download_ncbi_packages_keeps_zip_when_cache_dir_is_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            planning_dir = tmp / "planning"
+            outdir = tmp / "batches" / "batch_0001" / "raw"
+            cache_dir = tmp / "cache"
+            fake_bin_dir = tmp / "fake_bin"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            selected_batches_path = planning_dir / "selected_batches.tsv"
+            write_tsv(
+                selected_batches_path,
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "request_id": "req_001",
+                        "assembly_accession": "GCF_000001405.40",
+                        "taxon_id": "9606",
+                        "batch_reason": "single_small_taxon_batch",
+                        "resolved_name": "Homo sapiens",
+                        "refseq_category": "reference genome",
+                        "assembly_level": "Chromosome",
+                        "annotation_status": "annotated:Updated annotation",
+                    }
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "request_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "batch_reason",
+                    "resolved_name",
+                    "refseq_category",
+                    "assembly_level",
+                    "annotation_status",
+                ],
+            )
+
+            self._write_fake_datasets(fake_bin_dir / "datasets")
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+            env["HOMOREPEAT_FIXTURES_ROOT"] = str(FIXTURES_ROOT)
+
+            self._run_cli(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.download_ncbi_packages",
+                    "--batch-manifest",
+                    str(selected_batches_path),
+                    "--batch-id",
+                    "batch_0001",
+                    "--cache-dir",
+                    str(cache_dir),
+                    "--outdir",
+                    str(outdir),
+                ],
+                env=env,
+            )
+
+            manifest_rows = read_tsv(outdir / "download_manifest.tsv")
+            archive_path = cache_dir / "batch_0001_ncbi_dataset.zip"
+
+            self.assertEqual(len(manifest_rows), 1)
+            self.assertTrue((outdir / "ncbi_package").exists())
+            self.assertTrue(archive_path.is_file())
+            self.assertEqual({row["download_path"] for row in manifest_rows}, {str(archive_path.resolve())})
 
     def test_download_ncbi_packages_failure_writes_failed_manifest_and_stage_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -940,6 +1013,90 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
                 [row["warning_code"] for row in warnings_rows],
                 ["ambiguous_sequence_identity_resolved"],
             )
+
+    def test_normalize_uses_source_backed_keys_for_shared_gene_segment_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            package_root = tmp / "package"
+            accession = "GCF_TEST_SEGMENTS.1"
+            accession_dir = package_root / "ncbi_dataset" / "data" / accession
+            fake_bin_dir = tmp / "fake_bin"
+            outdir = tmp / "normalized"
+            taxonomy_db = tmp / "taxonomy.sqlite"
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+            accession_dir.mkdir(parents=True, exist_ok=True)
+            taxonomy_db.write_text("", encoding="utf-8")
+            self._write_fake_taxon_weaver(fake_bin_dir / "taxon-weaver")
+
+            (package_root / "ncbi_dataset" / "data" / "assembly_data_report.jsonl").write_text(
+                json.dumps(
+                    {
+                        "accession": accession,
+                        "assemblyInfo": {
+                            "assemblyLevel": "Chromosome",
+                            "assemblyType": "haploid",
+                        },
+                        "organism": {"taxId": 9606, "organismName": "Homo sapiens"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (accession_dir / f"{accession}_genomic.gff").write_text(
+                "\n".join(
+                    [
+                        "chr1\tRefSeq\tgene\t1\t9\t.\t+\t.\tID=gene1;gene=LOC_SEG1",
+                        "chr1\tRefSeq\tC_gene_segment\t1\t9\t.\t+\t.\tID=id-LOC_SEG1;Parent=gene1;gene=LOC_SEG1;standard_name=Shared segment",
+                        "chr1\tRefSeq\tCDS\t1\t9\t.\t+\t0\tID=cds-LOC_SEG1;Parent=id-LOC_SEG1;gene=LOC_SEG1;partial=true",
+                        "chr1\tRefSeq\tgene\t20\t28\t.\t+\t.\tID=gene2;gene=LOC_SEG2",
+                        "chr1\tRefSeq\tC_gene_segment\t20\t28\t.\t+\t.\tID=id-LOC_SEG2;Parent=gene2;gene=LOC_SEG2;standard_name=Shared segment",
+                        "chr1\tRefSeq\tCDS\t20\t28\t.\t+\t0\tID=cds-LOC_SEG2;Parent=id-LOC_SEG2;gene=LOC_SEG2;partial=true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (accession_dir / f"{accession}_cds_from_genomic.fna").write_text(
+                "\n".join(
+                    [
+                        ">lcl|chr1_cds_1 [gene=LOC_SEG1] [exception=rearrangement required for product] [gbkey=CDS]",
+                        "ATGGCCGCC",
+                        ">lcl|chr1_cds_2 [gene=LOC_SEG2] [exception=rearrangement required for product] [gbkey=CDS]",
+                        "ATGAAAGCC",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+
+            self._run_cli(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.normalize_cds",
+                    "--package-dir",
+                    str(package_root),
+                    "--taxonomy-db",
+                    str(taxonomy_db),
+                    "--batch-id",
+                    "batch_0001",
+                    "--outdir",
+                    str(outdir),
+                ],
+                env=env,
+            )
+
+            sequences = read_tsv(outdir / "sequences.tsv")
+            warnings_rows = read_tsv(outdir / "normalization_warnings.tsv")
+
+            self.assertEqual(len(sequences), 2)
+            self.assertEqual(len({row["sequence_id"] for row in sequences}), 2)
+            self.assertEqual({row["source_record_id"] for row in sequences}, {"cds-LOC_SEG1", "cds-LOC_SEG2"})
+            self.assertEqual({row["linkage_status"] for row in sequences}, {"gff_gene_segment_alias"})
+            self.assertEqual({row["transcript_id"] for row in sequences}, {"Shared segment"})
+            self.assertEqual(warnings_rows, [])
 
     def test_normalize_filters_alt_loci_using_sequence_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

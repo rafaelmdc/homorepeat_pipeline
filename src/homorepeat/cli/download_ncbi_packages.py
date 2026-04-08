@@ -122,6 +122,7 @@ def _run(args: argparse.Namespace) -> None:
         max_attempts=args.datasets_max_attempts,
         retry_delay_seconds=args.datasets_retry_delay_seconds,
     )
+    archive_size_bytes = archive_path.stat().st_size if archive_path.exists() else ""
     unzip_package(archive_path, package_extract_dir)
     if args.rehydrate:
         rehydrate_package(
@@ -132,6 +133,7 @@ def _run(args: argparse.Namespace) -> None:
             max_attempts=args.datasets_max_attempts,
             retry_delay_seconds=args.datasets_retry_delay_seconds,
         )
+    retained_archive_path = _finalize_archive_retention(archive_path, cache_dir_set=bool(args.cache_dir))
 
     package_root = find_package_root(package_extract_dir)
     downloaded_records = load_assembly_report(package_root)
@@ -148,10 +150,10 @@ def _run(args: argparse.Namespace) -> None:
                     "assembly_accession": accession,
                     "download_status": success_status,
                     "package_mode": package_mode,
-                    "download_path": str(archive_path.resolve()),
+                    "download_path": retained_archive_path,
                     "rehydrated_path": str(package_root.resolve()) if args.rehydrate else "",
                     "checksum": "",
-                    "file_size_bytes": archive_path.stat().st_size,
+                    "file_size_bytes": archive_size_bytes,
                     "download_started_at": "",
                     "download_finished_at": "",
                     "notes": "",
@@ -164,10 +166,10 @@ def _run(args: argparse.Namespace) -> None:
                 "assembly_accession": accession,
                 "download_status": "failed",
                 "package_mode": package_mode,
-                "download_path": str(archive_path.resolve()),
+                "download_path": retained_archive_path,
                 "rehydrated_path": "",
                 "checksum": "",
-                "file_size_bytes": archive_path.stat().st_size if archive_path.exists() else "",
+                "file_size_bytes": archive_size_bytes,
                 "download_started_at": "",
                 "download_finished_at": "",
                 "notes": "selected accession missing from downloaded package",
@@ -177,6 +179,14 @@ def _run(args: argparse.Namespace) -> None:
     write_tsv(outdir / "download_manifest.tsv", manifest_rows, fieldnames=DOWNLOAD_MANIFEST_FIELDNAMES)
     if not any(row["download_status"] in {"downloaded", "rehydrated"} for row in manifest_rows):
         raise ContractError(f"Batch {args.batch_id} produced no successful package records")
+
+
+def _finalize_archive_retention(archive_path: Path, *, cache_dir_set: bool) -> str:
+    if cache_dir_set:
+        return str(archive_path.resolve())
+    if archive_path.exists():
+        archive_path.unlink()
+    return ""
 
 
 def _write_failed_manifest(args: argparse.Namespace, message: str) -> None:
