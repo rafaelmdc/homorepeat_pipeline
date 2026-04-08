@@ -64,9 +64,10 @@ CREATE TABLE proteins (
 
 CREATE TABLE run_params (
     method TEXT NOT NULL,
+    repeat_residue TEXT NOT NULL,
     param_name TEXT NOT NULL,
     param_value TEXT NOT NULL,
-    PRIMARY KEY (method, param_name)
+    PRIMARY KEY (method, repeat_residue, param_name)
 );
 
 CREATE TABLE repeat_calls (

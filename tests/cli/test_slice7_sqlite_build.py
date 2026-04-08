@@ -75,6 +75,10 @@ class SliceSevenSqliteBuildTest(unittest.TestCase):
 
             connection = sqlite3.connect(sqlite_path)
             try:
+                run_param = connection.execute(
+                    "SELECT method, repeat_residue, param_name, param_value FROM run_params"
+                ).fetchone()
+                self.assertEqual(run_param, ("pure", "A", "min_repeat_count", "6"))
                 repeat_call = connection.execute(
                     "SELECT method, repeat_residue, start, end, aa_sequence FROM repeat_calls"
                 ).fetchone()
@@ -171,6 +175,75 @@ class SliceSevenSqliteBuildTest(unittest.TestCase):
                     "SELECT method, repeat_residue, start, end, aa_sequence FROM repeat_calls"
                 ).fetchone()
                 self.assertEqual(repeat_call, ("seed_extend", "A", 2, 7, "AAAAAA"))
+            finally:
+                connection.close()
+
+    def test_build_sqlite_cli_accepts_multi_residue_run_params_for_same_method(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            inputs_dir = tmp / "inputs"
+            outdir = tmp / "sqlite"
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+
+            paths = self._write_minimal_inputs(inputs_dir)
+            write_tsv(
+                paths["run_params"],
+                [
+                    {
+                        "method": "pure",
+                        "repeat_residue": "Q",
+                        "param_name": "min_repeat_count",
+                        "param_value": 6,
+                    },
+                    {
+                        "method": "pure",
+                        "repeat_residue": "N",
+                        "param_name": "min_repeat_count",
+                        "param_value": 6,
+                    },
+                ],
+                fieldnames=RUN_PARAM_FIELDNAMES,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.build_sqlite",
+                    "--taxonomy-tsv", str(paths["taxonomy"]),
+                    "--genomes-tsv", str(paths["genomes"]),
+                    "--sequences-tsv", str(paths["sequences"]),
+                    "--proteins-tsv", str(paths["proteins"]),
+                    "--call-tsv", str(paths["calls"]),
+                    "--run-params-tsv", str(paths["run_params"]),
+                    "--outdir", str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"build_sqlite.py failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            sqlite_path = outdir / "homorepeat.sqlite"
+            connection = sqlite3.connect(sqlite_path)
+            try:
+                rows = connection.execute(
+                    "SELECT method, repeat_residue, param_name, param_value "
+                    "FROM run_params ORDER BY method, repeat_residue, param_name"
+                ).fetchall()
+                self.assertEqual(
+                    rows,
+                    [
+                        ("pure", "N", "min_repeat_count", "6"),
+                        ("pure", "Q", "min_repeat_count", "6"),
+                    ],
+                )
             finally:
                 connection.close()
 
@@ -336,7 +409,7 @@ class SliceSevenSqliteBuildTest(unittest.TestCase):
         write_tsv(calls_path, [call_row], fieldnames=CALL_FIELDNAMES)
         write_tsv(
             run_params_path,
-            [{"method": method, "param_name": "min_repeat_count", "param_value": 6}],
+            [{"method": method, "repeat_residue": "A", "param_name": "min_repeat_count", "param_value": 6}],
             fieldnames=RUN_PARAM_FIELDNAMES,
         )
 

@@ -36,5 +36,6 @@ workflow {
   regression_input = reporting.regression_input
   echarts_report = reporting.echarts_report
   accession_status = statusBuild.accession_status_tsv
+  accession_call_counts = statusBuild.accession_call_counts_tsv
   status_summary = statusBuild.status_summary_json
 }

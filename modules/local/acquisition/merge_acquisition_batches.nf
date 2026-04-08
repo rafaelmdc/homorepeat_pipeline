@@ -5,7 +5,7 @@ process MERGE_ACQUISITION_BATCHES {
     })
 
     input:
-    val(translated_batch_dirs)
+    path(translated_batch_dirs, stageAs: 'batch??')
 
     output:
     path("acquisition_artifacts/genomes.tsv"), emit: genomes_tsv

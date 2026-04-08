@@ -25,13 +25,13 @@ Expose the current `pure` and `threshold` tuning knobs through pipeline config, 
 - add `params.threshold_window_size`
 - add `params.threshold_min_target_count`
 - pass them from Nextflow into the Python CLIs
-- ensure method-specific `run_params.tsv` reflects these values
+- ensure residue-scoped method-specific `run_params.tsv` reflects these values
 
 ### Acceptance criteria
 
 - pipeline params can override pure minimum size
 - pipeline params can override threshold window and count
-- `run_params.tsv` records the actual values used
+- `run_params.tsv` records the actual values used for each method plus repeat-residue block
 - existing defaults stay unchanged when params are not supplied
 
 ### Validation
@@ -104,7 +104,7 @@ Make the new method runnable end-to-end like the existing detection methods.
 
 - the method can be enabled or disabled independently
 - it produces call rows with the same core schema as other methods
-- `run_params.tsv` records all seed-extend settings
+- `run_params.tsv` records all seed-extend settings for each emitted repeat residue
 - merged canonical calls include the new method without schema drift
 
 ### Validation

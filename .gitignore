@@ -211,3 +211,7 @@ __marimo__/
 tmp/
 runtime/cache/
 download_attempts.txt
+
+# test
+runs/*
+!my-folder/README.md

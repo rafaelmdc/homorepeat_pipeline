@@ -10,8 +10,10 @@ from pathlib import Path
 
 from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
 from homorepeat.runtime.accession_status import (  # noqa: E402
+    ACCESSION_CALL_COUNTS_FIELDNAMES,
     ACCESSION_STATUS_FIELDNAMES,
     BATCH_TABLE_REQUIRED,
+    build_accession_call_count_rows,
     build_accession_status_rows,
     build_status_summary,
 )
@@ -49,10 +51,18 @@ def main() -> int:
         finalize_status_paths=[Path(path) for path in args.finalize_status_json],
         call_tsv_paths=[Path(path) for path in args.call_tsv],
     )
+    count_rows = build_accession_call_count_rows(
+        batch_table_rows=batch_table_rows,
+        batch_dirs=[Path(path) for path in args.batch_dir],
+        detect_status_paths=[Path(path) for path in args.detect_status_json],
+        finalize_status_paths=[Path(path) for path in args.finalize_status_json],
+        call_tsv_paths=[Path(path) for path in args.call_tsv],
+    )
     summary_payload = build_status_summary(status_rows)
 
     outdir = Path(args.outdir)
     write_tsv(outdir / "accession_status.tsv", status_rows, fieldnames=ACCESSION_STATUS_FIELDNAMES)
+    write_tsv(outdir / "accession_call_counts.tsv", count_rows, fieldnames=ACCESSION_CALL_COUNTS_FIELDNAMES)
     (outdir / "status_summary.json").write_text(
         json.dumps(summary_payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

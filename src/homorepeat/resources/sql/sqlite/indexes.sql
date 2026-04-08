@@ -15,4 +15,4 @@ CREATE INDEX idx_repeat_calls_sequence_id ON repeat_calls(sequence_id);
 CREATE INDEX idx_repeat_calls_genome_id ON repeat_calls(genome_id);
 CREATE INDEX idx_repeat_calls_taxon_id ON repeat_calls(taxon_id);
 
-CREATE INDEX idx_run_params_method ON run_params(method);
+CREATE INDEX idx_run_params_method_residue ON run_params(method, repeat_residue);

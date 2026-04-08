@@ -117,8 +117,8 @@ def _run(args: argparse.Namespace) -> None:
     write_run_params(
         outdir / "run_params.tsv",
         "threshold",
+        repeat_residue,
         {
-            "repeat_residue": repeat_residue,
             "window_size": args.window_size,
             "min_target_count": args.min_target_count,
         },
@@ -132,8 +132,8 @@ def _write_failed_outputs(args: argparse.Namespace) -> None:
     write_run_params(
         outdir / "run_params.tsv",
         "threshold",
+        args.repeat_residue.strip().upper(),
         {
-            "repeat_residue": args.repeat_residue.strip().upper(),
             "window_size": args.window_size,
             "min_target_count": args.min_target_count,
         },

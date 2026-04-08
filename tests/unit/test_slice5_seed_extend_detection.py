@@ -162,14 +162,13 @@ class SliceFiveSeedExtendPolyQDetectionTest(unittest.TestCase):
             self.assertEqual(row["merge_rule"], "seed_extend_connected_windows")
 
             self.assertEqual(
-                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {(item["repeat_residue"], item["param_name"], item["param_value"]) for item in param_rows},
                 {
-                    ("repeat_residue", "Q"),
-                    ("seed_window_size", "8"),
-                    ("seed_min_target_count", "6"),
-                    ("extend_window_size", "12"),
-                    ("extend_min_target_count", "8"),
-                    ("min_total_length", "10"),
+                    ("Q", "seed_window_size", "8"),
+                    ("Q", "seed_min_target_count", "6"),
+                    ("Q", "extend_window_size", "12"),
+                    ("Q", "extend_min_target_count", "8"),
+                    ("Q", "min_total_length", "10"),
                 },
             )
 

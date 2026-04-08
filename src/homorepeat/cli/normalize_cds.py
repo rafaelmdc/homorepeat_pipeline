@@ -62,6 +62,39 @@ SEQUENCES_FIELDNAMES = [
 ]
 
 
+def _build_primary_sequence_id(
+    accession: str,
+    transcript_id: str,
+    source_record_id: str,
+    record_id: str,
+    header: str,
+    sequence: str,
+) -> str:
+    stable_key = first_nonempty(transcript_id, source_record_id, record_id, header)
+    return stable_id("seq", accession, stable_key, sequence)
+
+
+def _build_disambiguated_sequence_id(
+    accession: str,
+    transcript_id: str,
+    source_record_id: str,
+    protein_external_id: str,
+    gene_symbol: str,
+    record_id: str,
+    sequence: str,
+) -> str:
+    return stable_id(
+        "seq",
+        accession,
+        transcript_id,
+        source_record_id,
+        protein_external_id,
+        gene_symbol,
+        record_id,
+        sequence,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-dir", required=True, help="Extracted package directory")
@@ -230,10 +263,18 @@ def _run(args: argparse.Namespace) -> None:
                         )
                     )
 
-            stable_key = first_nonempty(transcript_id, source_record_id, metadata.get("record_id", ""), header)
+            metadata_record_id = metadata.get("record_id", "")
+            stable_key = first_nonempty(transcript_id, source_record_id, metadata_record_id, header)
             source_sequence_key = stable_id("source_seq", accession, stable_key)
             previous_source_sequence = seen_source_sequences.get(source_sequence_key)
-            sequence_id = stable_id("seq", accession, stable_key, sequence)
+            sequence_id = _build_primary_sequence_id(
+                accession,
+                transcript_id,
+                source_record_id,
+                metadata_record_id,
+                header,
+                sequence,
+            )
             gene_group = first_nonempty(gene_symbol, transcript_id, sequence_id)
             sequence_name = first_nonempty(transcript_id, source_record_id, metadata.get("record_id", ""))
             candidate_row = {
@@ -274,11 +315,51 @@ def _run(args: argparse.Namespace) -> None:
             existing_row = seen_sequence_rows.get(sequence_id)
             if existing_row is not None:
                 existing_sequence = seen_cds_sequences.get(sequence_id, "")
-                if existing_row != candidate_row or existing_sequence != sequence:
+                if existing_row == candidate_row and existing_sequence == sequence:
+                    continue
+
+                disambiguated_sequence_id = _build_disambiguated_sequence_id(
+                    accession,
+                    transcript_id,
+                    source_record_id,
+                    protein_external_id,
+                    gene_symbol,
+                    metadata_record_id,
+                    sequence,
+                )
+                if disambiguated_sequence_id == sequence_id:
                     raise ContractError(
                         f"Conflicting normalized sequence rows produced the same sequence_id {sequence_id}"
                     )
-                continue
+
+                candidate_row = dict(candidate_row)
+                candidate_row["sequence_id"] = disambiguated_sequence_id
+                if candidate_row["gene_group"] == sequence_id:
+                    candidate_row["gene_group"] = disambiguated_sequence_id
+
+                existing_row = seen_sequence_rows.get(disambiguated_sequence_id)
+                existing_sequence = seen_cds_sequences.get(disambiguated_sequence_id, "")
+                if existing_row is not None:
+                    if existing_row != candidate_row or existing_sequence != sequence:
+                        raise ContractError(
+                            f"Conflicting normalized sequence rows produced the same sequence_id {disambiguated_sequence_id}"
+                        )
+                    continue
+
+                sequence_id = disambiguated_sequence_id
+                warnings_rows.append(
+                    build_warning_row(
+                        "ambiguous_sequence_identity_resolved",
+                        "sequence",
+                        "Transcript-level CDS identity was ambiguous; used a source-backed sequence identifier instead",
+                        batch_id=args.batch_id,
+                        genome_id=genome_id,
+                        sequence_id=sequence_id,
+                        assembly_accession=accession,
+                        source_file=str(cds_path.resolve()),
+                        source_record_id=source_record_id or metadata_record_id,
+                    )
+                )
 
             seen_sequence_rows[sequence_id] = candidate_row
             seen_cds_sequences[sequence_id] = sequence

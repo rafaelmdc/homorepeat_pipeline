@@ -280,6 +280,8 @@ Canonical merged downstream outputs remain under:
 
 - `publish/calls/`
 
+`run_params.tsv` is residue-scoped, so one method may publish multiple parameter blocks in a single run when multiple repeat residues are enabled.
+
 ---
 
 ## Database assembly

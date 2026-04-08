@@ -46,20 +46,21 @@ def main() -> int:
         )
     )
 
-    run_params_by_key: dict[tuple[str, str], dict[str, str]] = {}
+    run_params_by_key: dict[tuple[str, str, str], dict[str, str]] = {}
     for path in args.run_params_tsv:
         for row in read_tsv(path, required_columns=RUN_PARAM_FIELDNAMES):
-            key = (row.get("method", ""), row.get("param_name", ""))
+            key = (row.get("method", ""), row.get("repeat_residue", ""), row.get("param_name", ""))
             existing = run_params_by_key.get(key)
             if existing and existing.get("param_value", "") != row.get("param_value", ""):
                 raise ContractError(
                     "Conflicting run_params rows for "
-                    f"{key[0]}:{key[1]} -> {existing.get('param_value', '')!r} vs {row.get('param_value', '')!r}"
+                    f"{key[0]}:{key[1]}:{key[2]} -> "
+                    f"{existing.get('param_value', '')!r} vs {row.get('param_value', '')!r}"
                 )
             run_params_by_key[key] = row
     run_param_rows = sorted(
         run_params_by_key.values(),
-        key=lambda row: (row.get("method", ""), row.get("param_name", "")),
+        key=lambda row: (row.get("method", ""), row.get("repeat_residue", ""), row.get("param_name", "")),
     )
 
     outdir = Path(args.outdir)

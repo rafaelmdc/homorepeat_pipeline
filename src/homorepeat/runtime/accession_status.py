@@ -26,12 +26,21 @@ ACCESSION_STATUS_FIELDNAMES = [
     "n_repeat_calls",
     "notes",
 ]
+ACCESSION_CALL_COUNTS_FIELDNAMES = [
+    "assembly_accession",
+    "batch_id",
+    "method",
+    "repeat_residue",
+    "detect_status",
+    "finalize_status",
+    "n_repeat_calls",
+]
 
 BATCH_TABLE_REQUIRED = ["batch_id", "assembly_accession"]
 DOWNLOAD_MANIFEST_REQUIRED = ["batch_id", "assembly_accession", "download_status", "notes"]
 GENOMES_REQUIRED = ["genome_id", "accession"]
 PROTEINS_REQUIRED = ["protein_id", "genome_id", "assembly_accession"]
-CALLS_REQUIRED = ["genome_id"]
+CALLS_REQUIRED = ["genome_id", "method", "repeat_residue"]
 
 SUCCESSFUL_DOWNLOAD_STATUSES = {"downloaded", "rehydrated"}
 
@@ -71,9 +80,9 @@ def build_accession_status_rows(
             n_proteins,
             detect_status_by_batch.get(batch_id, []),
         )
-        finalize_status = _downstream_stage_status(
-            translate_status,
-            n_proteins,
+        finalize_status = _finalize_stage_status(
+            detect_status,
+            n_repeat_calls,
             finalize_status_by_batch.get(batch_id, []),
         )
 
@@ -116,6 +125,67 @@ def build_accession_status_rows(
             }
         )
     return status_rows
+
+
+def build_accession_call_count_rows(
+    *,
+    batch_table_rows: Sequence[dict[str, str]],
+    batch_dirs: Sequence[Path],
+    detect_status_paths: Sequence[Path],
+    finalize_status_paths: Sequence[Path],
+    call_tsv_paths: Sequence[Path],
+) -> list[dict[str, object]]:
+    """Build one published accession-method-residue status row per requested accession."""
+
+    batch_rows = list(batch_table_rows)
+    batch_info_by_id = _load_batch_info(batch_dirs)
+    detect_status_by_key = _group_stage_status_by_batch_method_residue(detect_status_paths)
+    finalize_status_by_key = _group_stage_status_by_batch_method_residue(finalize_status_paths)
+    accession_by_genome_id = _accession_by_genome_id(batch_info_by_id.values())
+    repeat_calls_by_key = _count_repeat_calls_by_accession_method_residue(call_tsv_paths, accession_by_genome_id)
+    method_residue_pairs = _observed_method_residue_pairs(
+        detect_status_paths=detect_status_paths,
+        finalize_status_paths=finalize_status_paths,
+        call_tsv_paths=call_tsv_paths,
+    )
+
+    count_rows: list[dict[str, object]] = []
+    for row in sorted(batch_rows, key=lambda item: (item.get("batch_id", ""), item.get("assembly_accession", ""))):
+        batch_id = row.get("batch_id", "")
+        accession = row.get("assembly_accession", "")
+        batch_info = batch_info_by_id.get(batch_id, {})
+        download_row = batch_info.get("download_rows_by_accession", {}).get(accession, {})
+        n_genomes = int(batch_info.get("genome_counts_by_accession", {}).get(accession, 0))
+        n_proteins = int(batch_info.get("protein_counts_by_accession", {}).get(accession, 0))
+
+        download_status = _download_status(download_row)
+        normalize_status = _normalize_status(download_status, batch_info, accession, n_genomes)
+        translate_status = _translate_status(normalize_status, batch_info)
+
+        for method, repeat_residue in method_residue_pairs:
+            detect_status = _downstream_stage_status(
+                translate_status,
+                n_proteins,
+                detect_status_by_key.get((batch_id, method, repeat_residue), []),
+            )
+            n_method_repeat_calls = repeat_calls_by_key.get((accession, method, repeat_residue), 0)
+            finalize_status = _finalize_stage_status(
+                detect_status,
+                n_method_repeat_calls,
+                finalize_status_by_key.get((batch_id, method, repeat_residue), []),
+            )
+            count_rows.append(
+                {
+                    "assembly_accession": accession,
+                    "batch_id": batch_id,
+                    "method": method,
+                    "repeat_residue": repeat_residue,
+                    "detect_status": detect_status,
+                    "finalize_status": finalize_status,
+                    "n_repeat_calls": n_method_repeat_calls,
+                }
+            )
+    return count_rows
 
 
 def build_status_summary(status_rows: Sequence[dict[str, object]]) -> dict[str, object]:
@@ -180,6 +250,18 @@ def _group_stage_status_by_batch(paths: Sequence[Path]) -> dict[str, list[dict[s
     return grouped
 
 
+def _group_stage_status_by_batch_method_residue(paths: Sequence[Path]) -> dict[tuple[str, str, str], list[dict[str, str]]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, str]]] = defaultdict(list)
+    for path in paths:
+        row = read_stage_status(path)
+        batch_id = row.get("batch_id", "")
+        method = row.get("method", "")
+        repeat_residue = row.get("repeat_residue", "")
+        if batch_id and method and repeat_residue:
+            grouped[(batch_id, method, repeat_residue)].append(row)
+    return grouped
+
+
 def _accession_by_genome_id(batch_info_rows: Iterable[dict[str, object]]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for batch_info in batch_info_rows:
@@ -197,6 +279,43 @@ def _count_repeat_calls(call_tsv_paths: Sequence[Path], accession_by_genome_id: 
             if accession:
                 counts[accession] += 1
     return counts
+
+
+def _count_repeat_calls_by_accession_method_residue(
+    call_tsv_paths: Sequence[Path],
+    accession_by_genome_id: dict[str, str],
+) -> Counter[tuple[str, str, str]]:
+    counts: Counter[tuple[str, str, str]] = Counter()
+    for path in call_tsv_paths:
+        for row in _read_optional_tsv(path, CALLS_REQUIRED):
+            accession = accession_by_genome_id.get(row.get("genome_id", ""))
+            method = row.get("method", "")
+            repeat_residue = row.get("repeat_residue", "")
+            if accession and method and repeat_residue:
+                counts[(accession, method, repeat_residue)] += 1
+    return counts
+
+
+def _observed_method_residue_pairs(
+    *,
+    detect_status_paths: Sequence[Path],
+    finalize_status_paths: Sequence[Path],
+    call_tsv_paths: Sequence[Path],
+) -> list[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for path in [*detect_status_paths, *finalize_status_paths]:
+        row = read_stage_status(path)
+        method = row.get("method", "")
+        repeat_residue = row.get("repeat_residue", "")
+        if method and repeat_residue:
+            pairs.add((method, repeat_residue))
+    for path in call_tsv_paths:
+        for row in _read_optional_tsv(path, CALLS_REQUIRED):
+            method = row.get("method", "")
+            repeat_residue = row.get("repeat_residue", "")
+            if method and repeat_residue:
+                pairs.add((method, repeat_residue))
+    return sorted(pairs)
 
 
 def _download_status(download_row: dict[str, str]) -> str:
@@ -244,6 +363,29 @@ def _downstream_stage_status(
         return "failed"
     if "success" in statuses:
         return "success"
+    return "failed"
+
+
+def _finalize_stage_status(
+    detect_status: str,
+    n_repeat_calls: int,
+    stage_rows: Sequence[dict[str, str]],
+) -> str:
+    if detect_status == "failed":
+        return "skipped_upstream_failed"
+    if detect_status == "skipped_upstream_failed":
+        return "skipped_upstream_failed"
+    if detect_status == "skipped":
+        return "skipped"
+    if stage_rows:
+        statuses = {row.get("status", "") for row in stage_rows}
+        if "failed" in statuses:
+            return "failed"
+        if "success" in statuses:
+            return "success"
+        return "failed"
+    if detect_status == "success" and n_repeat_calls == 0:
+        return "skipped"
     return "failed"
 
 

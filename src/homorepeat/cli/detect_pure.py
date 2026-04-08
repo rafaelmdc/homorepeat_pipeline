@@ -104,8 +104,8 @@ def _run(args: argparse.Namespace) -> None:
     write_run_params(
         outdir / "run_params.tsv",
         "pure",
+        repeat_residue,
         {
-            "repeat_residue": repeat_residue,
             "min_repeat_count": args.min_repeat_count,
         },
     )
@@ -118,8 +118,8 @@ def _write_failed_outputs(args: argparse.Namespace) -> None:
     write_run_params(
         outdir / "run_params.tsv",
         "pure",
+        args.repeat_residue.strip().upper(),
         {
-            "repeat_residue": args.repeat_residue.strip().upper(),
             "min_repeat_count": args.min_repeat_count,
         },
     )

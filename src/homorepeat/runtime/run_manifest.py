@@ -44,6 +44,7 @@ PUBLISHED_ARTIFACTS = {
     },
     "status": {
         "accession_status_tsv": "status/accession_status.tsv",
+        "accession_call_counts_tsv": "status/accession_call_counts.tsv",
         "status_summary_json": "status/status_summary.json",
     },
     "internal": {
@@ -167,26 +168,28 @@ def _enabled_methods(publish_root: Path) -> list[str]:
 
 def _repeat_residues(publish_root: Path) -> list[str]:
     residues = {
-        params.get("repeat_residue", "")
-        for params in _read_method_params(publish_root).values()
-        if params.get("repeat_residue", "")
+        repeat_residue
+        for method_payload in _read_method_params(publish_root).values()
+        for repeat_residue in method_payload.keys()
+        if repeat_residue
     }
     return sorted(residues)
 
 
-def _read_method_params(publish_root: Path) -> dict[str, dict[str, str]]:
+def _read_method_params(publish_root: Path) -> dict[str, dict[str, dict[str, str]]]:
     run_params_path = publish_root / "calls" / "run_params.tsv"
     if not run_params_path.is_file():
         return {}
 
     rows = _read_tsv_rows(run_params_path)
-    payload: dict[str, dict[str, str]] = {}
+    payload: dict[str, dict[str, dict[str, str]]] = {}
     for row in rows:
         method = row.get("method", "")
+        repeat_residue = row.get("repeat_residue", "")
         param_name = row.get("param_name", "")
-        if not method or not param_name:
+        if not method or not repeat_residue or not param_name:
             continue
-        payload.setdefault(method, {})[param_name] = row.get("param_value", "")
+        payload.setdefault(method, {}).setdefault(repeat_residue, {})[param_name] = row.get("param_value", "")
     return payload
 
 

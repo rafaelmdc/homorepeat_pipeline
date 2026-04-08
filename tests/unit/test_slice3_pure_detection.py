@@ -237,10 +237,9 @@ class SliceThreePureDetectionTest(unittest.TestCase):
             self.assertEqual(row["merge_rule"], "contiguous_run")
 
             self.assertEqual(
-                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {(item["repeat_residue"], item["param_name"], item["param_value"]) for item in param_rows},
                 {
-                    ("repeat_residue", "A"),
-                    ("min_repeat_count", "6"),
+                    ("A", "min_repeat_count", "6"),
                 },
             )
 
@@ -323,9 +322,8 @@ class SliceThreePureDetectionTest(unittest.TestCase):
 
             self.assertEqual(call_rows, [])
             self.assertEqual(
-                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {(item["repeat_residue"], item["param_name"], item["param_value"]) for item in param_rows},
                 {
-                    ("repeat_residue", "A"),
-                    ("min_repeat_count", "7"),
+                    ("A", "min_repeat_count", "7"),
                 },
             )

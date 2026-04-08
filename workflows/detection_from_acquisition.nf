@@ -32,10 +32,26 @@ workflow DETECTION_FROM_ACQUISITION {
     def finalizedCallCh = Channel.empty()
     def detectStatusCh = Channel.empty()
     def finalizeStatusCh = Channel.empty()
-    def batchDirLookup = {
+    def batchDirLookupByResidue = {
         translated_batch_rows.flatMap { rows ->
-            rows.collect { row -> tuple(row[0], row[1]) }
+            rows.collectMany { row ->
+                def batch_id = row[0]
+                def batch_dir = row[1]
+                repeatResidues.collect { repeatResidue ->
+                    tuple("${batch_id}::${repeatResidue}", batch_dir)
+                }
+            }
         }
+    }
+    def attachBatchDir = { callsChannel ->
+        callsChannel
+            .map { batch_id, method, repeatResidue, call_tsv, run_params_tsv ->
+                tuple("${batch_id}::${repeatResidue}", batch_id, method, repeatResidue, call_tsv, run_params_tsv)
+            }
+            .join(batchDirLookupByResidue())
+            .map { composite_key, batch_id, method, repeatResidue, call_tsv, run_params_tsv, batch_dir ->
+                tuple(batch_id, method, repeatResidue, call_tsv, run_params_tsv, batch_dir)
+            }
     }
 
     if( params.run_pure ) {
@@ -46,9 +62,7 @@ workflow DETECTION_FROM_ACQUISITION {
                 }
             }
         )
-        pureFinalize = FINALIZE_PURE_CALL_CODONS(
-            pureDetection.calls.join(batchDirLookup())
-        )
+        pureFinalize = FINALIZE_PURE_CALL_CODONS(attachBatchDir(pureDetection.calls))
         finalizedCallCh = finalizedCallCh.mix(pureFinalize.finalized_dir)
         detectStatusCh = detectStatusCh.mix(pureDetection.stage_status)
         finalizeStatusCh = finalizeStatusCh.mix(pureFinalize.stage_status)
@@ -62,9 +76,7 @@ workflow DETECTION_FROM_ACQUISITION {
                 }
             }
         )
-        thresholdFinalize = FINALIZE_THRESHOLD_CALL_CODONS(
-            thresholdDetection.calls.join(batchDirLookup())
-        )
+        thresholdFinalize = FINALIZE_THRESHOLD_CALL_CODONS(attachBatchDir(thresholdDetection.calls))
         finalizedCallCh = finalizedCallCh.mix(thresholdFinalize.finalized_dir)
         detectStatusCh = detectStatusCh.mix(thresholdDetection.stage_status)
         finalizeStatusCh = finalizeStatusCh.mix(thresholdFinalize.stage_status)
@@ -78,9 +90,7 @@ workflow DETECTION_FROM_ACQUISITION {
                 }
             }
         )
-        seedExtendFinalize = FINALIZE_SEED_EXTEND_CALL_CODONS(
-            seedExtendDetection.calls.join(batchDirLookup())
-        )
+        seedExtendFinalize = FINALIZE_SEED_EXTEND_CALL_CODONS(attachBatchDir(seedExtendDetection.calls))
         finalizedCallCh = finalizedCallCh.mix(seedExtendFinalize.finalized_dir)
         detectStatusCh = detectStatusCh.mix(seedExtendDetection.stage_status)
         finalizeStatusCh = finalizeStatusCh.mix(seedExtendFinalize.stage_status)

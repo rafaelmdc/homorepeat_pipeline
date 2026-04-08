@@ -22,12 +22,14 @@ class AccessionStatusCliTest(unittest.TestCase):
             batch_one = tmp / "batches" / "batch_0001"
             batch_two = tmp / "batches" / "batch_0002"
             batch_three = tmp / "batches" / "batch_0003"
+            batch_four = tmp / "batches" / "batch_0004"
             detect_dir = tmp / "detect"
             outdir = tmp / "publish" / "status"
             planning.mkdir(parents=True, exist_ok=True)
             batch_one.mkdir(parents=True, exist_ok=True)
             batch_two.mkdir(parents=True, exist_ok=True)
             batch_three.mkdir(parents=True, exist_ok=True)
+            batch_four.mkdir(parents=True, exist_ok=True)
             detect_dir.mkdir(parents=True, exist_ok=True)
 
             batch_table = planning / "accession_batches.tsv"
@@ -37,6 +39,7 @@ class AccessionStatusCliTest(unittest.TestCase):
                     {"batch_id": "batch_0001", "assembly_accession": "GCF_COMPLETE.1"},
                     {"batch_id": "batch_0002", "assembly_accession": "GCF_NO_CALLS.1"},
                     {"batch_id": "batch_0003", "assembly_accession": "GCF_FAILED.1"},
+                    {"batch_id": "batch_0004", "assembly_accession": "GCF_DETECT_NO_CALLS.1"},
                 ],
                 fieldnames=["batch_id", "assembly_accession"],
             )
@@ -63,8 +66,17 @@ class AccessionStatusCliTest(unittest.TestCase):
                 accession="GCF_FAILED.1",
                 message="datasets failed",
             )
+            self._write_batch_dir(
+                batch_four,
+                batch_id="batch_0004",
+                accession="GCF_DETECT_NO_CALLS.1",
+                n_genomes=1,
+                n_proteins=1,
+                download_status="downloaded",
+            )
 
             detect_success = detect_dir / "detect_success.json"
+            detect_success_no_calls = detect_dir / "detect_success_no_calls.json"
             finalize_success = detect_dir / "finalize_success.json"
             write_stage_status(
                 detect_success,
@@ -72,6 +84,16 @@ class AccessionStatusCliTest(unittest.TestCase):
                     stage="detect",
                     status="success",
                     batch_id="batch_0001",
+                    method="pure",
+                    repeat_residue="Q",
+                ),
+            )
+            write_stage_status(
+                detect_success_no_calls,
+                build_stage_status(
+                    stage="detect",
+                    status="success",
+                    batch_id="batch_0004",
                     method="pure",
                     repeat_residue="Q",
                 ),
@@ -119,8 +141,12 @@ class AccessionStatusCliTest(unittest.TestCase):
                     str(batch_two),
                     "--batch-dir",
                     str(batch_three),
+                    "--batch-dir",
+                    str(batch_four),
                     "--detect-status-json",
                     str(detect_success),
+                    "--detect-status-json",
+                    str(detect_success_no_calls),
                     "--finalize-status-json",
                     str(finalize_success),
                     "--call-tsv",
@@ -142,19 +168,34 @@ class AccessionStatusCliTest(unittest.TestCase):
                 )
 
             status_rows = read_tsv(outdir / "accession_status.tsv")
+            count_rows = read_tsv(outdir / "accession_call_counts.tsv")
             summary = json.loads((outdir / "status_summary.json").read_text(encoding="utf-8"))
 
             by_accession = {row["assembly_accession"]: row for row in status_rows}
+            by_count_key = {
+                (row["assembly_accession"], row["method"], row["repeat_residue"]): row
+                for row in count_rows
+            }
             self.assertEqual(by_accession["GCF_COMPLETE.1"]["terminal_status"], "completed")
             self.assertEqual(by_accession["GCF_COMPLETE.1"]["n_repeat_calls"], "1")
             self.assertEqual(by_accession["GCF_NO_CALLS.1"]["terminal_status"], "completed_no_calls")
             self.assertEqual(by_accession["GCF_NO_CALLS.1"]["detect_status"], "skipped")
+            self.assertEqual(by_accession["GCF_DETECT_NO_CALLS.1"]["terminal_status"], "completed_no_calls")
+            self.assertEqual(by_accession["GCF_DETECT_NO_CALLS.1"]["detect_status"], "success")
+            self.assertEqual(by_accession["GCF_DETECT_NO_CALLS.1"]["finalize_status"], "skipped")
             self.assertEqual(by_accession["GCF_FAILED.1"]["terminal_status"], "failed")
             self.assertEqual(by_accession["GCF_FAILED.1"]["failure_stage"], "download")
+            self.assertEqual(len(count_rows), 4)
+            self.assertEqual(by_count_key[("GCF_COMPLETE.1", "pure", "Q")]["n_repeat_calls"], "1")
+            self.assertEqual(by_count_key[("GCF_COMPLETE.1", "pure", "Q")]["finalize_status"], "success")
+            self.assertEqual(by_count_key[("GCF_NO_CALLS.1", "pure", "Q")]["detect_status"], "skipped")
+            self.assertEqual(by_count_key[("GCF_DETECT_NO_CALLS.1", "pure", "Q")]["detect_status"], "success")
+            self.assertEqual(by_count_key[("GCF_DETECT_NO_CALLS.1", "pure", "Q")]["finalize_status"], "skipped")
+            self.assertEqual(by_count_key[("GCF_FAILED.1", "pure", "Q")]["finalize_status"], "skipped_upstream_failed")
             self.assertEqual(summary["status"], "partial")
-            self.assertEqual(summary["counts"]["n_requested_accessions"], 3)
+            self.assertEqual(summary["counts"]["n_requested_accessions"], 4)
             self.assertEqual(summary["counts"]["n_completed"], 1)
-            self.assertEqual(summary["counts"]["n_completed_no_calls"], 1)
+            self.assertEqual(summary["counts"]["n_completed_no_calls"], 2)
             self.assertEqual(summary["counts"]["n_failed"], 1)
 
     def _write_batch_dir(

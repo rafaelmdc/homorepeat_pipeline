@@ -85,21 +85,28 @@ def validate_unique_keys(rows: Sequence[dict[str, str]], key_field: str, *, labe
 def validate_run_params_rows(rows: Sequence[dict[str, str]]) -> None:
     """Validate the flat run-parameter contract before import."""
 
-    seen_keys: set[tuple[str, str]] = set()
-    duplicates: list[tuple[str, str]] = []
+    seen_keys: set[tuple[str, str, str]] = set()
+    duplicates: list[tuple[str, str, str]] = []
     for row in rows:
         method = row.get("method", "")
+        repeat_residue = row.get("repeat_residue", "")
         param_name = row.get("param_name", "")
         param_value = row.get("param_value", "")
-        if not method or not param_name or param_value == "":
+        if not method or not repeat_residue or not param_name or param_value == "":
             raise ContractError("run_params.tsv contains an empty required field")
-        key = (method, param_name)
+        key = (method, repeat_residue, param_name)
         if key in seen_keys:
             duplicates.append(key)
         seen_keys.add(key)
     if duplicates:
-        duplicate_text = ", ".join(f"{method}:{param}" for method, param in duplicates[:5])
-        raise ContractError(f"run_params.tsv contains duplicate method/param_name pairs: {duplicate_text}")
+        duplicate_text = ", ".join(
+            f"{method}:{repeat_residue}:{param}"
+            for method, repeat_residue, param in duplicates[:5]
+        )
+        raise ContractError(
+            "run_params.tsv contains duplicate method/repeat_residue/param_name pairs: "
+            f"{duplicate_text}"
+        )
 
 
 def validate_repeat_call_rows(rows: Sequence[dict[str, str]]) -> None:

@@ -4,13 +4,14 @@ process BUILD_ACCESSION_STATUS {
 
     input:
     path(batch_table)
-    val(batch_dirs)
-    val(call_tsvs)
-    val(detect_status_jsons)
-    val(finalize_status_jsons)
+    path(batch_dirs, stageAs: 'batch??')
+    path(call_tsvs, stageAs: 'call??.tsv')
+    path(detect_status_jsons, stageAs: 'detect_status??.json')
+    path(finalize_status_jsons, stageAs: 'finalize_status??.json')
 
     output:
     path('accession_status.tsv'), emit: accession_status_tsv
+    path('accession_call_counts.tsv'), emit: accession_call_counts_tsv
     path('status_summary.json'), emit: status_summary_json
 
     script:
@@ -32,6 +33,7 @@ process BUILD_ACCESSION_STATUS {
       --outdir status_tmp
 
     mv status_tmp/accession_status.tsv accession_status.tsv
+    mv status_tmp/accession_call_counts.tsv accession_call_counts.tsv
     mv status_tmp/status_summary.json status_summary.json
     """
 }

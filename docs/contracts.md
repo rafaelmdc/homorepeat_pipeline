@@ -269,10 +269,11 @@ Rules:
 
 ### Output: `run_params.tsv`
 
-One row per run configuration block.
+One row per method, repeat residue, and configuration parameter.
 
 Required columns:
 - `method`
+- `repeat_residue`
 - `param_name`
 - `param_value`
 
@@ -280,6 +281,61 @@ Purpose:
 - preserve method settings used in a given run
 - support traceability
 - make database builds auditable
+
+Rules:
+- `repeat_residue` is the amino-acid target for the parameter block
+- `repeat_residue` must be a single uppercase amino-acid symbol
+- `run_params.tsv` must not encode `repeat_residue` as a `param_name`; residue scoping lives in the dedicated column
+- `(method, repeat_residue, param_name)` must be unique in the canonical merged output
+- finalized `final_<method>_<repeat_residue>_run_params.tsv` files must contain only rows whose `repeat_residue` matches the path component
+
+---
+
+## Status artifact contracts
+
+### Output: `publish/status/accession_status.tsv`
+
+One row per requested assembly accession.
+
+Required columns:
+- `assembly_accession`
+- `batch_id`
+- `download_status`
+- `normalize_status`
+- `translate_status`
+- `detect_status`
+- `finalize_status`
+- `terminal_status`
+- `failure_stage`
+- `failure_reason`
+- `n_genomes`
+- `n_proteins`
+- `n_repeat_calls`
+- `notes`
+
+Rules:
+- `n_repeat_calls` is the aggregate count across all enabled methods and repeat residues for that accession
+- `terminal_status` is the accession-level summary state for the whole run
+- `finalize_status=skipped` is valid when detection completed successfully but emitted no calls for that accession across the enabled methods and residues
+
+### Output: `publish/status/accession_call_counts.tsv`
+
+One row per requested assembly accession, observed method, and observed repeat residue.
+
+Required columns:
+- `assembly_accession`
+- `batch_id`
+- `method`
+- `repeat_residue`
+- `detect_status`
+- `finalize_status`
+- `n_repeat_calls`
+
+Rules:
+- rows are emitted for method plus repeat-residue combinations observed in the run-level detection status inputs or finalized call fragments
+- `n_repeat_calls` is scoped to one accession plus method plus repeat-residue combination
+- `finalize_status=skipped` is valid when the detect stage succeeded for that accession plus method plus repeat-residue combination but emitted no calls, so no finalize task was launched
+- this table is a companion detail artifact; `accession_status.tsv` remains the accession-level operational ledger
 
 ---
 
@@ -303,9 +359,11 @@ Required top-level keys:
 
 Rules:
 - `params.detection` is derived from the canonical published `calls/run_params.tsv` when present
+- `params.detection` is shaped as `method -> repeat_residue -> param_name -> param_value`
 - `enabled_methods` is the sorted list of methods present in `params.detection`
 - `artifacts.detection.finalized_root`, when present, points to `publish/detection/finalized`
-- `repeat_residues` is the sorted set of `repeat_residue` values present in the published run params
+- `repeat_residues` is the sorted set of `repeat_residue` column values present in the published run params
+- `artifacts.status.accession_call_counts_tsv`, when present, points to `publish/status/accession_call_counts.tsv`
 - artifact paths are stored relative to the run root so the manifest remains portable inside `runs/<run_id>/`
 - `params.params_file_values` may be empty when no params file was provided or when the supplied file is not JSON
 

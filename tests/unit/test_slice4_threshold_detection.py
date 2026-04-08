@@ -240,11 +240,10 @@ class SliceFourThresholdDetectionTest(unittest.TestCase):
             self.assertEqual(row["merge_rule"], "merge_adjacent_or_overlap")
 
             self.assertEqual(
-                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {(item["repeat_residue"], item["param_name"], item["param_value"]) for item in param_rows},
                 {
-                    ("repeat_residue", "A"),
-                    ("window_size", "8"),
-                    ("min_target_count", "6"),
+                    ("A", "window_size", "8"),
+                    ("A", "min_target_count", "6"),
                 },
             )
 
@@ -332,10 +331,9 @@ class SliceFourThresholdDetectionTest(unittest.TestCase):
             self.assertEqual(call_rows[0]["end"], "7")
             self.assertEqual(call_rows[0]["window_definition"], "Q6/7")
             self.assertEqual(
-                {(item["param_name"], item["param_value"]) for item in param_rows},
+                {(item["repeat_residue"], item["param_name"], item["param_value"]) for item in param_rows},
                 {
-                    ("repeat_residue", "Q"),
-                    ("window_size", "7"),
-                    ("min_target_count", "6"),
+                    ("Q", "window_size", "7"),
+                    ("Q", "min_target_count", "6"),
                 },
             )

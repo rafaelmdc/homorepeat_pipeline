@@ -565,6 +565,91 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             )
             self.assertEqual((outdir / "cds.fna").read_text(encoding="utf-8").count(">"), 2)
 
+    def test_normalize_disambiguates_ambiguous_transcript_level_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            package_root = tmp / "package"
+            accession = "GCF_TEST_AMBIG.1"
+            accession_dir = package_root / "ncbi_dataset" / "data" / accession
+            fake_bin_dir = tmp / "fake_bin"
+            outdir = tmp / "normalized"
+            taxonomy_db = tmp / "taxonomy.sqlite"
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+            accession_dir.mkdir(parents=True, exist_ok=True)
+            taxonomy_db.write_text("", encoding="utf-8")
+            self._write_fake_taxon_weaver(fake_bin_dir / "taxon-weaver")
+
+            (package_root / "ncbi_dataset" / "data" / "assembly_data_report.jsonl").write_text(
+                json.dumps(
+                    {
+                        "accession": accession,
+                        "assemblyInfo": {
+                            "assemblyLevel": "Chromosome",
+                            "assemblyType": "haploid",
+                        },
+                        "organism": {"taxId": 9606, "organismName": "Homo sapiens"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (accession_dir / f"{accession}_genomic.gff").write_text(
+                "\n".join(
+                    [
+                        "chr1\tRefSeq\tgene\t1\t9\t.\t+\t.\tID=gene1;gene=LOC1",
+                        "chr1\tRefSeq\tmRNA\t1\t9\t.\t+\t.\tID=rna1;Parent=gene1;transcript_id=XM_SHARED.1;gene=LOC1",
+                        "chr1\tRefSeq\tCDS\t1\t9\t.\t+\t0\tID=cds-LOC1;Parent=rna1;protein_id=XP_ONE.1;transcript_id=XM_SHARED.1;transl_table=1",
+                        "chr1\tRefSeq\tgene\t20\t28\t.\t+\t.\tID=gene2;gene=LOC2",
+                        "chr1\tRefSeq\tmRNA\t20\t28\t.\t+\t.\tID=rna2;Parent=gene2;transcript_id=XM_SHARED.1;gene=LOC2",
+                        "chr1\tRefSeq\tCDS\t20\t28\t.\t+\t0\tID=cds-LOC2;Parent=rna2;protein_id=XP_TWO.1;transcript_id=XM_SHARED.1;transl_table=1",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (accession_dir / f"{accession}_cds_from_genomic.fna").write_text(
+                "\n".join(
+                    [
+                        ">lcl|chr1_cds_XP_ONE.1_1 [gene=LOC1] [protein_id=XP_ONE.1] [transl_table=1]",
+                        "ATGGCCGCC",
+                        ">lcl|chr1_cds_XP_TWO.1_2 [gene=LOC2] [protein_id=XP_TWO.1] [transl_table=1]",
+                        "ATGGCCGCC",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+
+            self._run_cli(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.normalize_cds",
+                    "--package-dir",
+                    str(package_root),
+                    "--taxonomy-db",
+                    str(taxonomy_db),
+                    "--batch-id",
+                    "batch_0001",
+                    "--outdir",
+                    str(outdir),
+                ],
+                env=env,
+            )
+
+            sequences = read_tsv(outdir / "sequences.tsv")
+            warnings_rows = read_tsv(outdir / "normalization_warnings.tsv")
+
+            self.assertEqual(len(sequences), 2)
+            self.assertEqual(len({row["sequence_id"] for row in sequences}), 2)
+            self.assertEqual({row["gene_symbol"] for row in sequences}, {"LOC1", "LOC2"})
+            self.assertEqual(
+                [row["warning_code"] for row in warnings_rows],
+                ["ambiguous_sequence_identity_resolved"],
+            )
+
     def test_normalize_filters_alt_loci_using_sequence_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
