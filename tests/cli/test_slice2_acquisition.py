@@ -652,7 +652,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(stage_status["status"], "failed")
             self.assertIn(accession_missing, stage_status["message"])
 
-    def test_translate_fails_when_normalized_accession_has_no_retained_proteins(self) -> None:
+    def test_translate_warns_but_succeeds_when_one_accession_has_no_retained_proteins(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             outdir = tmp / "translated"
@@ -836,12 +836,321 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
                 text=True,
                 check=False,
             )
+            if result.returncode != 0:
+                self.fail(
+                    f"translate_cds failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            stage_status = json.loads((outdir / "translate_stage_status.json").read_text(encoding="utf-8"))
+            proteins_rows = read_tsv(outdir / "proteins.tsv")
+            warning_rows = read_tsv(outdir / "normalization_warnings.tsv")
+            validation = json.loads((outdir / "acquisition_validation.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(stage_status["status"], "success")
+            self.assertEqual(len(proteins_rows), 1)
+            self.assertEqual(proteins_rows[0]["assembly_accession"], "GCF_KEEP.1")
+            self.assertIn("GCF_DROP.1", validation["failed_accessions"])
+            self.assertEqual(validation["status"], "warn")
+            self.assertIn(
+                "translate stage retained no proteins for accessions: GCF_DROP.1",
+                validation["notes"],
+            )
+            self.assertEqual(
+                [row["warning_code"] for row in warning_rows],
+                ["partial_cds", "accession_no_retained_proteins"],
+            )
+
+    def test_translate_accepts_vertebrate_mitochondrial_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            outdir = tmp / "translated"
+            outdir.mkdir(parents=True, exist_ok=True)
+
+            sequences_tsv = tmp / "sequences.tsv"
+            cds_fasta = tmp / "cds.fna"
+
+            write_tsv(
+                outdir / "download_manifest.tsv",
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "assembly_accession": "GCF_MT.1",
+                        "download_status": "downloaded",
+                        "package_mode": "direct_zip",
+                        "download_path": "",
+                        "rehydrated_path": "",
+                        "checksum": "",
+                        "file_size_bytes": "",
+                        "download_started_at": "",
+                        "download_finished_at": "",
+                        "notes": "",
+                    }
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "assembly_accession",
+                    "download_status",
+                    "package_mode",
+                    "download_path",
+                    "rehydrated_path",
+                    "checksum",
+                    "file_size_bytes",
+                    "download_started_at",
+                    "download_finished_at",
+                    "notes",
+                ],
+            )
+            write_tsv(
+                outdir / "genomes.tsv",
+                [
+                    {
+                        "genome_id": "genome_mt",
+                        "source": "ncbi_datasets",
+                        "accession": "GCF_MT.1",
+                        "genome_name": "mt",
+                        "assembly_type": "haploid",
+                        "taxon_id": "10090",
+                        "assembly_level": "Chromosome",
+                        "species_name": "Mus musculus",
+                        "notes": "",
+                    }
+                ],
+                fieldnames=[
+                    "genome_id",
+                    "source",
+                    "accession",
+                    "genome_name",
+                    "assembly_type",
+                    "taxon_id",
+                    "assembly_level",
+                    "species_name",
+                    "notes",
+                ],
+            )
+            write_tsv(
+                sequences_tsv,
+                [
+                    {
+                        "sequence_id": "seq_mt",
+                        "genome_id": "genome_mt",
+                        "sequence_name": "rna-ND1",
+                        "sequence_length": "9",
+                        "gene_symbol": "ND1",
+                        "transcript_id": "rna-ND1",
+                        "isoform_id": "NP_MT.1",
+                        "assembly_accession": "GCF_MT.1",
+                        "taxon_id": "10090",
+                        "source_record_id": "cds-NP_MT.1",
+                        "protein_external_id": "NP_MT.1",
+                        "translation_table": "2",
+                        "gene_group": "ND1",
+                        "linkage_status": "gff",
+                        "partial_status": "",
+                    }
+                ],
+                fieldnames=[
+                    "sequence_id",
+                    "genome_id",
+                    "sequence_name",
+                    "sequence_length",
+                    "gene_symbol",
+                    "transcript_id",
+                    "isoform_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "source_record_id",
+                    "protein_external_id",
+                    "translation_table",
+                    "gene_group",
+                    "linkage_status",
+                    "partial_status",
+                ],
+            )
+            cds_fasta.write_text(">seq_mt\nATATGATAA\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.translate_cds",
+                    "--sequences-tsv",
+                    str(sequences_tsv),
+                    "--cds-fasta",
+                    str(cds_fasta),
+                    "--batch-id",
+                    "batch_0001",
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"translate_cds failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            proteins_rows = read_tsv(outdir / "proteins.tsv")
+            self.assertEqual(len(proteins_rows), 1)
+            self.assertEqual(proteins_rows[0]["gene_symbol"], "ND1")
+            self.assertEqual(proteins_rows[0]["protein_length"], "2")
+            self.assertIn(">prot_", (outdir / "proteins.faa").read_text(encoding="utf-8"))
+            self.assertIn("\nMW\n", (outdir / "proteins.faa").read_text(encoding="utf-8"))
+
+    def test_translate_fails_when_no_accession_yields_retained_proteins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            outdir = tmp / "translated"
+            outdir.mkdir(parents=True, exist_ok=True)
+
+            sequences_tsv = tmp / "sequences.tsv"
+            cds_fasta = tmp / "cds.fna"
+
+            write_tsv(
+                outdir / "download_manifest.tsv",
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "assembly_accession": "GCF_UNSUPPORTED.1",
+                        "download_status": "downloaded",
+                        "package_mode": "direct_zip",
+                        "download_path": "",
+                        "rehydrated_path": "",
+                        "checksum": "",
+                        "file_size_bytes": "",
+                        "download_started_at": "",
+                        "download_finished_at": "",
+                        "notes": "",
+                    }
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "assembly_accession",
+                    "download_status",
+                    "package_mode",
+                    "download_path",
+                    "rehydrated_path",
+                    "checksum",
+                    "file_size_bytes",
+                    "download_started_at",
+                    "download_finished_at",
+                    "notes",
+                ],
+            )
+            write_tsv(
+                outdir / "genomes.tsv",
+                [
+                    {
+                        "genome_id": "genome_unsupported",
+                        "source": "ncbi_datasets",
+                        "accession": "GCF_UNSUPPORTED.1",
+                        "genome_name": "unsupported",
+                        "assembly_type": "haploid",
+                        "taxon_id": "9606",
+                        "assembly_level": "Chromosome",
+                        "species_name": "Homo sapiens",
+                        "notes": "",
+                    }
+                ],
+                fieldnames=[
+                    "genome_id",
+                    "source",
+                    "accession",
+                    "genome_name",
+                    "assembly_type",
+                    "taxon_id",
+                    "assembly_level",
+                    "species_name",
+                    "notes",
+                ],
+            )
+            write_tsv(
+                sequences_tsv,
+                [
+                    {
+                        "sequence_id": "seq_unsupported",
+                        "genome_id": "genome_unsupported",
+                        "sequence_name": "SEQ_UNSUPPORTED",
+                        "sequence_length": "9",
+                        "gene_symbol": "GENE_BAD",
+                        "transcript_id": "NM_BAD.1",
+                        "isoform_id": "NP_BAD.1",
+                        "assembly_accession": "GCF_UNSUPPORTED.1",
+                        "taxon_id": "9606",
+                        "source_record_id": "rec_bad",
+                        "protein_external_id": "NP_BAD.1",
+                        "translation_table": "99",
+                        "gene_group": "GENE_BAD",
+                        "linkage_status": "gff",
+                        "partial_status": "",
+                    }
+                ],
+                fieldnames=[
+                    "sequence_id",
+                    "genome_id",
+                    "sequence_name",
+                    "sequence_length",
+                    "gene_symbol",
+                    "transcript_id",
+                    "isoform_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "source_record_id",
+                    "protein_external_id",
+                    "translation_table",
+                    "gene_group",
+                    "linkage_status",
+                    "partial_status",
+                ],
+            )
+            cds_fasta.write_text(">seq_unsupported\nATGGCCTAA\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.translate_cds",
+                    "--sequences-tsv",
+                    str(sequences_tsv),
+                    "--cds-fasta",
+                    str(cds_fasta),
+                    "--batch-id",
+                    "batch_0001",
+                    "--stage-status-out",
+                    str(outdir / "translate_stage_status.json"),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("produced no retained proteins", result.stderr)
 
             stage_status = json.loads((outdir / "translate_stage_status.json").read_text(encoding="utf-8"))
+            validation = json.loads((outdir / "acquisition_validation.json").read_text(encoding="utf-8"))
+            warning_rows = read_tsv(outdir / "normalization_warnings.tsv")
+
             self.assertEqual(stage_status["status"], "failed")
-            self.assertIn("GCF_DROP.1", stage_status["message"])
+            self.assertIn("GCF_UNSUPPORTED.1", stage_status["message"])
+            self.assertEqual(validation["status"], "fail")
+            self.assertIn("GCF_UNSUPPORTED.1", validation["failed_accessions"])
+            self.assertIn(
+                "translate stage failed: Batch batch_0001 produced no retained proteins for normalized accessions: GCF_UNSUPPORTED.1",
+                validation["notes"],
+            )
+            self.assertEqual(
+                [row["warning_code"] for row in warning_rows],
+                ["unsupported_translation_table", "accession_unsupported_translation_table"],
+            )
 
     def test_normalize_deduplicates_identical_cds_records_and_keeps_distinct_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

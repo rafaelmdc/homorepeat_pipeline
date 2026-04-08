@@ -93,6 +93,7 @@ def _run(args: argparse.Namespace) -> None:
 
     existing_warning_rows = read_tsv(warning_path) if warning_path.is_file() else []
     warning_rows = list(existing_warning_rows)
+    translation_warning_rows: list[dict[str, object]] = []
     retained_by_gene: dict[tuple[str, str], dict[str, object]] = {}
     seen_cds_sequence_ids: set[str] = set()
 
@@ -102,34 +103,34 @@ def _run(args: argparse.Namespace) -> None:
             continue
         seen_cds_sequence_ids.add(sequence_id)
         if row.get("partial_status", "") == "partial":
-            warning_rows.append(
-                build_warning_row(
-                    "partial_cds",
-                    "sequence",
-                    "CDS is marked partial and is rejected before translation",
-                    batch_id=args.batch_id,
-                    genome_id=row.get("genome_id", ""),
-                    sequence_id=sequence_id,
-                    assembly_accession=row.get("assembly_accession", ""),
-                    source_record_id=row.get("source_record_id", ""),
-                )
+            warning_row = build_warning_row(
+                "partial_cds",
+                "sequence",
+                "CDS is marked partial and is rejected before translation",
+                batch_id=args.batch_id,
+                genome_id=row.get("genome_id", ""),
+                sequence_id=sequence_id,
+                assembly_accession=row.get("assembly_accession", ""),
+                source_record_id=row.get("source_record_id", ""),
             )
+            warning_rows.append(warning_row)
+            translation_warning_rows.append(warning_row)
             continue
 
         result = translate_sequence(cds_sequence, row.get("translation_table", "1"))
         if not result.accepted:
-            warning_rows.append(
-                build_warning_row(
-                    result.warning_code,
-                    "sequence",
-                    result.warning_message,
-                    batch_id=args.batch_id,
-                    genome_id=row.get("genome_id", ""),
-                    sequence_id=sequence_id,
-                    assembly_accession=row.get("assembly_accession", ""),
-                    source_record_id=row.get("source_record_id", ""),
-                )
+            warning_row = build_warning_row(
+                result.warning_code,
+                "sequence",
+                result.warning_message,
+                batch_id=args.batch_id,
+                genome_id=row.get("genome_id", ""),
+                sequence_id=sequence_id,
+                assembly_accession=row.get("assembly_accession", ""),
+                source_record_id=row.get("source_record_id", ""),
             )
+            warning_rows.append(warning_row)
+            translation_warning_rows.append(warning_row)
             continue
 
         protein_id = stable_id("prot", sequence_id)
@@ -158,12 +159,12 @@ def _run(args: argparse.Namespace) -> None:
         raise ContractError(f"Normalized CDS FASTA is missing sequence_id {missing_sequence_ids[0]}")
 
     retained_rows = sorted(retained_by_gene.values(), key=lambda row: str(row.get("protein_id", "")))
-    _validate_translated_accession_coverage(
+    missing_accessions = _missing_translated_accessions(
         outdir / "download_manifest.tsv",
         sequence_accessions,
         retained_rows,
-        args.batch_id,
     )
+    warning_rows.extend(_build_missing_accession_warning_rows(translation_warning_rows, missing_accessions, args.batch_id))
     write_tsv(
         proteins_tsv_path,
         [{field: row.get(field, "") for field in PROTEINS_FIELDNAMES} for row in retained_rows],
@@ -182,6 +183,7 @@ def _run(args: argparse.Namespace) -> None:
         for row in download_manifest_rows
         if row.get("download_status") == "failed" and row.get("assembly_accession", "")
     ]
+    failed_accessions.extend(missing_accessions)
     warning_summary = Counter(row.get("warning_code", "") for row in warning_rows if row.get("warning_code", ""))
     validation_payload = build_acquisition_validation_from_summary(
         scope="batch",
@@ -204,7 +206,16 @@ def _run(args: argparse.Namespace) -> None:
         failed_accessions=failed_accessions,
         warning_summary=warning_summary,
     )
+    if missing_accessions:
+        validation_payload.setdefault("notes", []).append(
+            "translate stage retained no proteins for accessions: " + ", ".join(sorted(missing_accessions))
+        )
     write_validation_json(outdir / "acquisition_validation.json", validation_payload)
+    if retained_rows:
+        return
+    raise ContractError(
+        f"Batch {args.batch_id} produced no retained proteins for normalized accessions: {', '.join(sorted(missing_accessions))}"
+    )
 
 
 def _write_failed_outputs(args: argparse.Namespace, message: str) -> None:
@@ -235,6 +246,17 @@ def _write_failed_outputs(args: argparse.Namespace, message: str) -> None:
         warning_rows=existing_warning_rows,
         download_manifest_rows=download_manifest_rows,
     )
+    accession_failures = sorted(
+        {
+            row.get("assembly_accession", "")
+            for row in existing_warning_rows
+            if row.get("warning_scope", "") == "accession" and row.get("assembly_accession", "")
+        }
+    )
+    if accession_failures:
+        validation_payload["failed_accessions"] = sorted(
+            set(validation_payload.get("failed_accessions", [])) | set(accession_failures)
+        )
     validation_payload["status"] = "fail"
     validation_payload.setdefault("notes", []).append(f"translate stage failed: {message}")
     write_validation_json(outdir / "acquisition_validation.json", validation_payload)
@@ -258,12 +280,11 @@ def _candidate_sort_key(row: dict[str, object]) -> tuple[int, str]:
     return (-int(row.get("protein_length", 0)), str(row.get("protein_id", "")))
 
 
-def _validate_translated_accession_coverage(
+def _missing_translated_accessions(
     download_manifest_path: Path,
     sequence_accessions: set[str],
     retained_rows: list[dict[str, object]],
-    batch_id: str,
-) -> None:
+) -> list[str]:
     if download_manifest_path.is_file():
         expected_accessions = {
             row.get("assembly_accession", "")
@@ -280,11 +301,47 @@ def _validate_translated_accession_coverage(
         for row in retained_rows
         if str(row.get("assembly_accession", ""))
     }
-    missing_accessions = sorted(expected_accessions - translated_accessions)
-    if missing_accessions:
-        raise ContractError(
-            f"Batch {batch_id} produced no retained proteins for normalized accessions: {', '.join(missing_accessions)}"
+    return sorted(expected_accessions - translated_accessions)
+
+
+def _build_missing_accession_warning_rows(
+    warning_rows: list[dict[str, object]],
+    missing_accessions: list[str],
+    batch_id: str,
+) -> list[dict[str, object]]:
+    warning_codes_by_accession: dict[str, Counter[str]] = {}
+    for row in warning_rows:
+        assembly_accession = row.get("assembly_accession", "")
+        warning_code = row.get("warning_code", "")
+        if not assembly_accession or not warning_code:
+            continue
+        warning_codes_by_accession.setdefault(assembly_accession, Counter())[warning_code] += 1
+
+    payload: list[dict[str, object]] = []
+    for accession in missing_accessions:
+        warning_code = "accession_no_retained_proteins"
+        warning_message = "No retained proteins were produced for this accession during translation"
+        accession_warning_codes = warning_codes_by_accession.get(accession, Counter())
+        if accession_warning_codes:
+            if set(accession_warning_codes) == {"unsupported_translation_table"}:
+                warning_code = "accession_unsupported_translation_table"
+            elif "likely_translation_table_mismatch" in accession_warning_codes:
+                warning_code = "accession_likely_translation_table_mismatch"
+            detail = ", ".join(
+                f"{code} x{count}"
+                for code, count in sorted(accession_warning_codes.items())
+            )
+            warning_message = f"{warning_message} ({detail})"
+        payload.append(
+            build_warning_row(
+                warning_code,
+                "accession",
+                warning_message,
+                batch_id=batch_id,
+                assembly_accession=accession,
+            )
         )
+    return payload
 
 
 if __name__ == "__main__":

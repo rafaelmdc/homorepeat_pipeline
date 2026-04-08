@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from homorepeat.acquisition.translation import STANDARD_TABLE, translate_cds
+from homorepeat.acquisition.translation import get_translation_table, translate_cds
 
 
 @dataclass(slots=True)
@@ -91,8 +91,9 @@ def build_codon_usage_rows(
 ) -> list[dict[str, object]]:
     """Build normalized codon-usage rows for one finalized call with a validated codon sequence."""
 
-    table = str(translation_table or "1").strip() or "1"
-    if table != "1":
+    codon_table = get_translation_table(translation_table)
+    if codon_table is None:
+        table = str(translation_table or "1").strip() or "1"
         raise ValueError(f"Unsupported translation table: {table}")
 
     codon_sequence = str(call_row.get("codon_sequence", "")).strip().upper().replace("U", "T")
@@ -104,7 +105,7 @@ def build_codon_usage_rows(
     codons = [codon_sequence[index : index + 3] for index in range(0, len(codon_sequence), 3)]
     amino_acids: list[str] = []
     for codon in codons:
-        amino_acid = STANDARD_TABLE.get(codon)
+        amino_acid = codon_table.get(codon)
         if amino_acid is None or amino_acid == "*":
             raise ValueError(f"Unsupported codon encountered in codon_sequence: {codon}")
         amino_acids.append(amino_acid)

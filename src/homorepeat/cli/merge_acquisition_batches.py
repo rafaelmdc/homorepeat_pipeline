@@ -105,6 +105,16 @@ def main() -> int:
             if warnings_path.is_file():
                 for warning_row in iter_tsv(warnings_path):
                     warning_code = warning_row.get("warning_code", "")
+                    if (
+                        warning_row.get("warning_scope", "") == "accession"
+                        and warning_code in {
+                            "accession_no_retained_proteins",
+                            "accession_likely_translation_table_mismatch",
+                            "accession_unsupported_translation_table",
+                        }
+                        and warning_row.get("assembly_accession", "")
+                    ):
+                        failed_accessions.append(warning_row["assembly_accession"])
                     if warning_code:
                         warning_summary[warning_code] += 1
                     warnings_writer.write_row(warning_row)

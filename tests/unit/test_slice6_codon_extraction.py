@@ -67,6 +67,45 @@ class SliceSixCodonExtractionTest(unittest.TestCase):
             ],
         )
 
+    def test_extract_call_codons_accepts_table_two_slice(self) -> None:
+        result = extract_call_codons(
+            "ATATGATAA",
+            aa_start=1,
+            aa_end=2,
+            aa_sequence="MW",
+            translation_table="2",
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.codon_sequence, "ATATGA")
+
+    def test_build_codon_usage_rows_supports_table_two(self) -> None:
+        call_row = build_call_row(
+            method="pure",
+            genome_id="genome_001",
+            taxon_id="10090",
+            sequence_id="seq_mt_001",
+            protein_id="prot_mt_001",
+            repeat_residue="W",
+            start=1,
+            end=2,
+            aa_sequence="MW",
+        )
+        call_row["codon_sequence"] = "ATATGA"
+
+        usage_rows = build_codon_usage_rows(call_row, translation_table="2")
+
+        self.assertEqual(
+            [
+                (row["amino_acid"], row["codon"], row["codon_count"], row["codon_fraction"])
+                for row in usage_rows
+            ],
+            [
+                ("M", "ATA", 1, "1.0000000000"),
+                ("W", "TGA", 1, "1.0000000000"),
+            ],
+        )
+
     def test_extract_repeat_codons_cli_enriches_successful_rows_and_warns_on_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
