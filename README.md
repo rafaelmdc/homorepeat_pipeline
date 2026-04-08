@@ -52,6 +52,7 @@ Recommended standard flags:
 - `--run_id my_run`
 - `--accessions_file path/to/accessions.txt`
 - `--taxonomy_db path/to/ncbi_taxonomy.sqlite` when not using the default
+- `-output-dir path/to/publish` when you want a Nextflow-native publish override
 - `-params-file path/to/params.json`
 - `-resume`
 
@@ -219,5 +220,12 @@ What the method-specific settings mean:
 Published run artifacts live under `runs/<run_id>/publish/`, including:
 - canonical acquisition outputs in `publish/acquisition/`
 - canonical merged calls in `publish/calls/`
+- method-level finalized call bundles in `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
+- SQLite outputs in `publish/database/`
+- summaries and ECharts assets in `publish/reports/`
 - accession status ledgers in `publish/status/`
-- the stable run manifest in `publish/manifest/run_manifest.json`
+- run metadata in `publish/metadata/`
+- the stable run manifest in `publish/metadata/run_manifest.json`
+
+Metadata note:
+- `publish/metadata/nextflow/` exposes stable relative symlinks to the live files under `runs/<run_id>/internal/nextflow/`

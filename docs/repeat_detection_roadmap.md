@@ -14,7 +14,7 @@ The current gap is not one isolated bug. The codebase is still shaped around the
 - detection orchestration only wires `pure` and `threshold`
 - Nextflow params do not yet expose the main tuning knobs for each method
 - finalized call rows reserve codon metric fields but the implementation leaves them empty
-- method-level finalized outputs now publish under `publish/detection/finalized/...`, while canonical merged outputs remain under `publish/calls/`
+- method-level finalized outputs now publish under `publish/calls/finalized/...`, while canonical merged outputs remain under `publish/calls/`
 
 ## Target outcome
 
@@ -117,15 +117,15 @@ The current layout mixes canonical outputs and method-specific finalized outputs
 Recommended target layout:
 
 - `publish/acquisition/`
-- `publish/detection/finalized/<method>/<repeat_residue>/`
 - `publish/calls/`
-- `publish/database/sqlite/`
+- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
+- `publish/database/`
 - `publish/reports/`
-- `publish/manifest/`
+- `publish/metadata/`
 
 Recommended contents:
 
-- `publish/detection/finalized/<method>/<repeat_residue>/`
+- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
   - finalized call table for that method and residue
   - method run params
   - codon warnings

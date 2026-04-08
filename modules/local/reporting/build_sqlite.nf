@@ -1,6 +1,5 @@
 process BUILD_SQLITE {
     label 'database'
-    publishDir "${params.output_dir}/database/sqlite", mode: 'copy'
 
     input:
     path(taxonomy_tsv)

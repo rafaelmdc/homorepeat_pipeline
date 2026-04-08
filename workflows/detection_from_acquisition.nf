@@ -101,6 +101,7 @@ workflow DETECTION_FROM_ACQUISITION {
     finalizeStatusRows = finalizeStatusCh.toList()
 
     emit:
+    finalized_dirs = finalizedCallCh
     call_tsvs = finalizedCallRows.map { rows ->
         rows.collect { row ->
             def batch_id = row[0]

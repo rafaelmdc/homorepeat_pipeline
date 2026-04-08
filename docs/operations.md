@@ -37,7 +37,7 @@ When you do not need a full pipeline run:
 - `scripts/smoke_live_detection.sh`
 
 These are opt-in live checks. They are narrower than the full Nextflow smoke path.
-They currently stage direct CLI detection outputs under `publish/detection/raw/` and finalized codon-linked outputs under `publish/detection/finalized/`.
+They do not define the canonical published output contract for full pipeline runs.
 
 ## Runtime expectations
 
@@ -52,21 +52,22 @@ They currently stage direct CLI detection outputs under `publish/detection/raw/`
 
 Stable downstream outputs live under:
 - `runs/<run_id>/publish/acquisition/`
-- `runs/<run_id>/publish/detection/finalized/`
 - `runs/<run_id>/publish/calls/`
+- `runs/<run_id>/publish/calls/finalized/`
 - `runs/<run_id>/publish/status/`
-- `runs/<run_id>/publish/database/sqlite/`
+- `runs/<run_id>/publish/database/`
 - `runs/<run_id>/publish/reports/`
-- `runs/<run_id>/publish/manifest/run_manifest.json`
+- `runs/<run_id>/publish/metadata/`
 
 Operational note:
-- `publish/detection/finalized/` contains method-specific finalized artifacts such as per-method call tables, run params, codon warnings, and codon-usage tables
+- `publish/calls/finalized/` contains method-specific finalized artifacts such as per-method call tables, run params, codon warnings, and codon-usage tables, grouped by method, repeat residue, and batch
 - `publish/calls/` contains the canonical merged `repeat_calls.tsv` and `run_params.tsv` used downstream
 - `publish/status/` contains the accession-level operational ledger in `accession_status.tsv`, the per-method/per-residue breakdown in `accession_call_counts.tsv`, and run-level counts in `status_summary.json`
+- `publish/metadata/` contains `run_manifest.json`, `launch_metadata.json`, and stable relative symlinks under `publish/metadata/nextflow/` pointing back to `internal/nextflow/`
 
 Execution state lives under:
 - `runs/<run_id>/internal/`
-- `runs/<run_id>/internal/nextflow/launch_metadata.json` stores normalized launch metadata for the completed run
+- `runs/<run_id>/internal/nextflow/` stores the live Nextflow logs and source diagnostics used to build the published metadata bundle
 
 ## Verified baseline
 
@@ -74,6 +75,7 @@ Verified on April 8, 2026:
 - `bash scripts/build_dev_containers.sh`
 - full live Nextflow smoke run through the `docker` profile on 5 real NCBI accessions with `batch_size=2`
 - canonical outputs confirmed after the contract cleanup removing row-level `download_path`, `sequence_path`, `protein_path`, and `source_file`
+- one-accession Docker smoke run confirmed the workflow-output layout under `publish/`, including `publish/metadata/nextflow/` symlinks and `publish/calls/finalized/`
 
 Latest verified run:
-- `runs/smoke_contract_cleanup_live`
+- `runs/smoke_e2e_workflow_outputs_v3`

@@ -1,6 +1,5 @@
 process EXPORT_SUMMARY_TABLES {
     label 'reporting'
-    publishDir "${params.output_dir}/reports", mode: 'copy'
 
     input:
     path(taxonomy_tsv)

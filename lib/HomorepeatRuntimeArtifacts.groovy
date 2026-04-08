@@ -2,9 +2,9 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -26,31 +26,30 @@ class HomorepeatRuntimeArtifacts {
         calls      : [
             repeat_calls_tsv: 'calls/repeat_calls.tsv',
             run_params_tsv  : 'calls/run_params.tsv',
-        ],
-        detection  : [
-            finalized_root: 'detection/finalized',
+            finalized_root : 'calls/finalized',
         ],
         database   : [
-            sqlite                : 'database/sqlite/homorepeat.sqlite',
-            sqlite_validation_json: 'database/sqlite/sqlite_validation.json',
+            sqlite                : 'database/homorepeat.sqlite',
+            sqlite_validation_json: 'database/sqlite_validation.json',
         ],
         reports    : [
-            summary_by_taxon_tsv   : 'reports/summary_by_taxon.tsv',
-            regression_input_tsv   : 'reports/regression_input.tsv',
-            echarts_options_json   : 'reports/echarts_options.json',
-            echarts_report_html    : 'reports/echarts_report.html',
-            echarts_js             : 'reports/echarts.min.js',
-            nextflow_report_html   : 'reports/nextflow_report.html',
-            nextflow_timeline_html : 'reports/nextflow_timeline.html',
-            nextflow_dag_html      : 'reports/nextflow_dag.html',
+            summary_by_taxon_tsv: 'reports/summary_by_taxon.tsv',
+            regression_input_tsv: 'reports/regression_input.tsv',
+            echarts_options_json: 'reports/echarts_options.json',
+            echarts_report_html : 'reports/echarts_report.html',
+            echarts_js          : 'reports/echarts.min.js',
         ],
         status     : [
             accession_status_tsv     : 'status/accession_status.tsv',
             accession_call_counts_tsv: 'status/accession_call_counts.tsv',
             status_summary_json      : 'status/status_summary.json',
         ],
-        internal   : [
-            trace_txt: 'internal/nextflow/trace.txt',
+        metadata   : [
+            launch_metadata_json : 'metadata/launch_metadata.json',
+            nextflow_report_html : 'metadata/nextflow/report.html',
+            nextflow_timeline_html: 'metadata/nextflow/timeline.html',
+            nextflow_dag_html    : 'metadata/nextflow/dag.html',
+            trace_txt            : 'metadata/nextflow/trace.txt',
         ],
     ]
 
@@ -68,10 +67,17 @@ class HomorepeatRuntimeArtifacts {
         Path nextflowLog = resolveAgainstLaunchDir(logFileValue, launchDir)
 
         Path internalDir = runRoot.resolve('internal').resolve('nextflow')
+        Path metadataDir = publishRoot.resolve('metadata')
+        Path publishedNextflowDir = metadataDir.resolve('nextflow')
         Files.createDirectories(internalDir)
-        Files.createDirectories(publishRoot.resolve('manifest'))
+        Files.createDirectories(publishedNextflowDir)
 
-        Path launchMetadataPath = internalDir.resolve('launch_metadata.json')
+        linkPublishedPath(internalDir.resolve('report.html'), publishedNextflowDir.resolve('report.html'))
+        linkPublishedPath(internalDir.resolve('timeline.html'), publishedNextflowDir.resolve('timeline.html'))
+        linkPublishedPath(internalDir.resolve('dag.html'), publishedNextflowDir.resolve('dag.html'))
+        linkPublishedPath(internalDir.resolve('trace.txt'), publishedNextflowDir.resolve('trace.txt'))
+
+        Path launchMetadataPath = metadataDir.resolve('launch_metadata.json')
         writeJson(
             launchMetadataPath,
             buildLaunchMetadata(
@@ -96,7 +102,7 @@ class HomorepeatRuntimeArtifacts {
         )
 
         writeJson(
-            publishRoot.resolve('manifest').resolve('run_manifest.json'),
+            metadataDir.resolve('run_manifest.json'),
             buildRunManifest(
                 repoRoot: repoRoot,
                 runId: ctx.runId?.toString() ?: '',
@@ -165,9 +171,8 @@ class HomorepeatRuntimeArtifacts {
                 params_file    : ctx.paramsFile ? relativeOrAbsolute(ctx.paramsFile as Path, repoRoot) : '',
             ],
             paths          : [
-                run_root       : relativeOrAbsolute(runRoot, repoRoot),
-                publish_root   : relativeOrAbsolute(publishRoot, repoRoot),
-                launch_metadata: relativeOrAbsolute(ctx.launchMetadata as Path, repoRoot),
+                run_root    : relativeOrAbsolute(runRoot, repoRoot),
+                publish_root: relativeOrAbsolute(publishRoot, repoRoot),
             ],
             params         : manifestParams(
                 publishRoot: publishRoot,
@@ -242,12 +247,11 @@ class HomorepeatRuntimeArtifacts {
     private static Map<String, Map<String, String>> collectArtifacts(Path runRoot, Path publishRoot) {
         Map<String, Map<String, String>> payload = [:]
         PUBLISHED_ARTIFACTS.each { String section, Map<String, String> files ->
-            Path baseRoot = section == 'internal' ? runRoot : publishRoot
             Map<String, String> sectionPayload = [:]
             files.each { String key, String relativePath ->
-                Path candidate = baseRoot.resolve(relativePath).normalize()
-                if (Files.exists(candidate)) {
-                    sectionPayload[key] = normalizeSeparators(runRoot.relativize(candidate).toString())
+                Path candidate = publishRoot.resolve(relativePath).normalize()
+                if (Files.exists(candidate) || Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) {
+                    sectionPayload[key] = relativeOrAbsolute(candidate, runRoot)
                 }
             }
             payload[section] = sectionPayload
@@ -326,6 +330,13 @@ class HomorepeatRuntimeArtifacts {
             path,
             JsonOutput.prettyPrint(JsonOutput.toJson(payload)) + '\n',
         )
+    }
+
+    private static void linkPublishedPath(Path source, Path destination) {
+        Files.createDirectories(destination.parent)
+        Files.deleteIfExists(destination)
+        Path relativeSource = destination.parent.relativize(source)
+        Files.createSymbolicLink(destination, relativeSource)
     }
 
     private static Path resolveAgainstLaunchDir(Object rawPath, Path launchDir) {

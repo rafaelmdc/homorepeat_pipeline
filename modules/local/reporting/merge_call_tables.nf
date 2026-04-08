@@ -1,6 +1,5 @@
 process MERGE_CALL_TABLES {
     label 'reporting'
-    publishDir "${params.output_dir}/calls", mode: 'copy'
 
     input:
     path(call_tsvs)

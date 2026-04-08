@@ -275,7 +275,7 @@ Reported feature semantics:
 
 Finalized detection outputs publish under:
 
-- `publish/detection/finalized/<method>/<repeat_residue>/`
+- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
 
 Canonical merged downstream outputs remain under:
 

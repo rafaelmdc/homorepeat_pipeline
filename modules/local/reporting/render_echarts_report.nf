@@ -1,6 +1,5 @@
 process RENDER_ECHARTS_REPORT {
     label 'reporting'
-    publishDir "${params.output_dir}/reports", mode: 'copy'
 
     input:
     path(summary_tsv)

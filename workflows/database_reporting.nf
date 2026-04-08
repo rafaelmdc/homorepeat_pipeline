@@ -36,5 +36,7 @@ workflow DATABASE_REPORTING {
     sqlite_validation = sqliteBuild.sqlite_validation
     summary_by_taxon = summaries.summary_tsv
     regression_input = summaries.regression_tsv
+    echarts_options = reportPrep.echarts_options
     echarts_report = reportHtml.echarts_report
+    echarts_js = reportHtml.echarts_asset
 }

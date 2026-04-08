@@ -7,6 +7,7 @@ The pipeline now parallelizes both major heavy phases:
 - detection and codon finalization fan out by `batch_id x method x repeat_residue`
 
 Canonical outputs remain merged under `publish/acquisition/`, `publish/calls/`, `publish/database/`, and `publish/reports/`.
+Run metadata publishes separately under `publish/metadata/`.
 
 ## Default concurrency
 

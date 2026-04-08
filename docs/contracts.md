@@ -91,7 +91,7 @@ Rules:
 - local-mode paths must be readable from the execution environment
 - local mode should prefer `cds_fasta` plus `annotation_gff` when translation-driven normalization is desired
 - NCBI download/archive provenance lives in `download_manifest.tsv`, not repeated inside `genomes.tsv`
-- stable published acquisition artifact locations live under `publish/acquisition/` and in `publish/manifest/run_manifest.json`
+- stable published acquisition artifact locations live under `publish/acquisition/` and in `publish/metadata/run_manifest.json`
 
 ### Output: `genomes.tsv`
 
@@ -229,7 +229,7 @@ Optional but strongly recommended columns:
 
 Method-specific finalized outputs publish under:
 
-- `publish/detection/finalized/<method>/<repeat_residue>/`
+- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
 
 Expected finalized artifacts:
 - `final_<method>_<repeat_residue>_calls.tsv`
@@ -240,6 +240,7 @@ Expected finalized artifacts:
 Rules:
 - `publish/calls/` remains the canonical merged interface for downstream database and reporting stages
 - finalized method outputs are method-specific and may exist for multiple residues in the same run
+- finalized method outputs are grouped by `batch_id` inside each method and residue bucket
 - finalized call tables must still satisfy the shared detection call contract
 
 ---
@@ -345,7 +346,7 @@ Rules:
 
 ## Run manifest contract
 
-### Output: `publish/manifest/run_manifest.json`
+### Output: `publish/metadata/run_manifest.json`
 
 Required top-level keys:
 - `run_id`
@@ -365,11 +366,14 @@ Rules:
 - `params.detection` is derived from the canonical published `calls/run_params.tsv` when present
 - `params.detection` is shaped as `method -> repeat_residue -> param_name -> param_value`
 - `enabled_methods` is the sorted list of methods present in `params.detection`
-- `paths.launch_metadata`, when present, points to `runs/<run_id>/internal/nextflow/launch_metadata.json`
-- `artifacts.detection.finalized_root`, when present, points to `publish/detection/finalized`
+- `artifacts.calls.finalized_root`, when present, points to `publish/calls/finalized`
+- `artifacts.metadata.launch_metadata_json`, when present, points to `publish/metadata/launch_metadata.json`
+- `artifacts.metadata.nextflow_report_html`, `artifacts.metadata.nextflow_timeline_html`, and `artifacts.metadata.nextflow_dag_html`, when present, point to `publish/metadata/nextflow/`
+- `artifacts.metadata.trace_txt`, when present, points to `publish/metadata/nextflow/trace.txt`
+- files under `publish/metadata/nextflow/` may be published as relative symlinks into `runs/<run_id>/internal/nextflow/`
 - `repeat_residues` is the sorted set of `repeat_residue` column values present in the published run params
 - `artifacts.status.accession_call_counts_tsv`, when present, points to `publish/status/accession_call_counts.tsv`
-- artifact paths are stored relative to the run root so the manifest remains portable inside `runs/<run_id>/`
+- artifact paths are stored relative to the run root when possible; absolute paths are allowed when the publish root lives outside `runs/<run_id>/`
 - `params.params_file_values` may be empty when no params file was provided or when the supplied file is not JSON
 
 ---

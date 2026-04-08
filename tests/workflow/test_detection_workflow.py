@@ -41,9 +41,23 @@ class DetectionWorkflowTest(unittest.TestCase):
                     include {{ MERGE_CALL_TABLES }} from '{(REPO_ROOT / "modules" / "local" / "reporting" / "merge_call_tables").as_posix()}'
 
                     workflow {{
+                      main:
                       translated = Channel.value([ tuple('batch_0001', file(params.batch_dir)) ])
                       detection = DETECTION_FROM_ACQUISITION(translated)
-                      MERGE_CALL_TABLES(detection.call_tsvs, detection.run_params_tsvs)
+                      merged = MERGE_CALL_TABLES(detection.call_tsvs, detection.run_params_tsvs)
+
+                      publish:
+                      repeat_calls = merged.repeat_calls_tsv
+                      run_params = merged.run_params_tsv
+                      finalized = detection.finalized_dirs
+                    }}
+
+                    output {{
+                      repeat_calls {{ path 'calls' }}
+                      run_params {{ path 'calls' }}
+                      finalized {{
+                        path {{ batch_id, method, repeat_residue, finalized_dir -> "calls/finalized/${{method}}/${{repeat_residue}}" }}
+                      }}
                     }}
                     """
                 ).strip()
@@ -62,12 +76,12 @@ class DetectionWorkflowTest(unittest.TestCase):
                     str(workflow_path),
                     "-profile",
                     "local",
+                    "-output-dir",
+                    str(publish_dir),
                     "-work-dir",
                     str(work_dir),
                     "--batch_dir",
                     str(batch_dir),
-                    "--output_dir",
-                    str(publish_dir),
                     "--python_bin",
                     sys.executable,
                     "--repeat_residues",
@@ -96,6 +110,10 @@ class DetectionWorkflowTest(unittest.TestCase):
             run_params_path = publish_dir / "calls" / "run_params.tsv"
             self.assertTrue(repeat_calls_path.is_file(), repeat_calls_path)
             self.assertTrue(run_params_path.is_file(), run_params_path)
+            self.assertTrue((publish_dir / "calls" / "finalized" / "pure" / "Q" / "batch_0001").is_dir())
+            self.assertTrue((publish_dir / "calls" / "finalized" / "pure" / "N" / "batch_0001").is_dir())
+            self.assertTrue((publish_dir / "calls" / "finalized" / "threshold" / "Q" / "batch_0001").is_dir())
+            self.assertTrue((publish_dir / "calls" / "finalized" / "threshold" / "N" / "batch_0001").is_dir())
 
             call_counts: Counter[tuple[str, str]] = Counter()
             with repeat_calls_path.open(encoding="utf-8") as handle:

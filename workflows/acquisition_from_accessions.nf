@@ -41,5 +41,7 @@ workflow ACQUISITION_FROM_ACCESSIONS {
     proteins_tsv = merged.proteins_tsv
     cds_fasta = merged.cds_fasta
     proteins_fasta = merged.proteins_fasta
+    download_manifest_tsv = merged.download_manifest_tsv
+    normalization_warnings_tsv = merged.normalization_warnings_tsv
     acquisition_validation = merged.acquisition_validation
 }

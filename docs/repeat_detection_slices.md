@@ -162,7 +162,7 @@ Separate method-specific finalized outputs from canonical merged call exports.
 
 ### Changes
 
-- publish finalized method outputs under `publish/detection/finalized/<method>/<repeat_residue>/`
+- publish finalized method outputs under `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
 - leave canonical merged tables under `publish/calls/`
 - include `codon_usage.tsv` in finalized method output directories
 - update run manifest artifact collection if method-finalized artifacts are added there

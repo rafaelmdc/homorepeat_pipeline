@@ -1,6 +1,5 @@
 process BUILD_ACCESSION_STATUS {
     label 'reporting'
-    publishDir "${params.output_dir}/status", mode: 'copy'
 
     input:
     path(batch_table)

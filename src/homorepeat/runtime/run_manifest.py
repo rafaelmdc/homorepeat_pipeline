@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -24,13 +25,11 @@ PUBLISHED_ARTIFACTS = {
     "calls": {
         "repeat_calls_tsv": "calls/repeat_calls.tsv",
         "run_params_tsv": "calls/run_params.tsv",
-    },
-    "detection": {
-        "finalized_root": "detection/finalized",
+        "finalized_root": "calls/finalized",
     },
     "database": {
-        "sqlite": "database/sqlite/homorepeat.sqlite",
-        "sqlite_validation_json": "database/sqlite/sqlite_validation.json",
+        "sqlite": "database/homorepeat.sqlite",
+        "sqlite_validation_json": "database/sqlite_validation.json",
     },
     "reports": {
         "summary_by_taxon_tsv": "reports/summary_by_taxon.tsv",
@@ -38,17 +37,18 @@ PUBLISHED_ARTIFACTS = {
         "echarts_options_json": "reports/echarts_options.json",
         "echarts_report_html": "reports/echarts_report.html",
         "echarts_js": "reports/echarts.min.js",
-        "nextflow_report_html": "reports/nextflow_report.html",
-        "nextflow_timeline_html": "reports/nextflow_timeline.html",
-        "nextflow_dag_html": "reports/nextflow_dag.html",
     },
     "status": {
         "accession_status_tsv": "status/accession_status.tsv",
         "accession_call_counts_tsv": "status/accession_call_counts.tsv",
         "status_summary_json": "status/status_summary.json",
     },
-    "internal": {
-        "trace_txt": "internal/nextflow/trace.txt",
+    "metadata": {
+        "launch_metadata_json": "metadata/launch_metadata.json",
+        "nextflow_report_html": "metadata/nextflow/report.html",
+        "nextflow_timeline_html": "metadata/nextflow/timeline.html",
+        "nextflow_dag_html": "metadata/nextflow/dag.html",
+        "trace_txt": "metadata/nextflow/trace.txt",
     },
 }
 
@@ -85,7 +85,6 @@ def build_run_manifest(
         "paths": {
             "run_root": _relative_or_absolute(run_root, repo_root),
             "publish_root": _relative_or_absolute(publish_root, repo_root),
-            "launch_metadata": _relative_or_absolute(launch_metadata, repo_root),
         },
         "params": _manifest_params(publish_root=publish_root, params_file=params_file, run_root=run_root),
         "enabled_methods": _enabled_methods(publish_root),
@@ -107,10 +106,9 @@ def _collect_artifacts(*, run_root: Path, publish_root: Path) -> dict[str, dict[
     for section, files in PUBLISHED_ARTIFACTS.items():
         section_payload: dict[str, str] = {}
         for key, relative_path in files.items():
-            base_root = run_root if section == "internal" else publish_root
-            candidate = (base_root / relative_path).resolve()
-            if candidate.exists():
-                section_payload[key] = str(candidate.relative_to(run_root))
+            candidate = (publish_root / relative_path).resolve()
+            if os.path.lexists(candidate):
+                section_payload[key] = _relative_or_absolute(candidate, run_root)
         artifacts[section] = section_payload
     return artifacts
 

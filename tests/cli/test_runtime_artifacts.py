@@ -243,21 +243,21 @@ class RuntimeArtifactsTest(unittest.TestCase):
             publish_root = run_root / "publish"
             (publish_root / "acquisition").mkdir(parents=True, exist_ok=True)
             (publish_root / "calls").mkdir(parents=True, exist_ok=True)
-            (publish_root / "detection" / "finalized" / "pure" / "Q").mkdir(parents=True, exist_ok=True)
-            (publish_root / "database" / "sqlite").mkdir(parents=True, exist_ok=True)
+            (publish_root / "calls" / "finalized" / "pure" / "Q" / "batch_0001").mkdir(parents=True, exist_ok=True)
+            (publish_root / "database").mkdir(parents=True, exist_ok=True)
+            (publish_root / "metadata" / "nextflow").mkdir(parents=True, exist_ok=True)
             (publish_root / "reports").mkdir(parents=True, exist_ok=True)
             (publish_root / "status").mkdir(parents=True, exist_ok=True)
-            (run_root / "internal" / "nextflow").mkdir(parents=True, exist_ok=True)
 
             for path in [
                 publish_root / "acquisition" / "genomes.tsv",
                 publish_root / "calls" / "repeat_calls.tsv",
                 publish_root / "calls" / "run_params.tsv",
-                publish_root / "database" / "sqlite" / "homorepeat.sqlite",
+                publish_root / "database" / "homorepeat.sqlite",
                 publish_root / "reports" / "summary_by_taxon.tsv",
                 publish_root / "status" / "accession_status.tsv",
                 publish_root / "status" / "accession_call_counts.tsv",
-                run_root / "internal" / "nextflow" / "trace.txt",
+                publish_root / "metadata" / "nextflow" / "trace.txt",
             ]:
                 if path.name == "run_params.tsv":
                     path.write_text(
@@ -273,8 +273,8 @@ class RuntimeArtifactsTest(unittest.TestCase):
 
             accessions_file = tmp / "accessions.txt"
             taxonomy_db = tmp / "taxonomy.sqlite"
-            launch_metadata = run_root / "internal" / "nextflow" / "launch_metadata.json"
-            manifest_path = publish_root / "manifest" / "run_manifest.json"
+            launch_metadata = publish_root / "metadata" / "launch_metadata.json"
+            manifest_path = publish_root / "metadata" / "run_manifest.json"
             accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
             taxonomy_db.write_text("", encoding="utf-8")
             launch_metadata.write_text('{"run_id":"run_001"}\n', encoding="utf-8")
@@ -328,15 +328,16 @@ class RuntimeArtifactsTest(unittest.TestCase):
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")
-            self.assertEqual(payload["paths"]["launch_metadata"], str(launch_metadata.resolve()))
             self.assertEqual(payload["artifacts"]["acquisition"]["genomes_tsv"], "publish/acquisition/genomes.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["repeat_calls_tsv"], "publish/calls/repeat_calls.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
-            self.assertEqual(payload["artifacts"]["detection"]["finalized_root"], "publish/detection/finalized")
-            self.assertEqual(payload["artifacts"]["database"]["sqlite"], "publish/database/sqlite/homorepeat.sqlite")
+            self.assertEqual(payload["artifacts"]["calls"]["finalized_root"], "publish/calls/finalized")
+            self.assertEqual(payload["artifacts"]["database"]["sqlite"], "publish/database/homorepeat.sqlite")
             self.assertEqual(payload["artifacts"]["status"]["accession_status_tsv"], "publish/status/accession_status.tsv")
             self.assertEqual(payload["artifacts"]["status"]["accession_call_counts_tsv"], "publish/status/accession_call_counts.tsv")
             self.assertEqual(payload["artifacts"]["status"]["status_summary_json"], "publish/status/status_summary.json")
+            self.assertEqual(payload["artifacts"]["metadata"]["launch_metadata_json"], "publish/metadata/launch_metadata.json")
+            self.assertEqual(payload["artifacts"]["metadata"]["trace_txt"], "publish/metadata/nextflow/trace.txt")
 
     def test_write_run_manifest_cli_records_multi_residue_detection_params(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -344,8 +345,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             run_root = tmp / "runs" / "run_002"
             publish_root = run_root / "publish"
             (publish_root / "calls").mkdir(parents=True, exist_ok=True)
-            (publish_root / "manifest").mkdir(parents=True, exist_ok=True)
-            (run_root / "internal" / "nextflow").mkdir(parents=True, exist_ok=True)
+            (publish_root / "metadata" / "nextflow").mkdir(parents=True, exist_ok=True)
 
             (publish_root / "calls" / "run_params.tsv").write_text(
                 "method\trepeat_residue\tparam_name\tparam_value\n"
@@ -355,12 +355,12 @@ class RuntimeArtifactsTest(unittest.TestCase):
             )
             accessions_file = tmp / "accessions.txt"
             taxonomy_db = tmp / "taxonomy.sqlite"
-            launch_metadata = run_root / "internal" / "nextflow" / "launch_metadata.json"
-            manifest_path = publish_root / "manifest" / "run_manifest.json"
+            launch_metadata = publish_root / "metadata" / "launch_metadata.json"
+            manifest_path = publish_root / "metadata" / "run_manifest.json"
             accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
             taxonomy_db.write_text("", encoding="utf-8")
             launch_metadata.write_text('{"run_id":"run_002"}\n', encoding="utf-8")
-            (run_root / "internal" / "nextflow" / "trace.txt").write_text("stub\n", encoding="utf-8")
+            (publish_root / "metadata" / "nextflow" / "trace.txt").write_text("stub\n", encoding="utf-8")
 
             result = subprocess.run(
                 [
@@ -398,7 +398,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             self.assertEqual(payload["repeat_residues"], ["N", "Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["N"]["min_repeat_count"], "6")
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")
-            self.assertEqual(payload["artifacts"]["internal"]["trace_txt"], "internal/nextflow/trace.txt")
+            self.assertEqual(payload["artifacts"]["metadata"]["trace_txt"], "publish/metadata/nextflow/trace.txt")
 
 
 if __name__ == "__main__":
