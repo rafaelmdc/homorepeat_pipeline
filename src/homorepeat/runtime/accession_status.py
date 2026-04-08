@@ -40,6 +40,7 @@ BATCH_TABLE_REQUIRED = ["batch_id", "assembly_accession"]
 DOWNLOAD_MANIFEST_REQUIRED = ["batch_id", "assembly_accession", "download_status", "notes"]
 GENOMES_REQUIRED = ["genome_id", "accession"]
 PROTEINS_REQUIRED = ["protein_id", "genome_id", "assembly_accession"]
+SEQUENCES_REQUIRED = ["sequence_id", "assembly_accession"]
 CALLS_REQUIRED = ["genome_id", "method", "repeat_residue"]
 
 SUCCESSFUL_DOWNLOAD_STATUSES = {"downloaded", "rehydrated"}
@@ -69,12 +70,13 @@ def build_accession_status_rows(
         batch_info = batch_info_by_id.get(batch_id, {})
         download_row = batch_info.get("download_rows_by_accession", {}).get(accession, {})
         n_genomes = int(batch_info.get("genome_counts_by_accession", {}).get(accession, 0))
+        n_sequences = int(batch_info.get("sequence_counts_by_accession", {}).get(accession, 0))
         n_proteins = int(batch_info.get("protein_counts_by_accession", {}).get(accession, 0))
         n_repeat_calls = repeat_calls_by_accession.get(accession, 0)
 
         download_status = _download_status(download_row)
-        normalize_status = _normalize_status(download_status, batch_info, accession, n_genomes)
-        translate_status = _translate_status(normalize_status, batch_info)
+        normalize_status = _normalize_status(download_status, batch_info, accession, n_genomes, n_sequences)
+        translate_status = _translate_status(normalize_status, batch_info, n_proteins)
         detect_status = _downstream_stage_status(
             translate_status,
             n_proteins,
@@ -156,11 +158,12 @@ def build_accession_call_count_rows(
         batch_info = batch_info_by_id.get(batch_id, {})
         download_row = batch_info.get("download_rows_by_accession", {}).get(accession, {})
         n_genomes = int(batch_info.get("genome_counts_by_accession", {}).get(accession, 0))
+        n_sequences = int(batch_info.get("sequence_counts_by_accession", {}).get(accession, 0))
         n_proteins = int(batch_info.get("protein_counts_by_accession", {}).get(accession, 0))
 
         download_status = _download_status(download_row)
-        normalize_status = _normalize_status(download_status, batch_info, accession, n_genomes)
-        translate_status = _translate_status(normalize_status, batch_info)
+        normalize_status = _normalize_status(download_status, batch_info, accession, n_genomes, n_sequences)
+        translate_status = _translate_status(normalize_status, batch_info, n_proteins)
 
         for method, repeat_residue in method_residue_pairs:
             detect_status = _downstream_stage_status(
@@ -219,6 +222,7 @@ def _load_batch_info(batch_dirs: Sequence[Path]) -> dict[str, dict[str, object]]
 
         download_rows = _read_optional_tsv(batch_dir / "download_manifest.tsv", DOWNLOAD_MANIFEST_REQUIRED)
         genomes_rows = _read_optional_tsv(batch_dir / "genomes.tsv", GENOMES_REQUIRED)
+        sequences_rows = _read_optional_tsv(batch_dir / "sequences.tsv", SEQUENCES_REQUIRED)
         proteins_rows = _read_optional_tsv(batch_dir / "proteins.tsv", PROTEINS_REQUIRED)
         payload[batch_id] = {
             "download_stage_status": _read_optional_stage_status(batch_dir / "download_stage_status.json"),
@@ -228,6 +232,9 @@ def _load_batch_info(batch_dirs: Sequence[Path]) -> dict[str, dict[str, object]]
                 row.get("assembly_accession", ""): row for row in download_rows if row.get("assembly_accession", "")
             },
             "genome_counts_by_accession": Counter(row.get("accession", "") for row in genomes_rows if row.get("accession", "")),
+            "sequence_counts_by_accession": Counter(
+                row.get("assembly_accession", "") for row in sequences_rows if row.get("assembly_accession", "")
+            ),
             "protein_counts_by_accession": Counter(
                 row.get("assembly_accession", "") for row in proteins_rows if row.get("assembly_accession", "")
             ),
@@ -329,22 +336,23 @@ def _normalize_status(
     batch_info: dict[str, object],
     accession: str,
     n_genomes: int,
+    n_sequences: int,
 ) -> str:
     if download_status != "success":
         return "skipped_upstream_failed"
     stage_status = str(batch_info.get("normalize_stage_status", {}).get("status", ""))
     if stage_status == "failed":
         return "failed"
-    return "success" if n_genomes > 0 else "failed"
+    return "success" if n_genomes > 0 and n_sequences > 0 else "failed"
 
 
-def _translate_status(normalize_status: str, batch_info: dict[str, object]) -> str:
+def _translate_status(normalize_status: str, batch_info: dict[str, object], n_proteins: int) -> str:
     if normalize_status != "success":
         return "skipped_upstream_failed"
     stage_status = str(batch_info.get("translate_stage_status", {}).get("status", ""))
     if stage_status == "failed":
         return "failed"
-    return "success"
+    return "success" if n_proteins > 0 else "failed"
 
 
 def _downstream_stage_status(
@@ -404,11 +412,15 @@ def _failure_details(
     if download_status == "failed":
         return ("download", str(download_row.get("notes", "")) or "download failed")
     if normalize_status == "failed":
+        if not batch_info.get("sequence_counts_by_accession", {}).get(download_row.get("assembly_accession", ""), 0):
+            return ("normalize", "no normalized CDS sequences produced for accession")
         return (
             "normalize",
             str(batch_info.get("normalize_stage_status", {}).get("message", "")) or "normalize failed",
         )
     if translate_status == "failed":
+        if not batch_info.get("protein_counts_by_accession", {}).get(download_row.get("assembly_accession", ""), 0):
+            return ("translate", "no retained proteins produced for accession")
         return (
             "translate",
             str(batch_info.get("translate_stage_status", {}).get("message", "")) or "translate failed",

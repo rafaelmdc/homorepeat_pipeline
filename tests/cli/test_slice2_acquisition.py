@@ -51,17 +51,6 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
                         "annotation_status": "annotated:Updated annotation",
                     },
                     {
-                        "batch_id": "batch_0001",
-                        "request_id": "req_001",
-                        "assembly_accession": "GCF_222222222.1",
-                        "taxon_id": "9606",
-                        "batch_reason": "split_large_taxon_fixed_size",
-                        "resolved_name": "Homo sapiens",
-                        "refseq_category": "representative genome",
-                        "assembly_level": "Scaffold",
-                        "annotation_status": "annotated:Full annotation",
-                    },
-                    {
                         "batch_id": "batch_0002",
                         "request_id": "req_004",
                         "assembly_accession": "GCF_000001635.27",
@@ -137,7 +126,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             )
 
             batch_one_manifest = read_tsv(batch_one_raw / "download_manifest.tsv")
-            self.assertEqual(len(batch_one_manifest), 2)
+            self.assertEqual(len(batch_one_manifest), 1)
             self.assertEqual({row["download_status"] for row in batch_one_manifest}, {"downloaded"})
 
             batch_one_genomes = read_tsv(batch_one_norm / "genomes.tsv")
@@ -147,7 +136,7 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             batch_one_warnings = read_tsv(batch_one_norm / "normalization_warnings.tsv")
             batch_one_validation = json.loads((batch_one_norm / "acquisition_validation.json").read_text(encoding="utf-8"))
 
-            self.assertEqual(len(batch_one_genomes), 2)
+            self.assertEqual(len(batch_one_genomes), 1)
             self.assertEqual(len(batch_one_taxonomy), 3)
             taxonomy_by_id = {row["taxon_id"]: row for row in batch_one_taxonomy}
             self.assertEqual(taxonomy_by_id["1"]["taxon_name"], "root")
@@ -158,14 +147,14 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(taxonomy_by_id["9606"]["parent_taxon_id"], "9605")
             self.assertEqual(taxonomy_by_id["9606"]["rank"], "species")
             self.assertEqual(taxonomy_by_id["9606"]["source"], "taxon_weaver:2026-04-05")
-            self.assertEqual(len(batch_one_sequences), 4)
+            self.assertEqual(len(batch_one_sequences), 3)
             self.assertEqual(len(batch_one_proteins), 2)
             self.assertNotIn("download_path", batch_one_genomes[0])
             self.assertNotIn("sequence_path", batch_one_sequences[0])
             self.assertNotIn("protein_path", batch_one_proteins[0])
             self.assertEqual(sorted(row["gene_symbol"] for row in batch_one_proteins), ["ABC1", "XYZ1"])
-            self.assertEqual([row["warning_code"] for row in batch_one_warnings], ["non_triplet_length"])
-            self.assertEqual(batch_one_validation["status"], "warn")
+            self.assertEqual(batch_one_warnings, [])
+            self.assertEqual(batch_one_validation["status"], "pass")
 
             self._run_cli(
                 [
@@ -237,14 +226,14 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             merged_manifest = read_tsv(merged_dir / "download_manifest.tsv")
             merged_validation = json.loads((merged_dir / "acquisition_validation.json").read_text(encoding="utf-8"))
 
-            self.assertEqual(len(merged_genomes), 3)
+            self.assertEqual(len(merged_genomes), 2)
             self.assertEqual(len(merged_taxonomy), 5)
-            self.assertEqual(len(merged_sequences), 5)
+            self.assertEqual(len(merged_sequences), 4)
             self.assertEqual(len(merged_proteins), 3)
-            self.assertEqual(len(merged_manifest), 3)
-            self.assertEqual([row["warning_code"] for row in merged_warnings], ["non_triplet_length"])
+            self.assertEqual(len(merged_manifest), 2)
+            self.assertEqual(merged_warnings, [])
             self.assertEqual(merged_validation["scope"], "merged")
-            self.assertEqual(merged_validation["status"], "warn")
+            self.assertEqual(merged_validation["status"], "pass")
 
     def test_download_ncbi_packages_retries_transient_datasets_gateway_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -485,6 +474,301 @@ class SliceTwoAcquisitionTest(unittest.TestCase):
             self.assertEqual(stage_status["status"], "failed")
             self.assertEqual(stage_status["batch_id"], "batch_0001")
             self.assertTrue(stage_status["message"])
+
+    def test_normalize_fails_when_downloaded_accession_has_no_normalized_sequences(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            package_root = tmp / "package"
+            fake_bin_dir = tmp / "fake_bin"
+            outdir = tmp / "normalized"
+            taxonomy_db = tmp / "taxonomy.sqlite"
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+            taxonomy_db.write_text("", encoding="utf-8")
+            self._write_fake_taxon_weaver(fake_bin_dir / "taxon-weaver")
+
+            accession_good = "GCF_GOOD.1"
+            accession_missing = "GCF_MISSING_ANNOT.1"
+            good_dir = package_root / "ncbi_dataset" / "data" / accession_good
+            missing_dir = package_root / "ncbi_dataset" / "data" / accession_missing
+            good_dir.mkdir(parents=True, exist_ok=True)
+            missing_dir.mkdir(parents=True, exist_ok=True)
+
+            (package_root / "download_manifest.tsv").write_text(
+                "\n".join(
+                    [
+                        "batch_id\tassembly_accession\tdownload_status\tpackage_mode\tdownload_path\trehydrated_path\tchecksum\tfile_size_bytes\tdownload_started_at\tdownload_finished_at\tnotes",
+                        f"batch_0001\t{accession_good}\tdownloaded\tdirect_zip\t\t\t\t\t\t\t",
+                        f"batch_0001\t{accession_missing}\tdownloaded\tdirect_zip\t\t\t\t\t\t\t",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (package_root / "ncbi_dataset" / "data" / "assembly_data_report.jsonl").write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "accession": accession_good,
+                                "assemblyInfo": {"assemblyLevel": "Chromosome", "assemblyType": "haploid"},
+                                "organism": {"taxId": 9606, "organismName": "Homo sapiens"},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "accession": accession_missing,
+                                "assemblyInfo": {"assemblyLevel": "Chromosome", "assemblyType": "haploid"},
+                                "organism": {"taxId": 9606, "organismName": "Homo sapiens"},
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (good_dir / f"{accession_good}_genomic.gff").write_text(
+                "\n".join(
+                    [
+                        "chr1\tRefSeq\tgene\t1\t9\t.\t+\t.\tID=gene1;gene=GENE1",
+                        "chr1\tRefSeq\tmRNA\t1\t9\t.\t+\t.\tID=rna1;Parent=gene1;transcript_id=NM_TEST.1;gene=GENE1",
+                        "chr1\tRefSeq\tCDS\t1\t9\t.\t+\t0\tID=cds-NP_TEST.1-1;Parent=rna1;protein_id=NP_TEST.1;transcript_id=NM_TEST.1;transl_table=1",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (good_dir / f"{accession_good}_cds_from_genomic.fna").write_text(
+                "\n".join(
+                    [
+                        ">lcl|cds1 [gene=GENE1] [protein_id=NP_TEST.1] [transcript_id=NM_TEST.1] [transl_table=1]",
+                        "ATGGCCGCC",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin_dir}:{env.get('PATH', '')}"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.normalize_cds",
+                    "--package-dir",
+                    str(package_root),
+                    "--taxonomy-db",
+                    str(taxonomy_db),
+                    "--batch-id",
+                    "batch_0001",
+                    "--stage-status-out",
+                    str(outdir / "normalize_stage_status.json"),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env={**CLI_ENV, **env},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("produced no normalized CDS sequences", result.stderr)
+
+            stage_status = json.loads((outdir / "normalize_stage_status.json").read_text(encoding="utf-8"))
+            self.assertEqual(stage_status["status"], "failed")
+            self.assertIn(accession_missing, stage_status["message"])
+
+    def test_translate_fails_when_normalized_accession_has_no_retained_proteins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            outdir = tmp / "translated"
+            outdir.mkdir(parents=True, exist_ok=True)
+
+            sequences_tsv = tmp / "sequences.tsv"
+            cds_fasta = tmp / "cds.fna"
+
+            write_tsv(
+                tmp / "download_manifest.tsv",
+                [
+                    {
+                        "batch_id": "batch_0001",
+                        "assembly_accession": "GCF_KEEP.1",
+                        "download_status": "downloaded",
+                        "package_mode": "direct_zip",
+                        "download_path": "",
+                        "rehydrated_path": "",
+                        "checksum": "",
+                        "file_size_bytes": "",
+                        "download_started_at": "",
+                        "download_finished_at": "",
+                        "notes": "",
+                    },
+                    {
+                        "batch_id": "batch_0001",
+                        "assembly_accession": "GCF_DROP.1",
+                        "download_status": "downloaded",
+                        "package_mode": "direct_zip",
+                        "download_path": "",
+                        "rehydrated_path": "",
+                        "checksum": "",
+                        "file_size_bytes": "",
+                        "download_started_at": "",
+                        "download_finished_at": "",
+                        "notes": "",
+                    },
+                ],
+                fieldnames=[
+                    "batch_id",
+                    "assembly_accession",
+                    "download_status",
+                    "package_mode",
+                    "download_path",
+                    "rehydrated_path",
+                    "checksum",
+                    "file_size_bytes",
+                    "download_started_at",
+                    "download_finished_at",
+                    "notes",
+                ],
+            )
+            write_tsv(
+                tmp / "genomes.tsv",
+                [
+                    {
+                        "genome_id": "genome_keep",
+                        "source": "ncbi_datasets",
+                        "accession": "GCF_KEEP.1",
+                        "genome_name": "keep",
+                        "assembly_type": "haploid",
+                        "taxon_id": "9606",
+                        "assembly_level": "Chromosome",
+                        "species_name": "Homo sapiens",
+                        "notes": "",
+                    },
+                    {
+                        "genome_id": "genome_drop",
+                        "source": "ncbi_datasets",
+                        "accession": "GCF_DROP.1",
+                        "genome_name": "drop",
+                        "assembly_type": "haploid",
+                        "taxon_id": "9606",
+                        "assembly_level": "Chromosome",
+                        "species_name": "Homo sapiens",
+                        "notes": "",
+                    },
+                ],
+                fieldnames=[
+                    "genome_id",
+                    "source",
+                    "accession",
+                    "genome_name",
+                    "assembly_type",
+                    "taxon_id",
+                    "assembly_level",
+                    "species_name",
+                    "notes",
+                ],
+            )
+            write_tsv(
+                sequences_tsv,
+                [
+                    {
+                        "sequence_id": "seq_keep",
+                        "genome_id": "genome_keep",
+                        "sequence_name": "SEQ_KEEP",
+                        "sequence_length": "9",
+                        "gene_symbol": "GENE1",
+                        "transcript_id": "NM_KEEP.1",
+                        "isoform_id": "NP_KEEP.1",
+                        "assembly_accession": "GCF_KEEP.1",
+                        "taxon_id": "9606",
+                        "source_record_id": "rec_keep",
+                        "protein_external_id": "NP_KEEP.1",
+                        "translation_table": "1",
+                        "gene_group": "GENE1",
+                        "linkage_status": "gff",
+                        "partial_status": "",
+                    },
+                    {
+                        "sequence_id": "seq_drop",
+                        "genome_id": "genome_drop",
+                        "sequence_name": "SEQ_DROP",
+                        "sequence_length": "9",
+                        "gene_symbol": "GENE2",
+                        "transcript_id": "NM_DROP.1",
+                        "isoform_id": "NP_DROP.1",
+                        "assembly_accession": "GCF_DROP.1",
+                        "taxon_id": "9606",
+                        "source_record_id": "rec_drop",
+                        "protein_external_id": "NP_DROP.1",
+                        "translation_table": "1",
+                        "gene_group": "GENE2",
+                        "linkage_status": "gff",
+                        "partial_status": "partial",
+                    },
+                ],
+                fieldnames=[
+                    "sequence_id",
+                    "genome_id",
+                    "sequence_name",
+                    "sequence_length",
+                    "gene_symbol",
+                    "transcript_id",
+                    "isoform_id",
+                    "assembly_accession",
+                    "taxon_id",
+                    "source_record_id",
+                    "protein_external_id",
+                    "translation_table",
+                    "gene_group",
+                    "linkage_status",
+                    "partial_status",
+                ],
+            )
+            cds_fasta.write_text(
+                "\n".join(
+                    [
+                        ">seq_keep",
+                        "ATGGCCGCC",
+                        ">seq_drop",
+                        "ATGGCCGCC",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            shutil.copyfile(tmp / "download_manifest.tsv", outdir / "download_manifest.tsv")
+            shutil.copyfile(tmp / "genomes.tsv", outdir / "genomes.tsv")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m", "homorepeat.cli.translate_cds",
+                    "--sequences-tsv",
+                    str(sequences_tsv),
+                    "--cds-fasta",
+                    str(cds_fasta),
+                    "--batch-id",
+                    "batch_0001",
+                    "--stage-status-out",
+                    str(outdir / "translate_stage_status.json"),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("produced no retained proteins", result.stderr)
+
+            stage_status = json.loads((outdir / "translate_stage_status.json").read_text(encoding="utf-8"))
+            self.assertEqual(stage_status["status"], "failed")
+            self.assertIn("GCF_DROP.1", stage_status["message"])
 
     def test_normalize_deduplicates_identical_cds_records_and_keeps_distinct_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

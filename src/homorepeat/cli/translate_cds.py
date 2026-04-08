@@ -137,6 +137,12 @@ def _run(args: argparse.Namespace) -> None:
         )
 
     retained_rows = retain_one_isoform_per_gene(translated_candidates)
+    _validate_translated_accession_coverage(
+        outdir / "download_manifest.tsv",
+        sequences_rows,
+        retained_rows,
+        args.batch_id,
+    )
     write_tsv(
         proteins_tsv_path,
         [{field: row.get(field, "") for field in PROTEINS_FIELDNAMES} for row in retained_rows],
@@ -224,6 +230,39 @@ def retain_one_isoform_per_gene(rows: list[dict[str, object]]) -> list[dict[str,
         )[0]
         retained.append(winner)
     return sorted(retained, key=lambda row: str(row.get("protein_id", "")))
+
+
+def _validate_translated_accession_coverage(
+    download_manifest_path: Path,
+    sequences_rows: list[dict[str, str]],
+    retained_rows: list[dict[str, object]],
+    batch_id: str,
+) -> None:
+    if download_manifest_path.is_file():
+        expected_accessions = {
+            row.get("assembly_accession", "")
+            for row in read_tsv(
+                download_manifest_path,
+                required_columns=["assembly_accession", "download_status"],
+            )
+            if row.get("download_status", "") in {"downloaded", "rehydrated"} and row.get("assembly_accession", "")
+        }
+    else:
+        expected_accessions = {
+            row.get("assembly_accession", "")
+            for row in sequences_rows
+            if row.get("assembly_accession", "")
+        }
+    translated_accessions = {
+        str(row.get("assembly_accession", ""))
+        for row in retained_rows
+        if str(row.get("assembly_accession", ""))
+    }
+    missing_accessions = sorted(expected_accessions - translated_accessions)
+    if missing_accessions:
+        raise ContractError(
+            f"Batch {batch_id} produced no retained proteins for normalized accessions: {', '.join(missing_accessions)}"
+        )
 
 
 if __name__ == "__main__":

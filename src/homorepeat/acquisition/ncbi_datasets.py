@@ -122,6 +122,105 @@ def summary_genome_accession(
             raise DatasetsCommandError(f"{cli_error}; REST fallback failed: {rest_error}") from rest_error
 
 
+def summary_genome_accession_unfiltered(
+    accession: str,
+    *,
+    api_key: str | None = None,
+    datasets_bin: str = "datasets",
+    max_attempts: int = 3,
+    retry_delay_seconds: float = 5.0,
+    api_base_url: str = DEFAULT_DATASETS_API_BASE_URL,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Query genome metadata by assembly accession without source/annotation filters."""
+
+    command = [
+        "summary",
+        "genome",
+        "accession",
+        str(accession),
+        "--as-json-lines",
+    ]
+    try:
+        return run_datasets_jsonl(
+            command,
+            api_key=api_key,
+            datasets_bin=datasets_bin,
+            max_attempts=max_attempts,
+            retry_delay_seconds=retry_delay_seconds,
+        )
+    except DatasetsCommandError as cli_error:
+        request = {
+            "accessions": [str(accession)],
+            "page_size": 1000,
+            "returned_content": "COMPLETE",
+        }
+        try:
+            return rest_summary_genome_reports(
+                request,
+                api_key=api_key,
+                api_base_url=api_base_url,
+                max_attempts=max_attempts,
+                retry_delay_seconds=retry_delay_seconds,
+            )
+        except DatasetsCommandError as rest_error:
+            raise DatasetsCommandError(f"{cli_error}; REST fallback failed: {rest_error}") from rest_error
+
+
+def resolve_download_accession(
+    accession: str,
+    *,
+    api_key: str | None = None,
+    datasets_bin: str = "datasets",
+    max_attempts: int = 3,
+    retry_delay_seconds: float = 5.0,
+    api_base_url: str = DEFAULT_DATASETS_API_BASE_URL,
+) -> dict[str, str]:
+    """Resolve one requested accession to the accession we should actually download."""
+
+    records, _ = summary_genome_accession_unfiltered(
+        accession,
+        api_key=api_key,
+        datasets_bin=datasets_bin,
+        max_attempts=max_attempts,
+        retry_delay_seconds=retry_delay_seconds,
+        api_base_url=api_base_url,
+    )
+    if not records:
+        raise DatasetsCommandError(f"No assembly summary records were returned for accession {accession}")
+
+    record = records[0]
+    assembly_info = _mapping(_get(record, "assemblyInfo", "assembly_info"))
+    paired_assembly = _mapping(_get(assembly_info, "pairedAssembly", "paired_assembly"))
+    annotation_info = _mapping(_get(record, "annotationInfo", "annotation_info"))
+
+    current_accession = _text(_get(record, "currentAccession", "current_accession")) or accession
+    paired_accession = _text(_get(record, "pairedAccession", "paired_accession"))
+    source_database = _normalize_source_database(_get(record, "sourceDatabase", "source_database"))
+    annotation_status = _annotation_status(annotation_info)
+
+    resolved_accession = accession
+    resolution_reason = "kept_requested_accession"
+    if source_database == "GENBANK" and paired_accession:
+        resolved_accession = paired_accession
+        if _text(_get(paired_assembly, "annotationName", "annotation_name")):
+            resolution_reason = "resolved_genbank_to_paired_refseq_annotated"
+        else:
+            resolution_reason = "resolved_genbank_to_paired_refseq"
+    elif current_accession != accession:
+        resolved_accession = current_accession
+        resolution_reason = "resolved_to_current_accession"
+
+    return {
+        "requested_accession": accession,
+        "resolved_accession": resolved_accession,
+        "resolution_reason": resolution_reason,
+        "source_database": source_database,
+        "current_accession": current_accession,
+        "paired_accession": paired_accession,
+        "annotation_status": annotation_status,
+    }
+
+
 def download_genome_batch(
     accessions_file: Path | str,
     output_zip: Path | str,

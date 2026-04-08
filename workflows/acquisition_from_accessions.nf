@@ -34,6 +34,7 @@ workflow ACQUISITION_FROM_ACCESSIONS {
 
     emit:
     batch_table = planning.batch_table
+    accession_resolution = planning.accession_resolution
     batch_rows = translatedBatchRows
     genomes_tsv = merged.genomes_tsv
     taxonomy_tsv = merged.taxonomy_tsv

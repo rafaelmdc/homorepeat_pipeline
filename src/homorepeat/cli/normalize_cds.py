@@ -24,7 +24,7 @@ from homorepeat.acquisition.package_layout import (  # noqa: E402
     load_sequence_report,
 )
 from homorepeat.taxonomy.ncbi import build_taxonomy_rows, get_build_version, inspect_lineage  # noqa: E402
-from homorepeat.io.tsv_io import ContractError, write_tsv  # noqa: E402
+from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
 from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
@@ -58,6 +58,7 @@ SEQUENCES_FIELDNAMES = [
     "linkage_status",
     "partial_status",
 ]
+DOWNLOAD_MANIFEST_REQUIRED = ["assembly_accession", "download_status"]
 
 
 def _build_primary_sequence_id(
@@ -138,6 +139,7 @@ def _run(args: argparse.Namespace) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
     warning_path = Path(args.warning_out) if args.warning_out else outdir / "normalization_warnings.tsv"
     normalized_cds_path = outdir / "cds.fna"
+    expected_accessions = _load_expected_accessions(package_root)
     taxonomy_build_version = get_build_version(
         args.taxonomy_db,
         taxon_weaver_bin=args.taxon_weaver_bin,
@@ -157,6 +159,8 @@ def _run(args: argparse.Namespace) -> None:
         assembly_info = record.get("assemblyInfo", {}) if isinstance(record.get("assemblyInfo"), dict) else {}
         organism = record.get("organism", {}) if isinstance(record.get("organism"), dict) else {}
         accession = str(record.get("accession", ""))
+        if expected_accessions and accession not in expected_accessions:
+            continue
         taxon_id = str(organism.get("taxId", ""))
         genome_id = stable_id("genome", accession, taxon_id)
         genomes_rows.append(
@@ -379,6 +383,7 @@ def _run(args: argparse.Namespace) -> None:
     write_fasta(normalized_cds_path, normalized_cds_records)
     write_tsv(warning_path, warnings_rows, fieldnames=WARNING_FIELDNAMES)
     _copy_download_manifest(package_root, outdir)
+    _validate_normalized_accession_coverage(outdir / "download_manifest.tsv", sequences_rows, args.batch_id)
 
 
 def _copy_download_manifest(package_root: Path, outdir: Path) -> None:
@@ -392,6 +397,29 @@ def _copy_download_manifest(package_root: Path, outdir: Path) -> None:
             return
 
 
+def _load_expected_accessions(package_root: Path) -> set[str]:
+    download_manifest_path = _find_download_manifest_path(package_root)
+    if download_manifest_path is None:
+        return set()
+    download_rows = read_tsv(download_manifest_path, required_columns=DOWNLOAD_MANIFEST_REQUIRED)
+    return {
+        row.get("assembly_accession", "")
+        for row in download_rows
+        if row.get("download_status", "") in {"downloaded", "rehydrated"} and row.get("assembly_accession", "")
+    }
+
+
+def _find_download_manifest_path(package_root: Path) -> Path | None:
+    candidate_paths = [
+        package_root / "download_manifest.tsv",
+        package_root.parent / "download_manifest.tsv",
+    ]
+    for candidate in candidate_paths:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _copy_download_manifest_from_package_dir(package_dir: Path, outdir: Path) -> None:
     candidate_paths = [
         package_dir / "download_manifest.tsv",
@@ -402,6 +430,32 @@ def _copy_download_manifest_from_package_dir(package_dir: Path, outdir: Path) ->
         if candidate.is_file():
             shutil.copyfile(candidate, outdir / "download_manifest.tsv")
             return
+
+
+def _validate_normalized_accession_coverage(
+    download_manifest_path: Path,
+    sequences_rows: list[dict[str, object]],
+    batch_id: str,
+) -> None:
+    if not download_manifest_path.is_file():
+        return
+
+    download_rows = read_tsv(download_manifest_path, required_columns=DOWNLOAD_MANIFEST_REQUIRED)
+    expected_accessions = {
+        row.get("assembly_accession", "")
+        for row in download_rows
+        if row.get("download_status", "") in {"downloaded", "rehydrated"} and row.get("assembly_accession", "")
+    }
+    normalized_accessions = {
+        str(row.get("assembly_accession", ""))
+        for row in sequences_rows
+        if str(row.get("assembly_accession", ""))
+    }
+    missing_accessions = sorted(expected_accessions - normalized_accessions)
+    if missing_accessions:
+        raise ContractError(
+            f"Batch {batch_id} produced no normalized CDS sequences for requested accessions: {', '.join(missing_accessions)}"
+        )
 
 
 def _write_failed_outputs(args: argparse.Namespace) -> None:

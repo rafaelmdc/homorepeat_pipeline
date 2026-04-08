@@ -178,8 +178,9 @@ class AccessionStatusCliTest(unittest.TestCase):
             }
             self.assertEqual(by_accession["GCF_COMPLETE.1"]["terminal_status"], "completed")
             self.assertEqual(by_accession["GCF_COMPLETE.1"]["n_repeat_calls"], "1")
-            self.assertEqual(by_accession["GCF_NO_CALLS.1"]["terminal_status"], "completed_no_calls")
-            self.assertEqual(by_accession["GCF_NO_CALLS.1"]["detect_status"], "skipped")
+            self.assertEqual(by_accession["GCF_NO_CALLS.1"]["terminal_status"], "failed")
+            self.assertEqual(by_accession["GCF_NO_CALLS.1"]["translate_status"], "failed")
+            self.assertEqual(by_accession["GCF_NO_CALLS.1"]["failure_stage"], "translate")
             self.assertEqual(by_accession["GCF_DETECT_NO_CALLS.1"]["terminal_status"], "completed_no_calls")
             self.assertEqual(by_accession["GCF_DETECT_NO_CALLS.1"]["detect_status"], "success")
             self.assertEqual(by_accession["GCF_DETECT_NO_CALLS.1"]["finalize_status"], "skipped")
@@ -188,15 +189,15 @@ class AccessionStatusCliTest(unittest.TestCase):
             self.assertEqual(len(count_rows), 4)
             self.assertEqual(by_count_key[("GCF_COMPLETE.1", "pure", "Q")]["n_repeat_calls"], "1")
             self.assertEqual(by_count_key[("GCF_COMPLETE.1", "pure", "Q")]["finalize_status"], "success")
-            self.assertEqual(by_count_key[("GCF_NO_CALLS.1", "pure", "Q")]["detect_status"], "skipped")
+            self.assertEqual(by_count_key[("GCF_NO_CALLS.1", "pure", "Q")]["detect_status"], "skipped_upstream_failed")
             self.assertEqual(by_count_key[("GCF_DETECT_NO_CALLS.1", "pure", "Q")]["detect_status"], "success")
             self.assertEqual(by_count_key[("GCF_DETECT_NO_CALLS.1", "pure", "Q")]["finalize_status"], "skipped")
             self.assertEqual(by_count_key[("GCF_FAILED.1", "pure", "Q")]["finalize_status"], "skipped_upstream_failed")
             self.assertEqual(summary["status"], "partial")
             self.assertEqual(summary["counts"]["n_requested_accessions"], 4)
             self.assertEqual(summary["counts"]["n_completed"], 1)
-            self.assertEqual(summary["counts"]["n_completed_no_calls"], 2)
-            self.assertEqual(summary["counts"]["n_failed"], 1)
+            self.assertEqual(summary["counts"]["n_completed_no_calls"], 1)
+            self.assertEqual(summary["counts"]["n_failed"], 2)
 
     def _write_batch_dir(
         self,
@@ -279,6 +280,46 @@ class AccessionStatusCliTest(unittest.TestCase):
                 "species_name",
                 "download_path",
                 "notes",
+            ],
+        )
+        write_tsv(
+            batch_dir / "sequences.tsv",
+            [
+                {
+                    "sequence_id": f"seq_{accession}_{index}",
+                    "genome_id": f"genome_{accession}",
+                    "sequence_name": f"SEQ_{index}",
+                    "sequence_length": "300",
+                    "gene_symbol": "",
+                    "transcript_id": "",
+                    "isoform_id": "",
+                    "assembly_accession": accession,
+                    "taxon_id": "9606",
+                    "source_record_id": "",
+                    "protein_external_id": "",
+                    "translation_table": "1",
+                    "gene_group": f"gene_{index}",
+                    "linkage_status": "gff",
+                    "partial_status": "",
+                }
+                for index in range(n_genomes)
+            ],
+            fieldnames=[
+                "sequence_id",
+                "genome_id",
+                "sequence_name",
+                "sequence_length",
+                "gene_symbol",
+                "transcript_id",
+                "isoform_id",
+                "assembly_accession",
+                "taxon_id",
+                "source_record_id",
+                "protein_external_id",
+                "translation_table",
+                "gene_group",
+                "linkage_status",
+                "partial_status",
             ],
         )
         write_tsv(
@@ -373,6 +414,23 @@ class AccessionStatusCliTest(unittest.TestCase):
             "species_name",
             "download_path",
             "notes",
+        ])
+        write_tsv(batch_dir / "sequences.tsv", [], fieldnames=[
+            "sequence_id",
+            "genome_id",
+            "sequence_name",
+            "sequence_length",
+            "gene_symbol",
+            "transcript_id",
+            "isoform_id",
+            "assembly_accession",
+            "taxon_id",
+            "source_record_id",
+            "protein_external_id",
+            "translation_table",
+            "gene_group",
+            "linkage_status",
+            "partial_status",
         ])
         write_tsv(batch_dir / "proteins.tsv", [], fieldnames=[
             "protein_id",
