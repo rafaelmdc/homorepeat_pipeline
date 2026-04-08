@@ -5,15 +5,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from itertools import chain
 from pathlib import Path
 
 from homorepeat.reporting.summaries import (  # noqa: E402
     REGRESSION_FIELDNAMES,
     SUMMARY_FIELDNAMES,
-    build_regression_input,
-    build_summary_by_taxon,
+    build_summary_tables,
 )
-from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
+from homorepeat.io.tsv_io import ContractError, iter_tsv, read_tsv, write_tsv  # noqa: E402
 
 
 PROTEINS_REQUIRED = [
@@ -64,13 +64,13 @@ def main() -> int:
 
     taxonomy_rows = read_tsv(args.taxonomy_tsv, required_columns=TAXONOMY_REQUIRED)
     proteins_rows = read_tsv(args.proteins_tsv, required_columns=PROTEINS_REQUIRED)
-    call_rows: list[dict[str, str]] = []
-    for path in args.call_tsv:
-        call_rows.extend(read_tsv(path, required_columns=CALLS_REQUIRED))
 
     outdir = Path(args.outdir)
-    summary_rows = build_summary_by_taxon(call_rows, proteins_rows, taxonomy_rows)
-    regression_rows = build_regression_input(call_rows, taxonomy_rows)
+    summary_rows, regression_rows = build_summary_tables(
+        call_rows=chain.from_iterable(iter_tsv(path, required_columns=CALLS_REQUIRED) for path in args.call_tsv),
+        proteins_rows=proteins_rows,
+        taxonomy_rows=taxonomy_rows,
+    )
 
     write_tsv(outdir / "summary_by_taxon.tsv", summary_rows, fieldnames=SUMMARY_FIELDNAMES)
     write_tsv(outdir / "regression_input.tsv", regression_rows, fieldnames=REGRESSION_FIELDNAMES)

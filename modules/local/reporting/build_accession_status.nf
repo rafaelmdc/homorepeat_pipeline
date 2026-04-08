@@ -1,4 +1,4 @@
-process BUILD_ACCESSION_STATUS {
+process BUILD_ACCESSION_STATUS_TASK {
     label 'reporting'
 
     input:
@@ -57,4 +57,30 @@ process BUILD_ACCESSION_STATUS {
     mv status_tmp/accession_call_counts.tsv accession_call_counts.tsv
     mv status_tmp/status_summary.json status_summary.json
     """
+}
+
+workflow BUILD_ACCESSION_STATUS {
+    take:
+    batch_table
+    batch_inputs
+    call_tsvs
+    detect_status_jsons
+    finalize_status_jsons
+
+    main:
+    collectedCallTsvs = call_tsvs.collect()
+    collectedDetectStatusJsons = detect_status_jsons.collect()
+    collectedFinalizeStatusJsons = finalize_status_jsons.collect()
+    statusBuild = BUILD_ACCESSION_STATUS_TASK(
+        batch_table,
+        batch_inputs,
+        collectedCallTsvs,
+        collectedDetectStatusJsons,
+        collectedFinalizeStatusJsons,
+    )
+
+    emit:
+    accession_status_tsv = statusBuild.accession_status_tsv
+    accession_call_counts_tsv = statusBuild.accession_call_counts_tsv
+    status_summary_json = statusBuild.status_summary_json
 }

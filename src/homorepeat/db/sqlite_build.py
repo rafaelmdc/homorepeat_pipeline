@@ -9,7 +9,7 @@ from typing import Iterable, Sequence
 
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, validate_call_row
 from homorepeat.contracts.run_params import RUN_PARAM_FIELDNAMES
-from homorepeat.io.tsv_io import ContractError, ensure_directory, read_tsv
+from homorepeat.io.tsv_io import ContractError, ensure_directory, iter_tsv, read_tsv
 
 
 GENOMES_FIELDNAMES = [
@@ -128,12 +128,12 @@ def build_sqlite_database(
     *,
     schema_sql_path: Path | str,
     indexes_sql_path: Path | str,
-    taxonomy_rows: Sequence[dict[str, str]],
-    genomes_rows: Sequence[dict[str, str]],
-    sequences_rows: Sequence[dict[str, str]],
-    proteins_rows: Sequence[dict[str, str]],
-    run_params_rows: Sequence[dict[str, str]],
-    repeat_call_rows: Sequence[dict[str, str]],
+    taxonomy_tsv: Path | str,
+    genomes_tsv: Path | str,
+    sequences_tsv: Path | str,
+    proteins_tsv: Path | str,
+    run_params_tsvs: Sequence[Path | str],
+    repeat_call_tsvs: Sequence[Path | str],
 ) -> dict[str, object]:
     """Build the SQLite artifact and return a validation payload."""
 
@@ -152,22 +152,47 @@ def build_sqlite_database(
         connection.executescript(schema_sql)
 
         with connection:
-            _insert_rows(connection, "taxonomy", TAXONOMY_FIELDNAMES, taxonomy_rows)
-            _insert_rows(connection, "genomes", GENOMES_FIELDNAMES, genomes_rows)
-            _insert_rows(connection, "sequences", SEQUENCES_FIELDNAMES, sequences_rows)
-            _insert_rows(connection, "proteins", PROTEINS_FIELDNAMES, proteins_rows)
-            _insert_rows(connection, "run_params", RUN_PARAM_FIELDNAMES, run_params_rows)
-            _insert_rows(connection, "repeat_calls", CALL_FIELDNAMES, repeat_call_rows)
+            expected_counts = {
+                "taxonomy": _import_unique_table(
+                    connection,
+                    "taxonomy",
+                    TAXONOMY_FIELDNAMES,
+                    taxonomy_tsv,
+                    key_field="taxon_id",
+                    label="taxonomy",
+                ),
+                "genomes": _import_unique_table(
+                    connection,
+                    "genomes",
+                    GENOMES_FIELDNAMES,
+                    genomes_tsv,
+                    key_field="genome_id",
+                    label="genomes",
+                ),
+                "sequences": _import_unique_table(
+                    connection,
+                    "sequences",
+                    SEQUENCES_FIELDNAMES,
+                    sequences_tsv,
+                    key_field="sequence_id",
+                    label="sequences",
+                ),
+                "proteins": _import_unique_table(
+                    connection,
+                    "proteins",
+                    PROTEINS_FIELDNAMES,
+                    proteins_tsv,
+                    key_field="protein_id",
+                    label="proteins",
+                ),
+                "run_params": _import_run_params(connection, run_params_tsvs),
+                "repeat_calls": _import_repeat_calls(connection, repeat_call_tsvs),
+            }
 
         connection.executescript(indexes_sql)
         validation_payload = _build_validation_payload(
             connection,
-            taxonomy_rows=taxonomy_rows,
-            genomes_rows=genomes_rows,
-            sequences_rows=sequences_rows,
-            proteins_rows=proteins_rows,
-            run_params_rows=run_params_rows,
-            repeat_call_rows=repeat_call_rows,
+            expected_counts=expected_counts,
         )
         return validation_payload
     finally:
@@ -186,15 +211,22 @@ def _insert_rows(
     connection: sqlite3.Connection,
     table_name: str,
     fieldnames: Sequence[str],
-    rows: Sequence[dict[str, str]],
-) -> None:
-    if not rows:
-        return
+    rows: Iterable[dict[str, str]],
+) -> int:
     placeholders = ", ".join("?" for _ in fieldnames)
     column_list = ", ".join(fieldnames)
     sql = f"INSERT INTO {table_name} ({column_list}) VALUES ({placeholders})"
-    values = [tuple(_coerce_import_value(row.get(field, ""), field) for field in fieldnames) for row in rows]
-    connection.executemany(sql, values)
+    values: list[tuple[object, ...]] = []
+    row_count = 0
+    for row in rows:
+        values.append(tuple(_coerce_import_value(row.get(field, ""), field) for field in fieldnames))
+        row_count += 1
+        if len(values) >= 1000:
+            connection.executemany(sql, values)
+            values.clear()
+    if values:
+        connection.executemany(sql, values)
+    return row_count
 
 
 def _coerce_import_value(value: str, fieldname: str) -> object:
@@ -216,12 +248,7 @@ def _coerce_import_value(value: str, fieldname: str) -> object:
 def _build_validation_payload(
     connection: sqlite3.Connection,
     *,
-    taxonomy_rows: Sequence[dict[str, str]],
-    genomes_rows: Sequence[dict[str, str]],
-    sequences_rows: Sequence[dict[str, str]],
-    proteins_rows: Sequence[dict[str, str]],
-    run_params_rows: Sequence[dict[str, str]],
-    repeat_call_rows: Sequence[dict[str, str]],
+    expected_counts: dict[str, int],
 ) -> dict[str, object]:
     counts = {
         "taxonomy": _count_rows(connection, "taxonomy"),
@@ -230,14 +257,6 @@ def _build_validation_payload(
         "proteins": _count_rows(connection, "proteins"),
         "run_params": _count_rows(connection, "run_params"),
         "repeat_calls": _count_rows(connection, "repeat_calls"),
-    }
-    expected_counts = {
-        "taxonomy": len(taxonomy_rows),
-        "genomes": len(genomes_rows),
-        "sequences": len(sequences_rows),
-        "proteins": len(proteins_rows),
-        "run_params": len(run_params_rows),
-        "repeat_calls": len(repeat_call_rows),
     }
     checks = {
         "taxonomy_row_count_matches": counts["taxonomy"] == expected_counts["taxonomy"],
@@ -299,3 +318,75 @@ def _count_rows(connection: sqlite3.Connection, table_name: str) -> int:
 def _count_query(connection: sqlite3.Connection, sql: str) -> int:
     row = connection.execute(sql).fetchone()
     return int(row[0]) if row is not None else 0
+
+
+def _import_unique_table(
+    connection: sqlite3.Connection,
+    table_name: str,
+    fieldnames: Sequence[str],
+    path: Path | str,
+    *,
+    key_field: str,
+    label: str,
+) -> int:
+    seen_keys: set[str] = set()
+
+    def iter_rows() -> Iterable[dict[str, str]]:
+        for row in iter_tsv(path, required_columns=fieldnames):
+            key = row.get(key_field, "")
+            if key in seen_keys:
+                raise ContractError(f"{label} contains duplicate {key_field} values: {key}")
+            seen_keys.add(key)
+            yield row
+
+    return _insert_rows(connection, table_name, fieldnames, iter_rows())
+
+
+def _import_run_params(connection: sqlite3.Connection, paths: Sequence[Path | str]) -> int:
+    seen_keys: set[tuple[str, str, str]] = set()
+
+    def iter_rows() -> Iterable[dict[str, str]]:
+        for path in paths:
+            for row in iter_tsv(path, required_columns=RUN_PARAM_FIELDNAMES):
+                method = row.get("method", "")
+                repeat_residue = row.get("repeat_residue", "")
+                param_name = row.get("param_name", "")
+                param_value = row.get("param_value", "")
+                if not method or not repeat_residue or not param_name or param_value == "":
+                    raise ContractError("run_params.tsv contains an empty required field")
+                key = (method, repeat_residue, param_name)
+                if key in seen_keys:
+                    duplicate_text = f"{method}:{repeat_residue}:{param_name}"
+                    raise ContractError(
+                        "run_params.tsv contains duplicate method/repeat_residue/param_name pairs: "
+                        f"{duplicate_text}"
+                    )
+                seen_keys.add(key)
+                yield row
+
+    return _insert_rows(connection, "run_params", RUN_PARAM_FIELDNAMES, iter_rows())
+
+
+def _import_repeat_calls(connection: sqlite3.Connection, paths: Sequence[Path | str]) -> int:
+    seen_call_ids: set[str] = set()
+
+    def iter_rows() -> Iterable[dict[str, str]]:
+        for path in paths:
+            for row in iter_tsv(path, required_columns=CALL_FIELDNAMES):
+                call_id = row.get("call_id", "")
+                if call_id in seen_call_ids:
+                    raise ContractError(f"repeat_calls contains duplicate call_id values: {call_id}")
+                seen_call_ids.add(call_id)
+                method = row.get("method", "")
+                if method not in VALID_METHODS:
+                    raise ContractError(f"repeat_calls contains an invalid method: {method!r}")
+                try:
+                    purity = float(row.get("purity", ""))
+                except ValueError as exc:
+                    raise ContractError("repeat_calls contains a non-numeric purity value") from exc
+                if purity < 0.0 or purity > 1.0:
+                    raise ContractError(f"repeat_calls contains an out-of-range purity value: {purity}")
+                validate_call_row(row)
+                yield row
+
+    return _insert_rows(connection, "repeat_calls", CALL_FIELDNAMES, iter_rows())

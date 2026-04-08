@@ -84,34 +84,26 @@ workflow DETECTION_FROM_ACQUISITION {
         finalizeStatusCh = finalizeStatusCh.mix(seedExtendFinalize.stage_status)
     }
 
-    finalizedCallRows = finalizedCallCh.toList()
-    detectStatusRows = detectStatusCh.toList()
-    finalizeStatusRows = finalizeStatusCh.toList()
-
     emit:
     finalized_dirs = finalizedCallCh
-    call_tsvs = finalizedCallRows.map { rows ->
-        rows.collect { row ->
-            def batch_id = row[0]
-            def method = row[1]
-            def repeatResidue = row[2]
-            def finalizedDir = row[3]
-            finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_calls.tsv")
-        }
+    call_tsvs = finalizedCallCh.map { row ->
+        def batch_id = row[0]
+        def method = row[1]
+        def repeatResidue = row[2]
+        def finalizedDir = row[3]
+        finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_calls.tsv")
     }
-    run_params_tsvs = finalizedCallRows.map { rows ->
-        rows.collect { row ->
-            def batch_id = row[0]
-            def method = row[1]
-            def repeatResidue = row[2]
-            def finalizedDir = row[3]
-            finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_run_params.tsv")
-        }
+    run_params_tsvs = finalizedCallCh.map { row ->
+        def batch_id = row[0]
+        def method = row[1]
+        def repeatResidue = row[2]
+        def finalizedDir = row[3]
+        finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_run_params.tsv")
     }
-    detect_status_jsons = detectStatusRows.map { rows ->
-        rows.collect { row -> row[3] }
+    detect_status_jsons = detectStatusCh.map { row ->
+        row[3]
     }
-    finalize_status_jsons = finalizeStatusRows.map { rows ->
-        rows.collect { row -> row[3] }
+    finalize_status_jsons = finalizeStatusCh.map { row ->
+        row[3]
     }
 }

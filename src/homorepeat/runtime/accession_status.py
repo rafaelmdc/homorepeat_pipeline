@@ -56,15 +56,65 @@ def build_accession_status_rows(
 ) -> list[dict[str, object]]:
     """Build one published accession status row per requested accession."""
 
+    status_rows, _ = build_accession_status_tables(
+        batch_table_rows=batch_table_rows,
+        batch_dirs=batch_dirs,
+        detect_status_paths=detect_status_paths,
+        finalize_status_paths=finalize_status_paths,
+        call_tsv_paths=call_tsv_paths,
+    )
+    return status_rows
+
+
+def build_accession_call_count_rows(
+    *,
+    batch_table_rows: Sequence[dict[str, str]],
+    batch_dirs: Sequence[Path],
+    detect_status_paths: Sequence[Path],
+    finalize_status_paths: Sequence[Path],
+    call_tsv_paths: Sequence[Path],
+) -> list[dict[str, object]]:
+    """Build one published accession-method-residue status row per requested accession."""
+
+    _, count_rows = build_accession_status_tables(
+        batch_table_rows=batch_table_rows,
+        batch_dirs=batch_dirs,
+        detect_status_paths=detect_status_paths,
+        finalize_status_paths=finalize_status_paths,
+        call_tsv_paths=call_tsv_paths,
+    )
+    return count_rows
+
+
+def build_accession_status_tables(
+    *,
+    batch_table_rows: Sequence[dict[str, str]],
+    batch_dirs: Sequence[Path],
+    detect_status_paths: Sequence[Path],
+    finalize_status_paths: Sequence[Path],
+    call_tsv_paths: Sequence[Path],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Build both published accession status tables from one shared reducer state."""
+
     batch_rows = list(batch_table_rows)
     batch_info_by_id = _load_batch_info(batch_dirs)
+    sorted_batch_rows = sorted(batch_rows, key=lambda item: (item.get("batch_id", ""), item.get("assembly_accession", "")))
+    detect_status_by_key = _group_stage_status_by_batch_method_residue(detect_status_paths)
+    finalize_status_by_key = _group_stage_status_by_batch_method_residue(finalize_status_paths)
     detect_status_by_batch = _group_stage_status_by_batch(detect_status_paths)
     finalize_status_by_batch = _group_stage_status_by_batch(finalize_status_paths)
     accession_by_genome_id = _accession_by_genome_id(batch_info_by_id.values())
     repeat_calls_by_accession = _count_repeat_calls(call_tsv_paths, accession_by_genome_id)
+    repeat_calls_by_key = _count_repeat_calls_by_accession_method_residue(call_tsv_paths, accession_by_genome_id)
+    method_residue_pairs = _observed_method_residue_pairs(
+        detect_status_paths=detect_status_paths,
+        finalize_status_paths=finalize_status_paths,
+        call_tsv_paths=call_tsv_paths,
+    )
 
     status_rows: list[dict[str, object]] = []
-    for row in sorted(batch_rows, key=lambda item: (item.get("batch_id", ""), item.get("assembly_accession", ""))):
+    count_rows: list[dict[str, object]] = []
+    for row in sorted_batch_rows:
         batch_id = row.get("batch_id", "")
         accession = row.get("assembly_accession", "")
         batch_info = batch_info_by_id.get(batch_id, {})
@@ -87,7 +137,6 @@ def build_accession_status_rows(
             n_repeat_calls,
             finalize_status_by_batch.get(batch_id, []),
         )
-
         failure_stage, failure_reason = _failure_details(
             download_status=download_status,
             normalize_status=normalize_status,
@@ -126,54 +175,16 @@ def build_accession_status_rows(
                 "notes": str(download_row.get("notes", "")),
             }
         )
-    return status_rows
-
-
-def build_accession_call_count_rows(
-    *,
-    batch_table_rows: Sequence[dict[str, str]],
-    batch_dirs: Sequence[Path],
-    detect_status_paths: Sequence[Path],
-    finalize_status_paths: Sequence[Path],
-    call_tsv_paths: Sequence[Path],
-) -> list[dict[str, object]]:
-    """Build one published accession-method-residue status row per requested accession."""
-
-    batch_rows = list(batch_table_rows)
-    batch_info_by_id = _load_batch_info(batch_dirs)
-    detect_status_by_key = _group_stage_status_by_batch_method_residue(detect_status_paths)
-    finalize_status_by_key = _group_stage_status_by_batch_method_residue(finalize_status_paths)
-    accession_by_genome_id = _accession_by_genome_id(batch_info_by_id.values())
-    repeat_calls_by_key = _count_repeat_calls_by_accession_method_residue(call_tsv_paths, accession_by_genome_id)
-    method_residue_pairs = _observed_method_residue_pairs(
-        detect_status_paths=detect_status_paths,
-        finalize_status_paths=finalize_status_paths,
-        call_tsv_paths=call_tsv_paths,
-    )
-
-    count_rows: list[dict[str, object]] = []
-    for row in sorted(batch_rows, key=lambda item: (item.get("batch_id", ""), item.get("assembly_accession", ""))):
-        batch_id = row.get("batch_id", "")
-        accession = row.get("assembly_accession", "")
-        batch_info = batch_info_by_id.get(batch_id, {})
-        download_row = batch_info.get("download_rows_by_accession", {}).get(accession, {})
-        n_genomes = int(batch_info.get("genome_counts_by_accession", {}).get(accession, 0))
-        n_sequences = int(batch_info.get("sequence_counts_by_accession", {}).get(accession, 0))
-        n_proteins = int(batch_info.get("protein_counts_by_accession", {}).get(accession, 0))
-
-        download_status = _download_status(download_row)
-        normalize_status = _normalize_status(download_status, batch_info, accession, n_genomes, n_sequences)
-        translate_status = _translate_status(normalize_status, batch_info, n_proteins)
 
         for method, repeat_residue in method_residue_pairs:
-            detect_status = _downstream_stage_status(
+            method_detect_status = _downstream_stage_status(
                 translate_status,
                 n_proteins,
                 detect_status_by_key.get((batch_id, method, repeat_residue), []),
             )
             n_method_repeat_calls = repeat_calls_by_key.get((accession, method, repeat_residue), 0)
-            finalize_status = _finalize_stage_status(
-                detect_status,
+            method_finalize_status = _finalize_stage_status(
+                method_detect_status,
                 n_method_repeat_calls,
                 finalize_status_by_key.get((batch_id, method, repeat_residue), []),
             )
@@ -183,12 +194,12 @@ def build_accession_call_count_rows(
                     "batch_id": batch_id,
                     "method": method,
                     "repeat_residue": repeat_residue,
-                    "detect_status": detect_status,
-                    "finalize_status": finalize_status,
+                    "detect_status": method_detect_status,
+                    "finalize_status": method_finalize_status,
                     "n_repeat_calls": n_method_repeat_calls,
                 }
             )
-    return count_rows
+    return status_rows, count_rows
 
 
 def build_status_summary(status_rows: Sequence[dict[str, object]]) -> dict[str, object]:

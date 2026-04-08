@@ -1,4 +1,4 @@
-process MERGE_CALL_TABLES {
+process MERGE_CALL_TABLES_TASK {
     label 'reporting'
 
     input:
@@ -23,4 +23,19 @@ process MERGE_CALL_TABLES {
     mv merged_calls_tmp/repeat_calls.tsv repeat_calls.tsv
     mv merged_calls_tmp/run_params.tsv run_params.tsv
     """
+}
+
+workflow MERGE_CALL_TABLES {
+    take:
+    call_tsvs
+    run_params_tsvs
+
+    main:
+    collectedCallTsvs = call_tsvs.collect()
+    collectedRunParamTsvs = run_params_tsvs.collect()
+    merged = MERGE_CALL_TABLES_TASK(collectedCallTsvs, collectedRunParamTsvs)
+
+    emit:
+    repeat_calls_tsv = merged.repeat_calls_tsv
+    run_params_tsv = merged.run_params_tsv
 }

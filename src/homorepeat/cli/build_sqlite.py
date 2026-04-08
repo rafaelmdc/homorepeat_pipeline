@@ -9,19 +9,9 @@ import sys
 from pathlib import Path
 
 from homorepeat.db.sqlite_build import (  # noqa: E402
-    GENOMES_FIELDNAMES,
-    PROTEINS_FIELDNAMES,
-    SEQUENCES_FIELDNAMES,
-    TAXONOMY_FIELDNAMES,
     build_sqlite_database,
-    load_import_rows,
-    validate_repeat_call_rows,
-    validate_run_params_rows,
-    validate_unique_keys,
     write_sqlite_validation,
 )
-from homorepeat.contracts.repeat_features import CALL_FIELDNAMES  # noqa: E402
-from homorepeat.contracts.run_params import RUN_PARAM_FIELDNAMES  # noqa: E402
 from homorepeat.io.tsv_io import ContractError  # noqa: E402
 
 
@@ -67,37 +57,17 @@ def main() -> int:
     sqlite_path = outdir / "homorepeat.sqlite"
     validation_path = outdir / "sqlite_validation.json"
 
-    taxonomy_rows = load_import_rows(args.taxonomy_tsv, required_columns=TAXONOMY_FIELDNAMES)
-    genomes_rows = load_import_rows(args.genomes_tsv, required_columns=GENOMES_FIELDNAMES)
-    sequences_rows = load_import_rows(args.sequences_tsv, required_columns=SEQUENCES_FIELDNAMES)
-    proteins_rows = load_import_rows(args.proteins_tsv, required_columns=PROTEINS_FIELDNAMES)
-
-    validate_unique_keys(taxonomy_rows, "taxon_id", label="taxonomy")
-    validate_unique_keys(genomes_rows, "genome_id", label="genomes")
-    validate_unique_keys(sequences_rows, "sequence_id", label="sequences")
-    validate_unique_keys(proteins_rows, "protein_id", label="proteins")
-
-    run_params_rows: list[dict[str, str]] = []
-    for path in args.run_params_tsv:
-        run_params_rows.extend(load_import_rows(path, required_columns=RUN_PARAM_FIELDNAMES))
-    validate_run_params_rows(run_params_rows)
-
-    repeat_call_rows: list[dict[str, str]] = []
-    for path in args.call_tsv:
-        repeat_call_rows.extend(load_import_rows(path, required_columns=CALL_FIELDNAMES))
-    validate_repeat_call_rows(repeat_call_rows)
-
     try:
         validation_payload = build_sqlite_database(
             sqlite_path,
             schema_sql_path=args.schema_sql,
             indexes_sql_path=args.indexes_sql,
-            taxonomy_rows=taxonomy_rows,
-            genomes_rows=genomes_rows,
-            sequences_rows=sequences_rows,
-            proteins_rows=proteins_rows,
-            run_params_rows=run_params_rows,
-            repeat_call_rows=repeat_call_rows,
+            taxonomy_tsv=args.taxonomy_tsv,
+            genomes_tsv=args.genomes_tsv,
+            sequences_tsv=args.sequences_tsv,
+            proteins_tsv=args.proteins_tsv,
+            run_params_tsvs=args.run_params_tsv,
+            repeat_call_tsvs=args.call_tsv,
         )
     except sqlite3.IntegrityError as exc:
         raise ContractError(f"SQLite import failed integrity checks: {exc}") from exc
