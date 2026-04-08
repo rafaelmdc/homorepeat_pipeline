@@ -28,7 +28,6 @@ CALL_FIELDNAMES = [
     "template_name",
     "merge_rule",
     "score",
-    "source_file",
 ]
 
 
@@ -101,7 +100,6 @@ def build_call_row(
         "template_name": template_name,
         "merge_rule": merge_rule,
         "score": score,
-        "source_file": source_file,
     }
     validate_call_row(row)
     return row

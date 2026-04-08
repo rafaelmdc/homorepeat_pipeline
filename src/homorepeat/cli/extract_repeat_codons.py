@@ -40,7 +40,6 @@ SEQUENCES_REQUIRED = [
     "genome_id",
     "sequence_name",
     "sequence_length",
-    "sequence_path",
 ]
 
 

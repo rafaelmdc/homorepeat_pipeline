@@ -21,7 +21,6 @@ GENOMES_FIELDNAMES = [
     "taxon_id",
     "assembly_level",
     "species_name",
-    "download_path",
     "notes",
 ]
 TAXONOMY_FIELDNAMES = ["taxon_id", "taxon_name", "parent_taxon_id", "rank", "source"]
@@ -30,7 +29,6 @@ SEQUENCES_FIELDNAMES = [
     "genome_id",
     "sequence_name",
     "sequence_length",
-    "sequence_path",
     "gene_symbol",
     "transcript_id",
     "isoform_id",
@@ -49,7 +47,6 @@ PROTEINS_FIELDNAMES = [
     "genome_id",
     "protein_name",
     "protein_length",
-    "protein_path",
     "gene_symbol",
     "translation_method",
     "translation_status",

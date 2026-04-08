@@ -142,6 +142,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             merged_params = read_tsv(outdir / "run_params.tsv")
 
             self.assertEqual([row["method"] for row in merged_calls], ["pure", "seed_extend", "threshold"])
+            self.assertNotIn("source_file", merged_calls[0])
             self.assertEqual(
                 [(row["method"], row["repeat_residue"], row["param_name"]) for row in merged_params],
                 [

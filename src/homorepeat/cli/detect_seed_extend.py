@@ -21,7 +21,6 @@ PROTEINS_REQUIRED = [
     "genome_id",
     "protein_name",
     "protein_length",
-    "protein_path",
     "taxon_id",
 ]
 
@@ -117,7 +116,6 @@ def _run(args: argparse.Namespace) -> None:
                     start=tract.start,
                     end=tract.end,
                     aa_sequence=tract.aa_sequence,
-                    source_file=row.get("protein_path", ""),
                     window_definition=window_definition,
                     merge_rule=merge_rule,
                 )

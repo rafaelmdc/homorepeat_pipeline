@@ -90,7 +90,8 @@ Rules:
 - rows in `acquisition_targets.tsv` are intent records, not downstream biological entities
 - local-mode paths must be readable from the execution environment
 - local mode should prefer `cds_fasta` plus `annotation_gff` when translation-driven normalization is desired
-- NCBI mode must retain the downloaded package path in `genomes.tsv.download_path`
+- NCBI download/archive provenance lives in `download_manifest.tsv`, not repeated inside `genomes.tsv`
+- stable published acquisition artifact locations live under `publish/acquisition/` and in `publish/manifest/run_manifest.json`
 
 ### Output: `genomes.tsv`
 
@@ -107,7 +108,6 @@ Required columns:
 Optional columns:
 - `assembly_level`
 - `species_name`
-- `download_path`
 - `notes`
 
 ---
@@ -141,12 +141,14 @@ Required columns:
 - `genome_id`
 - `sequence_name`
 - `sequence_length`
-- `sequence_path`
 
 Optional columns:
 - `gene_symbol`
 - `transcript_id`
 - `isoform_id`
+
+Rules:
+- row-level sequence tables must not repeat canonical FASTA paths; the normalized CDS FASTA lives at the stable published path `publish/acquisition/cds.fna`
 
 ---
 
@@ -162,12 +164,14 @@ Required columns:
 - `genome_id`
 - `protein_name`
 - `protein_length`
-- `protein_path`
 
 Optional columns:
 - `gene_symbol`
 - `translation_method`
 - `translation_status`
+
+Rules:
+- row-level protein tables must not repeat canonical FASTA paths; the canonical translated protein FASTA lives at the stable published path `publish/acquisition/proteins.faa`
 
 ---
 
@@ -205,7 +209,6 @@ Optional but strongly recommended columns:
 - `template_name`
 - `merge_rule`
 - `score`
-- `source_file`
 
 ### Rules
 - `method` must be one of: `pure`, `threshold`, `seed_extend`
@@ -218,6 +221,7 @@ Optional but strongly recommended columns:
 - for `pure`, `aa_sequence` is expected to be a contiguous run of `repeat_residue`
 - for `threshold`, `window_definition` should record the qualifying sliding-window rule, such as `Q6/8`
 - for `seed_extend`, `window_definition` should record both seed and extend rules, such as `seed:Q6/8|extend:Q8/12`
+- row-level repeat-call tables must not repeat source FASTA paths; call provenance flows through stable biological identifiers plus the published acquisition artifacts
 
 ---
 

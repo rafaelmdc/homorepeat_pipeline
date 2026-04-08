@@ -17,7 +17,6 @@ CREATE TABLE genomes (
     taxon_id TEXT NOT NULL,
     assembly_level TEXT NOT NULL,
     species_name TEXT NOT NULL,
-    download_path TEXT NOT NULL,
     notes TEXT NOT NULL,
     FOREIGN KEY (taxon_id) REFERENCES taxonomy(taxon_id)
 );
@@ -27,7 +26,6 @@ CREATE TABLE sequences (
     genome_id TEXT NOT NULL,
     sequence_name TEXT NOT NULL,
     sequence_length INTEGER NOT NULL,
-    sequence_path TEXT NOT NULL,
     gene_symbol TEXT NOT NULL,
     transcript_id TEXT NOT NULL,
     isoform_id TEXT NOT NULL,
@@ -49,7 +47,6 @@ CREATE TABLE proteins (
     genome_id TEXT NOT NULL,
     protein_name TEXT NOT NULL,
     protein_length INTEGER NOT NULL,
-    protein_path TEXT NOT NULL,
     gene_symbol TEXT NOT NULL,
     translation_method TEXT NOT NULL,
     translation_status TEXT NOT NULL,
@@ -92,7 +89,6 @@ CREATE TABLE repeat_calls (
     template_name TEXT NOT NULL,
     merge_rule TEXT NOT NULL,
     score TEXT NOT NULL,
-    source_file TEXT NOT NULL,
     FOREIGN KEY (genome_id) REFERENCES genomes(genome_id),
     FOREIGN KEY (taxon_id) REFERENCES taxonomy(taxon_id),
     FOREIGN KEY (sequence_id) REFERENCES sequences(sequence_id),

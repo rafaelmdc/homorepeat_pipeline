@@ -38,7 +38,6 @@ GENOMES_FIELDNAMES = [
     "taxon_id",
     "assembly_level",
     "species_name",
-    "download_path",
     "notes",
 ]
 TAXONOMY_FIELDNAMES = ["taxon_id", "taxon_name", "parent_taxon_id", "rank", "source"]
@@ -47,7 +46,6 @@ SEQUENCES_FIELDNAMES = [
     "genome_id",
     "sequence_name",
     "sequence_length",
-    "sequence_path",
     "gene_symbol",
     "transcript_id",
     "isoform_id",
@@ -164,7 +162,6 @@ def _run(args: argparse.Namespace) -> None:
                 "taxon_id": taxon_id,
                 "assembly_level": str(assembly_info.get("assemblyLevel", "")),
                 "species_name": str(organism.get("organismName", "")),
-                "download_path": str(package_root.resolve()),
                 "notes": "",
             }
         )
@@ -282,7 +279,6 @@ def _run(args: argparse.Namespace) -> None:
                 "genome_id": genome_id,
                 "sequence_name": sequence_name,
                 "sequence_length": len(sequence),
-                "sequence_path": str(normalized_cds_path.resolve()),
                 "gene_symbol": gene_symbol,
                 "transcript_id": transcript_id,
                 "isoform_id": first_nonempty(protein_external_id, transcript_id),

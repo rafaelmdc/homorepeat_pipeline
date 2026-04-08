@@ -17,14 +17,13 @@ from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row 
 from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
-SEQUENCES_REQUIRED = ["sequence_id", "genome_id", "sequence_name", "sequence_length", "sequence_path"]
+SEQUENCES_REQUIRED = ["sequence_id", "genome_id", "sequence_name", "sequence_length"]
 PROTEINS_FIELDNAMES = [
     "protein_id",
     "sequence_id",
     "genome_id",
     "protein_name",
     "protein_length",
-    "protein_path",
     "gene_symbol",
     "translation_method",
     "translation_status",
@@ -119,7 +118,6 @@ def _run(args: argparse.Namespace) -> None:
                 "genome_id": row.get("genome_id", ""),
                 "protein_name": row.get("protein_external_id", "") or row.get("sequence_name", ""),
                 "protein_length": len(result.protein_sequence),
-                "protein_path": str(protein_fasta_path.resolve()),
                 "gene_symbol": row.get("gene_symbol", ""),
                 "translation_method": "local_cds_translation",
                 "translation_status": "translated",
