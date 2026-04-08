@@ -12,9 +12,9 @@ from homorepeat.detection.codon_extract import (  # noqa: E402
     build_codon_usage_rows,
     extract_call_codons,
 )
-from homorepeat.io.fasta_io import read_fasta  # noqa: E402
+from homorepeat.io.fasta_io import iter_fasta  # noqa: E402
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, validate_call_row  # noqa: E402
-from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
+from homorepeat.io.tsv_io import ContractError, iter_tsv, open_tsv_writer, write_tsv  # noqa: E402
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES, build_warning_row  # noqa: E402
 from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
@@ -93,92 +93,100 @@ def _run(args: argparse.Namespace) -> None:
     )
     codon_usage_path = outdir / f"{calls_path.stem}_codon_usage.tsv"
 
-    call_rows = read_tsv(calls_path, required_columns=CALLS_REQUIRED)
-    sequence_rows = read_tsv(args.sequences_tsv, required_columns=SEQUENCES_REQUIRED)
-    cds_records = dict(read_fasta(args.cds_fasta))
+    needed_sequence_ids = {
+        row.get("sequence_id", "")
+        for row in iter_tsv(calls_path, required_columns=CALLS_REQUIRED)
+        if row.get("sequence_id", "")
+    }
+    sequence_rows_by_id = {
+        row.get("sequence_id", ""): row
+        for row in iter_tsv(args.sequences_tsv, required_columns=SEQUENCES_REQUIRED)
+        if row.get("sequence_id", "") in needed_sequence_ids
+    }
+    cds_records = {
+        sequence_id: cds_sequence
+        for sequence_id, cds_sequence in iter_fasta(args.cds_fasta)
+        if sequence_id in needed_sequence_ids
+    }
 
-    sequence_rows_by_id = {row.get("sequence_id", ""): row for row in sequence_rows}
-    enriched_rows: list[dict[str, object]] = []
-    warning_rows: list[dict[str, object]] = []
-    codon_usage_rows: list[dict[str, object]] = []
+    with (
+        open_tsv_writer(output_calls_path, fieldnames=CALL_FIELDNAMES) as calls_writer,
+        open_tsv_writer(warning_path, fieldnames=WARNING_FIELDNAMES) as warning_writer,
+        open_tsv_writer(codon_usage_path, fieldnames=CODON_USAGE_FIELDNAMES) as codon_usage_writer,
+    ):
+        for row in iter_tsv(calls_path, required_columns=CALLS_REQUIRED):
+            output_row = {field: row.get(field, "") for field in CALL_FIELDNAMES}
+            output_row["codon_sequence"] = ""
+            output_row["codon_metric_name"] = ""
+            output_row["codon_metric_value"] = ""
 
-    for row in call_rows:
-        output_row = {field: row.get(field, "") for field in CALL_FIELDNAMES}
-        output_row["codon_sequence"] = ""
-        output_row["codon_metric_name"] = ""
-        output_row["codon_metric_value"] = ""
-
-        sequence_id = str(row.get("sequence_id", ""))
-        sequence_row = sequence_rows_by_id.get(sequence_id)
-        if sequence_row is None:
-            warning_rows.append(
-                build_warning_row(
-                    "codon_slice_failed",
-                    "call",
-                    "No canonical CDS row was found for the call sequence_id",
-                    genome_id=row.get("genome_id", ""),
-                    sequence_id=sequence_id,
-                    protein_id=row.get("protein_id", ""),
-                    source_file=str(calls_path.resolve()),
+            sequence_id = str(row.get("sequence_id", ""))
+            sequence_row = sequence_rows_by_id.get(sequence_id)
+            if sequence_row is None:
+                warning_writer.write_row(
+                    build_warning_row(
+                        "codon_slice_failed",
+                        "call",
+                        "No canonical CDS row was found for the call sequence_id",
+                        genome_id=row.get("genome_id", ""),
+                        sequence_id=sequence_id,
+                        protein_id=row.get("protein_id", ""),
+                        source_file=str(calls_path.resolve()),
+                    )
                 )
+                validate_call_row(output_row)
+                calls_writer.write_row(output_row)
+                continue
+
+            cds_sequence = cds_records.get(sequence_id)
+            if cds_sequence is None:
+                warning_writer.write_row(
+                    build_warning_row(
+                        "codon_slice_failed",
+                        "call",
+                        "Normalized CDS FASTA is missing the call sequence_id",
+                        genome_id=row.get("genome_id", ""),
+                        sequence_id=sequence_id,
+                        protein_id=row.get("protein_id", ""),
+                        source_file=str(Path(args.cds_fasta).resolve()),
+                    )
+                )
+                validate_call_row(output_row)
+                calls_writer.write_row(output_row)
+                continue
+
+            result = extract_call_codons(
+                cds_sequence,
+                aa_start=int(row.get("start", 0)),
+                aa_end=int(row.get("end", 0)),
+                aa_sequence=str(row.get("aa_sequence", "")),
+                translation_table=sequence_row.get("translation_table", "1"),
             )
+            if result.accepted:
+                output_row["codon_sequence"] = result.codon_sequence
+                codon_usage_writer.write_rows(
+                    build_codon_usage_rows(
+                        output_row,
+                        translation_table=sequence_row.get("translation_table", "1"),
+                    )
+                )
+            else:
+                warning_writer.write_row(
+                    build_warning_row(
+                        "codon_slice_failed",
+                        "call",
+                        result.warning_message,
+                        genome_id=row.get("genome_id", ""),
+                        sequence_id=sequence_id,
+                        protein_id=row.get("protein_id", ""),
+                        assembly_accession=sequence_row.get("assembly_accession", ""),
+                        source_file=str(Path(args.cds_fasta).resolve()),
+                        source_record_id=sequence_row.get("source_record_id", ""),
+                    )
+                )
+
             validate_call_row(output_row)
-            enriched_rows.append(output_row)
-            continue
-
-        cds_sequence = cds_records.get(sequence_id)
-        if cds_sequence is None:
-            warning_rows.append(
-                build_warning_row(
-                    "codon_slice_failed",
-                    "call",
-                    "Normalized CDS FASTA is missing the call sequence_id",
-                    genome_id=row.get("genome_id", ""),
-                    sequence_id=sequence_id,
-                    protein_id=row.get("protein_id", ""),
-                    source_file=str(Path(args.cds_fasta).resolve()),
-                )
-            )
-            validate_call_row(output_row)
-            enriched_rows.append(output_row)
-            continue
-
-        result = extract_call_codons(
-            cds_sequence,
-            aa_start=int(row.get("start", 0)),
-            aa_end=int(row.get("end", 0)),
-            aa_sequence=str(row.get("aa_sequence", "")),
-            translation_table=sequence_row.get("translation_table", "1"),
-        )
-        if result.accepted:
-            output_row["codon_sequence"] = result.codon_sequence
-            codon_usage_rows.extend(
-                build_codon_usage_rows(
-                    output_row,
-                    translation_table=sequence_row.get("translation_table", "1"),
-                )
-            )
-        else:
-            warning_rows.append(
-                build_warning_row(
-                    "codon_slice_failed",
-                    "call",
-                    result.warning_message,
-                    genome_id=row.get("genome_id", ""),
-                    sequence_id=sequence_id,
-                    protein_id=row.get("protein_id", ""),
-                    assembly_accession=sequence_row.get("assembly_accession", ""),
-                    source_file=str(Path(args.cds_fasta).resolve()),
-                    source_record_id=sequence_row.get("source_record_id", ""),
-                )
-            )
-
-        validate_call_row(output_row)
-        enriched_rows.append(output_row)
-
-    write_tsv(output_calls_path, enriched_rows, fieldnames=CALL_FIELDNAMES)
-    write_tsv(warning_path, warning_rows, fieldnames=WARNING_FIELDNAMES)
-    write_tsv(codon_usage_path, codon_usage_rows, fieldnames=CODON_USAGE_FIELDNAMES)
+            calls_writer.write_row(output_row)
 
 
 def _write_failed_outputs(args: argparse.Namespace) -> None:

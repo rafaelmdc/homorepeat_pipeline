@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 from contextlib import contextmanager
+from itertools import zip_longest
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Sequence
 
-from .tsv_io import ensure_directory
+from .tsv_io import ContractError, ensure_directory, iter_tsv
 
 
 def read_fasta(path: Path | str) -> list[tuple[str, str]]:
@@ -36,6 +37,36 @@ def iter_fasta(path: Path | str) -> Iterator[tuple[str, str]]:
             chunks.append(line)
     if header is not None:
         yield (header, "".join(chunks))
+
+
+def iter_tsv_fasta_pairs(
+    tsv_path: Path | str,
+    fasta_path: Path | str,
+    *,
+    required_columns: Sequence[str],
+    id_field: str,
+) -> Iterator[tuple[dict[str, str], str]]:
+    """Yield aligned TSV rows and FASTA sequences keyed by the same identifier."""
+
+    fasta_file_path = Path(fasta_path)
+    row_iter = iter_tsv(tsv_path, required_columns=required_columns)
+    fasta_iter = iter_fasta(fasta_file_path)
+    for row, record in zip_longest(row_iter, fasta_iter):
+        if row is None:
+            header, _sequence = record
+            raise ContractError(f"{fasta_file_path} has unexpected FASTA record {header}")
+
+        expected_id = row.get(id_field, "")
+        if record is None:
+            raise ContractError(f"{fasta_file_path} is missing {id_field} {expected_id}")
+
+        header, sequence = record
+        if header != expected_id:
+            raise ContractError(
+                f"{fasta_file_path} expected {id_field} {expected_id} but found FASTA header {header}"
+            )
+
+        yield row, sequence
 
 
 def write_fasta(path: Path | str, records: Iterable[tuple[str, str]], *, width: int = 80) -> None:

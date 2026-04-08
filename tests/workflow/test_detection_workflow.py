@@ -44,7 +44,7 @@ class DetectionWorkflowTest(unittest.TestCase):
 
                     workflow {{
                       main:
-                      batch_rows = Channel.value([ tuple('batch_0001', file(params.normalized_dir), file(params.translated_dir)) ])
+                      batch_rows = Channel.of(tuple('batch_0001', file(params.normalized_dir), file(params.translated_dir)))
                       detection = DETECTION_FROM_ACQUISITION(batch_rows)
                       merged = MERGE_CALL_TABLES(detection.call_tsvs, detection.run_params_tsvs)
 

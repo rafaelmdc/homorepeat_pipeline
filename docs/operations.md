@@ -80,8 +80,9 @@ They do not define the canonical published output contract for full pipeline run
 - the Nextflow `docker` profile expects `homorepeat-acquisition:dev` and `homorepeat-detection:dev`
 - the canonical operator entrypoint is `nextflow run .`
 - the `local` profile still requires the repo CLIs and Python environment on the host; the `docker` profile keeps task execution inside the runtime images
-- batch planning defaults to `params.batch_size = 25`
+- batch planning defaults to `params.batch_size = 10`
 - task-level parallelism is controlled by Nextflow labels in `conf/base.config`
+- for larger runs, prefer `--work_dir` on fast local scratch; if unset, Nextflow work data defaults to `runs/<run_id>/internal/nextflow/work`
 
 ## Published outputs
 

@@ -1,5 +1,5 @@
 process TRANSLATE_CDS_BATCH {
-    label 'acquisition_normalize'
+    label 'acquisition_translate'
     tag { batch_id }
 
     input:

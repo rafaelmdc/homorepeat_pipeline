@@ -8,10 +8,10 @@ import sys
 from pathlib import Path
 
 from homorepeat.detection.detect_pure import find_pure_tracts  # noqa: E402
-from homorepeat.io.fasta_io import read_fasta  # noqa: E402
+from homorepeat.io.fasta_io import iter_tsv_fasta_pairs  # noqa: E402
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, build_call_row  # noqa: E402
 from homorepeat.contracts.run_params import write_run_params  # noqa: E402
-from homorepeat.io.tsv_io import ContractError, read_tsv, write_tsv  # noqa: E402
+from homorepeat.io.tsv_io import ContractError, open_tsv_writer, write_tsv  # noqa: E402
 from homorepeat.runtime.stage_status import build_stage_status, write_stage_status  # noqa: E402
 
 
@@ -67,45 +67,35 @@ def _run(args: argparse.Namespace) -> None:
     if args.min_repeat_count < 1:
         raise ContractError("--min-repeat-count must be positive")
 
-    proteins_rows = read_tsv(args.proteins_tsv, required_columns=PROTEINS_REQUIRED)
-    protein_records = dict(read_fasta(args.proteins_fasta))
     outdir = Path(args.outdir)
 
-    call_rows: list[dict[str, object]] = []
-    for row in proteins_rows:
-        protein_id = row.get("protein_id", "")
-        protein_sequence = protein_records.get(protein_id)
-        if protein_sequence is None:
-            raise ContractError(f"Protein FASTA is missing protein_id {protein_id}")
-
-        for tract in find_pure_tracts(
-            protein_sequence,
-            repeat_residue,
-            min_repeat_count=args.min_repeat_count,
+    with open_tsv_writer(outdir / "pure_calls.tsv", fieldnames=CALL_FIELDNAMES) as call_writer:
+        for row, protein_sequence in iter_tsv_fasta_pairs(
+            args.proteins_tsv,
+            args.proteins_fasta,
+            required_columns=PROTEINS_REQUIRED,
+            id_field="protein_id",
         ):
-            call_rows.append(
-                build_call_row(
-                    method="pure",
-                    genome_id=row.get("genome_id", ""),
-                    taxon_id=row.get("taxon_id", ""),
-                    sequence_id=row.get("sequence_id", ""),
-                    protein_id=protein_id,
-                    repeat_residue=repeat_residue,
-                    start=tract.start,
-                    end=tract.end,
-                    aa_sequence=tract.aa_sequence,
-                    merge_rule="contiguous_run",
+            protein_id = row.get("protein_id", "")
+            for tract in find_pure_tracts(
+                protein_sequence,
+                repeat_residue,
+                min_repeat_count=args.min_repeat_count,
+            ):
+                call_writer.write_row(
+                    build_call_row(
+                        method="pure",
+                        genome_id=row.get("genome_id", ""),
+                        taxon_id=row.get("taxon_id", ""),
+                        sequence_id=row.get("sequence_id", ""),
+                        protein_id=protein_id,
+                        repeat_residue=repeat_residue,
+                        start=tract.start,
+                        end=tract.end,
+                        aa_sequence=tract.aa_sequence,
+                        merge_rule="contiguous_run",
+                    )
                 )
-            )
-
-    call_rows.sort(
-        key=lambda row: (
-            str(row.get("protein_id", "")),
-            int(row.get("start", 0)),
-            str(row.get("call_id", "")),
-        )
-    )
-    write_tsv(outdir / "pure_calls.tsv", call_rows, fieldnames=CALL_FIELDNAMES)
     write_run_params(
         outdir / "run_params.tsv",
         "pure",

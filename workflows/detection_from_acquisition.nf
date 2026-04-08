@@ -32,23 +32,17 @@ workflow DETECTION_FROM_ACQUISITION {
     def finalizedCallCh = Channel.empty()
     def detectStatusCh = Channel.empty()
     def finalizeStatusCh = Channel.empty()
-    def normalizedBatchDirLookupByResidue = {
-        batch_rows.flatMap { rows ->
-            rows.collectMany { row ->
-                def batch_id = row[0]
-                def normalized_batch_dir = row[1]
-                repeatResidues.collect { repeatResidue ->
-                    tuple("${batch_id}::${repeatResidue}", normalized_batch_dir)
-                }
+    def attachBatchDir = { callsChannel ->
+        def normalizedBatchDirLookup = batch_rows.flatMap { batch_id, normalized_batch_dir, translated_batch_dir ->
+            repeatResidues.collect { repeatResidue ->
+                tuple("${batch_id}::${repeatResidue}", normalized_batch_dir)
             }
         }
-    }
-    def attachBatchDir = { callsChannel ->
         callsChannel
             .map { batch_id, method, repeatResidue, call_tsv, run_params_tsv ->
                 tuple("${batch_id}::${repeatResidue}", batch_id, method, repeatResidue, call_tsv, run_params_tsv)
             }
-            .join(normalizedBatchDirLookupByResidue())
+            .join(normalizedBatchDirLookup)
             .map { composite_key, batch_id, method, repeatResidue, call_tsv, run_params_tsv, normalized_batch_dir ->
                 tuple(batch_id, method, repeatResidue, call_tsv, run_params_tsv, normalized_batch_dir)
             }
@@ -56,10 +50,8 @@ workflow DETECTION_FROM_ACQUISITION {
 
     if( params.run_pure ) {
         pureDetection = DETECT_PURE(
-            batch_rows.flatMap { rows ->
-                rows.collectMany { row ->
-                    repeatResidues.collect { residue -> tuple(row[0], residue, row[2]) }
-                }
+            batch_rows.flatMap { batch_id, normalized_batch_dir, translated_batch_dir ->
+                repeatResidues.collect { residue -> tuple(batch_id, residue, translated_batch_dir) }
             }
         )
         pureFinalize = FINALIZE_PURE_CALL_CODONS(attachBatchDir(pureDetection.calls))
@@ -70,10 +62,8 @@ workflow DETECTION_FROM_ACQUISITION {
 
     if( params.run_threshold ) {
         thresholdDetection = DETECT_THRESHOLD(
-            batch_rows.flatMap { rows ->
-                rows.collectMany { row ->
-                    repeatResidues.collect { residue -> tuple(row[0], residue, row[2]) }
-                }
+            batch_rows.flatMap { batch_id, normalized_batch_dir, translated_batch_dir ->
+                repeatResidues.collect { residue -> tuple(batch_id, residue, translated_batch_dir) }
             }
         )
         thresholdFinalize = FINALIZE_THRESHOLD_CALL_CODONS(attachBatchDir(thresholdDetection.calls))
@@ -84,10 +74,8 @@ workflow DETECTION_FROM_ACQUISITION {
 
     if( params.run_seed_extend ) {
         seedExtendDetection = DETECT_SEED_EXTEND(
-            batch_rows.flatMap { rows ->
-                rows.collectMany { row ->
-                    repeatResidues.collect { residue -> tuple(row[0], residue, row[2]) }
-                }
+            batch_rows.flatMap { batch_id, normalized_batch_dir, translated_batch_dir ->
+                repeatResidues.collect { residue -> tuple(batch_id, residue, translated_batch_dir) }
             }
         )
         seedExtendFinalize = FINALIZE_SEED_EXTEND_CALL_CODONS(attachBatchDir(seedExtendDetection.calls))
