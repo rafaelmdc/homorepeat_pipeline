@@ -79,7 +79,8 @@ This complements Nextflow caching:
 ## What was verified
 
 As of April 8, 2026:
-- real Docker smoke runs on 5 live NCBI accessions completed successfully
+- a real Docker benchmark run on 1 live NCBI accession completed successfully after the canonical ID migration
 - batch fan-out was observed in the Nextflow trace
 - multi-residue runs (`Q,N`) now merge correctly into canonical `repeat_calls.tsv` and residue-scoped `run_params.tsv`
 - accession status and per-method/per-residue call counts were published correctly
+- source-derived canonical IDs were verified in live published outputs and SQLite import

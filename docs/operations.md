@@ -110,9 +110,14 @@ Execution state lives under:
 
 Verified on April 8, 2026:
 - `bash scripts/build_dev_containers.sh`
-- full live Nextflow smoke run through the `docker` profile on 5 real NCBI accessions with `batch_size=2`
+- full live Nextflow smoke run through the `docker` profile on 1 real NCBI accession with `batch_size=1`
 - canonical outputs confirmed after the contract cleanup removing row-level `download_path`, `sequence_path`, `protein_path`, and `source_file`
-- one-accession Docker smoke run confirmed the published layout under `publish/`, including `publish/metadata/nextflow/` symlinks and `publish/calls/finalized/`
+- one-accession Docker benchmark run confirmed the published layout under `publish/`, including `publish/metadata/nextflow/` symlinks and `publish/calls/finalized/`
+- source-derived canonical IDs were verified in live outputs:
+  - `genome_id = assembly_accession`
+  - `sequence_id = assembly_accession::...`
+  - `protein_id = sequence_id::protein`
+  - `call_id = method::protein_id::repeat_residue::start-end`
 
 Latest verified run:
-- `runs/smoke_e2e_workflow_outputs_v3`
+- `runs/live_benchmark_small_2026_04_08`

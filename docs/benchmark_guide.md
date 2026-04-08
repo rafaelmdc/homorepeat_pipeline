@@ -20,6 +20,24 @@ The current baseline came from `runs/real_run_chr_v2`:
 
 That means later improvements should be judged against the same benchmark input and these same measurement categories, not against ad hoc smoke runs alone.
 
+## Latest live verification
+
+The latest post-fix live verification run is:
+
+- `runs/live_benchmark_small_2026_04_08`
+
+This was a one-accession Docker run against `examples/accessions/smoke_human.txt` after the canonical ID migration from truncated hashes to source-derived text IDs.
+
+Observed summary:
+- elapsed time was about `89.4s`
+- run root size was about `3.1 GB`
+- `NORMALIZE_CDS_BATCH` peak RSS was about `533 MB`
+- `TRANSLATE_CDS_BATCH` peak RSS was about `223 MB`
+- `MERGE_ACQUISITION_BATCHES` completed successfully
+- published outputs confirmed source-derived IDs end to end
+
+This run is a correctness and smoke-scale benchmark, not the scale reference benchmark.
+
 ## Measurement checklist
 
 For each benchmark rerun, capture:

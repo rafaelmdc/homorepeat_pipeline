@@ -143,6 +143,12 @@ Rules:
 - canonical FASTA artifacts live at stable published paths under `publish/acquisition/`
 - canonical TSV rows do not repeat stable artifact paths such as `sequence_path` or `protein_path`
 
+Current identifier policy:
+- `genome_id` is the real assembly accession
+- `sequence_id` is source-derived from `assembly_accession` plus CDS identity, usually the resolved transcript identifier
+- `protein_id` is `sequence_id::protein`
+- call rows derive `call_id` from method, protein, residue, and coordinates rather than from a truncated hash
+
 ### CDS normalization and translation
 
 Default normalization authority:

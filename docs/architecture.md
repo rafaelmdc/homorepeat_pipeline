@@ -353,9 +353,9 @@ Avoid giant mixed-purpose processes.
 
 Identifier policy
 
-The project should define one canonical identifier strategy and preserve it throughout the workflow.
+The project should preserve one canonical identifier strategy throughout the workflow.
 
-Recommended internal IDs:
+Current canonical IDs:
 
 genome_id
 taxon_id
@@ -363,7 +363,15 @@ sequence_id
 protein_id
 call_id
 
-External identifiers may also be stored, but internal IDs should be the stable relational backbone.
+Current policy:
+
+- `genome_id` is the real assembly accession
+- `taxon_id` is the NCBI taxid as text
+- `sequence_id` is source-derived from accession plus CDS identity
+- `protein_id` is derived directly from `sequence_id`
+- `call_id` is derived from method, protein, residue, and amino-acid coordinates
+
+External identifiers are still stored explicitly, but these canonical IDs are the stable relational backbone.
 
 Output philosophy
 

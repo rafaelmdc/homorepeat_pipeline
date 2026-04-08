@@ -38,7 +38,7 @@ Pure, threshold, and seed-extend outputs must share the same call schema.
 
 ## Canonical identifiers
 
-The following internal identifiers are recommended:
+The current canonical identifiers are:
 
 - `genome_id`
 - `taxon_id`
@@ -47,9 +47,22 @@ The following internal identifiers are recommended:
 - `call_id`
 
 Rules:
-- internal IDs must be stable within a pipeline run
+- canonical IDs are source-derived text identifiers, not truncated hash IDs
+- canonical IDs must remain stable across reruns when the same accession and source annotations produce the same retained records
 - downstream tables should prefer internal IDs over fragile filename parsing
 - external identifiers may be preserved in separate columns
+
+Current shapes:
+- `genome_id = assembly_accession`
+- `taxon_id = NCBI taxid as text`
+- `sequence_id = assembly_accession::primary_sequence_key`
+- `protein_id = sequence_id::protein`
+- `call_id = method::protein_id::repeat_residue::start-end`
+
+Notes:
+- `primary_sequence_key` is usually the resolved transcript identifier and falls back to source-backed CDS identity when transcript-level identity is not available
+- when transcript-level identity is ambiguous within one accession, the normalized `sequence_id` expands to include source-backed disambiguation fields instead of collapsing records into a short hash collision
+- external identifiers such as `transcript_id`, `protein_external_id`, and `source_record_id` are preserved as explicit columns rather than encoded into opaque reversible IDs
 
 ---
 
@@ -104,11 +117,13 @@ Required columns:
 - `genome_name`
 - `assembly_type`
 - `taxon_id`
-
-Optional columns:
 - `assembly_level`
 - `species_name`
 - `notes`
+
+Rules:
+- `genome_id` is the real assembly accession used as the canonical relational key
+- all columns above are part of the stable emitted schema, even if a specific value is empty
 
 ---
 
@@ -141,13 +156,21 @@ Required columns:
 - `genome_id`
 - `sequence_name`
 - `sequence_length`
-
-Optional columns:
 - `gene_symbol`
 - `transcript_id`
 - `isoform_id`
+- `assembly_accession`
+- `taxon_id`
+- `source_record_id`
+- `protein_external_id`
+- `translation_table`
+- `gene_group`
+- `linkage_status`
+- `partial_status`
 
 Rules:
+- all columns above are part of the canonical schema; some biologically optional values may still be emitted as empty strings
+- `sequence_id` is source-derived and should be human-auditable from the accession plus CDS identity
 - row-level sequence tables must not repeat canonical FASTA paths; the normalized CDS FASTA lives at the stable published path `publish/acquisition/cds.fna`
 
 ---
@@ -164,13 +187,17 @@ Required columns:
 - `genome_id`
 - `protein_name`
 - `protein_length`
-
-Optional columns:
 - `gene_symbol`
 - `translation_method`
 - `translation_status`
+- `assembly_accession`
+- `taxon_id`
+- `gene_group`
+- `protein_external_id`
 
 Rules:
+- all columns above are part of the canonical schema; some biologically optional values may still be emitted as empty strings
+- `protein_id` is derived from `sequence_id` and is not an independent opaque hash
 - row-level protein tables must not repeat canonical FASTA paths; the canonical translated protein FASTA lives at the stable published path `publish/acquisition/proteins.faa`
 
 ---
@@ -200,8 +227,6 @@ Required columns:
 - `non_repeat_count`
 - `purity`
 - `aa_sequence`
-
-Optional but strongly recommended columns:
 - `codon_sequence`
 - `codon_metric_name`
 - `codon_metric_value`
@@ -211,6 +236,7 @@ Optional but strongly recommended columns:
 - `score`
 
 ### Rules
+- all columns above are part of the canonical merged call schema; values such as `codon_sequence`, `codon_metric_name`, `codon_metric_value`, `template_name`, `merge_rule`, and `score` may be empty when a method or stage does not populate them
 - `method` must be one of: `pure`, `threshold`, `seed_extend`
 - `repeat_calls.tsv` is the canonical merged export for downstream database and app ingestion
 - `start` and `end` use the same coordinate system across all methods
@@ -218,6 +244,7 @@ Optional but strongly recommended columns:
 - `length` is the total tract length, including non-target residues if the method definition allows them
 - `purity` is a numeric fraction from 0 to 1
 - `aa_sequence` must reflect the called tract sequence exactly
+- `call_id` is source-derived from `method`, `protein_id`, `repeat_residue`, and amino-acid coordinates
 - for `pure`, `aa_sequence` is expected to be a contiguous run of `repeat_residue`
 - for `threshold`, `window_definition` should record the qualifying sliding-window rule, such as `Q6/8`
 - for `seed_extend`, `window_definition` should record both seed and extend rules, such as `seed:Q6/8|extend:Q8/12`
