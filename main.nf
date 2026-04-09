@@ -4,6 +4,7 @@ include { ACQUISITION_FROM_ACCESSIONS } from './workflows/acquisition_from_acces
 include { DETECTION_FROM_ACQUISITION } from './workflows/detection_from_acquisition'
 include { DATABASE_REPORTING } from './workflows/database_reporting'
 include { BUILD_ACCESSION_STATUS } from './modules/local/reporting/build_accession_status'
+include { MERGE_CALL_TABLES } from './modules/local/reporting/merge_call_tables'
 
 def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
   "${projectDir}/runtime/output_placeholders/workflow_output_placeholder.txt",
@@ -45,7 +46,27 @@ def finalizedPublishTarget = { batchId, method, repeatResidue, finalizedDir ->
     : "calls/finalized/${method}/${repeatResidue}"
 }
 
+def normalizedAcquisitionPublishMode = {
+  def mode = (params.acquisition_publish_mode ?: 'raw').toString().trim().toLowerCase()
+  if( !['raw', 'merged'].contains(mode) ) {
+    error "params.acquisition_publish_mode must be one of: raw, merged"
+  }
+  mode
+}
+
+def effectiveManifestParams = { acquisitionPublishMode ->
+  [
+    acquisition_publish_mode: acquisitionPublishMode,
+    batch_size              : params.batch_size,
+    repeat_residues         : params.repeat_residues,
+    run_pure                : params.run_pure,
+    run_threshold           : params.run_threshold,
+    run_seed_extend         : params.run_seed_extend,
+  ]
+}
+
 workflow {
+  def acquisitionPublishMode = normalizedAcquisitionPublishMode()
   acquisition = ACQUISITION_FROM_ACCESSIONS()
   detection = DETECTION_FROM_ACQUISITION(
     acquisition.batch_rows,
@@ -57,14 +78,35 @@ workflow {
     detection.detect_status_jsons,
     detection.finalize_status_jsons,
   )
-  reporting = DATABASE_REPORTING(
-    acquisition.taxonomy_tsv,
-    acquisition.genomes_tsv,
-    acquisition.sequences_tsv,
-    acquisition.proteins_tsv,
+  canonicalCalls = MERGE_CALL_TABLES(
     detection.call_tsvs,
     detection.run_params_tsvs,
   )
+  def databaseSqliteCh = Channel.empty()
+  def databaseSqliteValidationCh = Channel.empty()
+  def reportsSummaryByTaxonCh = Channel.empty()
+  def reportsRegressionInputCh = Channel.empty()
+  def reportsEchartsOptionsCh = Channel.empty()
+  def reportsEchartsHtmlCh = Channel.empty()
+  def reportsEchartsJsCh = Channel.empty()
+
+  if( acquisitionPublishMode == 'merged' ) {
+    reporting = DATABASE_REPORTING(
+      acquisition.taxonomy_tsv,
+      acquisition.genomes_tsv,
+      acquisition.sequences_tsv,
+      acquisition.proteins_tsv,
+      canonicalCalls.repeat_calls_tsv,
+      canonicalCalls.run_params_tsv,
+    )
+    databaseSqliteCh = reporting.sqlite
+    databaseSqliteValidationCh = reporting.sqlite_validation
+    reportsSummaryByTaxonCh = reporting.summary_by_taxon
+    reportsRegressionInputCh = reporting.regression_input
+    reportsEchartsOptionsCh = reporting.echarts_options
+    reportsEchartsHtmlCh = reporting.echarts_report
+    reportsEchartsJsCh = reporting.echarts_js
+  }
 
   publish:
   acquisition_genomes = publishablePathChannel(acquisition.genomes_tsv)
@@ -76,16 +118,16 @@ workflow {
   acquisition_download_manifest = publishablePathChannel(acquisition.download_manifest_tsv)
   acquisition_normalization_warnings = publishablePathChannel(acquisition.normalization_warnings_tsv)
   acquisition_validation = publishablePathChannel(acquisition.acquisition_validation)
-  calls_repeat = publishablePathChannel(reporting.repeat_calls)
-  calls_params = publishablePathChannel(reporting.run_params)
+  calls_repeat = publishablePathChannel(canonicalCalls.repeat_calls_tsv)
+  calls_params = publishablePathChannel(canonicalCalls.run_params_tsv)
   calls_finalized = publishableFinalizedChannel(detection.finalized_dirs)
-  database_sqlite = publishablePathChannel(reporting.sqlite)
-  database_sqlite_validation = publishablePathChannel(reporting.sqlite_validation)
-  reports_summary_by_taxon = publishablePathChannel(reporting.summary_by_taxon)
-  reports_regression_input = publishablePathChannel(reporting.regression_input)
-  reports_echarts_options = publishablePathChannel(reporting.echarts_options)
-  reports_echarts_html = publishablePathChannel(reporting.echarts_report)
-  reports_echarts_js = publishablePathChannel(reporting.echarts_js)
+  database_sqlite = publishablePathChannel(databaseSqliteCh)
+  database_sqlite_validation = publishablePathChannel(databaseSqliteValidationCh)
+  reports_summary_by_taxon = publishablePathChannel(reportsSummaryByTaxonCh)
+  reports_regression_input = publishablePathChannel(reportsRegressionInputCh)
+  reports_echarts_options = publishablePathChannel(reportsEchartsOptionsCh)
+  reports_echarts_html = publishablePathChannel(reportsEchartsHtmlCh)
+  reports_echarts_js = publishablePathChannel(reportsEchartsJsCh)
   status_accession = publishablePathChannel(statusBuild.accession_status_tsv)
   status_accession_call_counts = publishablePathChannel(statusBuild.accession_call_counts_tsv)
   status_summary = publishablePathChannel(statusBuild.status_summary_json)
@@ -101,15 +143,15 @@ workflow {
   normalization_warnings_tsv = acquisition.normalization_warnings_tsv
   acquisition_validation = acquisition.acquisition_validation
   finalized_dirs = detection.finalized_dirs
-  repeat_calls = reporting.repeat_calls
-  run_params = reporting.run_params
-  sqlite = reporting.sqlite
-  sqlite_validation = reporting.sqlite_validation
-  summary_by_taxon = reporting.summary_by_taxon
-  regression_input = reporting.regression_input
-  echarts_options = reporting.echarts_options
-  echarts_report = reporting.echarts_report
-  echarts_js = reporting.echarts_js
+  repeat_calls = canonicalCalls.repeat_calls_tsv
+  run_params = canonicalCalls.run_params_tsv
+  sqlite = databaseSqliteCh
+  sqlite_validation = databaseSqliteValidationCh
+  summary_by_taxon = reportsSummaryByTaxonCh
+  regression_input = reportsRegressionInputCh
+  echarts_options = reportsEchartsOptionsCh
+  echarts_report = reportsEchartsHtmlCh
+  echarts_js = reportsEchartsJsCh
   accession_status = statusBuild.accession_status_tsv
   accession_call_counts = statusBuild.accession_call_counts_tsv
   status_summary = statusBuild.status_summary_json
@@ -161,5 +203,7 @@ workflow.onComplete {
     success: workflow.success,
     runName: workflow.runName,
     workDir: workflow.workDir,
+    acquisitionPublishMode: normalizedAcquisitionPublishMode(),
+    effectiveParams: effectiveManifestParams(normalizedAcquisitionPublishMode()),
   )
 }

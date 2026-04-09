@@ -1,12 +1,11 @@
 # Scale Guide
 
-For the redesign plan and implementation order, see:
+This guide summarizes the current scaling model, default resource shape, and operational advice for larger runs.
 
+Related stable docs:
 - [Benchmark Guide](./benchmark_guide.md)
-- [Pipeline Performance and Scalability Roadmap](./performance_roadmap.md)
-- [Pipeline Performance Implementation Slices](./performance_slices.md)
-- [Remaining Memory Streaming Roadmap](./memory_streaming_roadmap.md)
-- [Remaining Memory Streaming Slices](./memory_streaming_slices.md)
+- [Operations](./operations.md)
+- [Contracts](./contracts.md)
 
 ## Current scaling model
 
@@ -14,8 +13,12 @@ The pipeline now parallelizes both major heavy phases:
 - acquisition fans out by planned batch
 - detection and codon finalization fan out by `batch_id x method x repeat_residue`
 
-Canonical outputs remain merged under `publish/acquisition/`, `publish/calls/`, `publish/database/`, and `publish/reports/`.
-Run metadata publishes separately under `publish/metadata/`.
+Current published-layout rule:
+- `raw` is now the default acquisition publish mode and publishes acquisition artifacts under `publish/acquisition/batches/<batch_id>/`
+- `merged` keeps the legacy flat acquisition bundle under `publish/acquisition/`
+- canonical `publish/calls/` remains present in both modes
+- `publish/database/` and `publish/reports/` are merged-only
+- run metadata publishes separately under `publish/metadata/` and is the authoritative place to detect the mode
 
 ## Default concurrency and memory
 
@@ -78,9 +81,9 @@ This complements Nextflow caching:
 
 ## What was verified
 
-As of April 8, 2026:
-- a real Docker benchmark run on 1 live NCBI accession completed successfully after the canonical ID migration
-- batch fan-out was observed in the Nextflow trace
-- multi-residue runs (`Q,N`) now merge correctly into canonical `repeat_calls.tsv` and residue-scoped `run_params.tsv`
-- accession status and per-method/per-residue call counts were published correctly
-- source-derived canonical IDs were verified in live published outputs and SQLite import
+As of April 9, 2026:
+- live Docker smokes against NCBI completed successfully in both `raw` and `merged` acquisition publish modes
+- live multi-batch Docker runs with `batch_size=2` completed successfully in both `raw` and `merged` modes
+- `raw` runs published flat batch roots under `publish/acquisition/batches/<batch_id>/`
+- `merged` runs published the legacy flat acquisition bundle plus merged-only database and report artifacts
+- manifests now distinguish `params.params_file_values` from `params.effective_values`, so CLI overrides such as `--batch_size 1` are recorded correctly

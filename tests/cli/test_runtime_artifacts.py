@@ -306,6 +306,8 @@ class RuntimeArtifactsTest(unittest.TestCase):
                     "2026-04-06T00:05:00Z",
                     "--status",
                     "success",
+                    "--acquisition-publish-mode",
+                    "merged",
                     "--outpath",
                     str(manifest_path),
                 ],
@@ -325,6 +327,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run_id"], "run_001")
             self.assertEqual(payload["status"], "success")
+            self.assertEqual(payload["acquisition_publish_mode"], "merged")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")
@@ -378,6 +381,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                     "--started-at-utc", "2026-04-06T00:00:00Z",
                     "--finished-at-utc", "2026-04-06T00:05:00Z",
                     "--status", "success",
+                    "--acquisition-publish-mode", "raw",
                     "--outpath", str(manifest_path),
                 ],
                 cwd=REPO_ROOT,
@@ -394,11 +398,175 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["acquisition_publish_mode"], "raw")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["N", "Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["N"]["min_repeat_count"], "6")
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")
             self.assertEqual(payload["artifacts"]["metadata"]["trace_txt"], "publish/metadata/nextflow/trace.txt")
+
+    def test_write_run_manifest_cli_records_raw_batch_acquisition_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            run_root = tmp / "runs" / "run_raw"
+            publish_root = run_root / "publish"
+            (publish_root / "acquisition" / "batches" / "batch_0001").mkdir(parents=True, exist_ok=True)
+            (publish_root / "calls").mkdir(parents=True, exist_ok=True)
+            (publish_root / "metadata" / "nextflow").mkdir(parents=True, exist_ok=True)
+            (publish_root / "status").mkdir(parents=True, exist_ok=True)
+
+            (publish_root / "acquisition" / "batches" / "batch_0001" / "taxonomy.tsv").write_text("stub\n", encoding="utf-8")
+            (publish_root / "calls" / "repeat_calls.tsv").write_text("stub\n", encoding="utf-8")
+            (publish_root / "calls" / "run_params.tsv").write_text(
+                "method\trepeat_residue\tparam_name\tparam_value\n"
+                "pure\tQ\tmin_repeat_count\t6\n",
+                encoding="utf-8",
+            )
+            (publish_root / "metadata" / "nextflow" / "trace.txt").write_text("stub\n", encoding="utf-8")
+            (publish_root / "status" / "accession_status.tsv").write_text("stub\n", encoding="utf-8")
+
+            accessions_file = tmp / "accessions.txt"
+            taxonomy_db = tmp / "taxonomy.sqlite"
+            launch_metadata = publish_root / "metadata" / "launch_metadata.json"
+            manifest_path = publish_root / "metadata" / "run_manifest.json"
+            accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
+            taxonomy_db.write_text("", encoding="utf-8")
+            launch_metadata.write_text('{"run_id":"run_raw"}\n', encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "homorepeat.cli.write_run_manifest",
+                    "--pipeline-root",
+                    str(REPO_ROOT),
+                    "--run-id",
+                    "run_raw",
+                    "--run-root",
+                    str(run_root),
+                    "--publish-root",
+                    str(publish_root),
+                    "--profile",
+                    "local",
+                    "--accessions-file",
+                    str(accessions_file),
+                    "--taxonomy-db",
+                    str(taxonomy_db),
+                    "--launch-metadata",
+                    str(launch_metadata),
+                    "--started-at-utc",
+                    "2026-04-06T00:00:00Z",
+                    "--finished-at-utc",
+                    "2026-04-06T00:05:00Z",
+                    "--status",
+                    "success",
+                    "--acquisition-publish-mode",
+                    "raw",
+                    "--outpath",
+                    str(manifest_path),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"write_run_manifest failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["acquisition_publish_mode"], "raw")
+            self.assertEqual(payload["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
+            self.assertNotIn("genomes_tsv", payload["artifacts"]["acquisition"])
+            self.assertEqual(payload["artifacts"]["calls"]["repeat_calls_tsv"], "publish/calls/repeat_calls.tsv")
+            self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
+            self.assertEqual(payload["artifacts"]["database"], {})
+            self.assertEqual(payload["artifacts"]["reports"], {})
+
+    def test_write_run_manifest_cli_records_effective_params_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            run_root = tmp / "runs" / "run_effective"
+            publish_root = run_root / "publish"
+            (publish_root / "calls").mkdir(parents=True, exist_ok=True)
+            (publish_root / "metadata" / "nextflow").mkdir(parents=True, exist_ok=True)
+
+            (publish_root / "calls" / "run_params.tsv").write_text(
+                "method\trepeat_residue\tparam_name\tparam_value\n"
+                "pure\tQ\tmin_repeat_count\t6\n",
+                encoding="utf-8",
+            )
+            (publish_root / "metadata" / "nextflow" / "trace.txt").write_text("stub\n", encoding="utf-8")
+
+            accessions_file = tmp / "accessions.txt"
+            taxonomy_db = tmp / "taxonomy.sqlite"
+            params_file = tmp / "params.json"
+            launch_metadata = publish_root / "metadata" / "launch_metadata.json"
+            manifest_path = publish_root / "metadata" / "run_manifest.json"
+            accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
+            taxonomy_db.write_text("", encoding="utf-8")
+            params_file.write_text(
+                json.dumps({"repeat_residues": "Q", "run_pure": True, "run_threshold": True, "batch_size": 10}),
+                encoding="utf-8",
+            )
+            launch_metadata.write_text('{"run_id":"run_effective"}\n', encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "homorepeat.cli.write_run_manifest",
+                    "--pipeline-root",
+                    str(REPO_ROOT),
+                    "--run-id",
+                    "run_effective",
+                    "--run-root",
+                    str(run_root),
+                    "--publish-root",
+                    str(publish_root),
+                    "--profile",
+                    "local",
+                    "--accessions-file",
+                    str(accessions_file),
+                    "--taxonomy-db",
+                    str(taxonomy_db),
+                    "--launch-metadata",
+                    str(launch_metadata),
+                    "--started-at-utc",
+                    "2026-04-06T00:00:00Z",
+                    "--finished-at-utc",
+                    "2026-04-06T00:05:00Z",
+                    "--status",
+                    "success",
+                    "--acquisition-publish-mode",
+                    "raw",
+                    "--params-file",
+                    str(params_file),
+                    "--effective-params-json",
+                    json.dumps({"batch_size": 2, "run_pure": True, "run_threshold": True, "repeat_residues": "Q"}),
+                    "--outpath",
+                    str(manifest_path),
+                ],
+                cwd=REPO_ROOT,
+                env=CLI_ENV,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"write_run_manifest failed with exit code {result.returncode}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["params"]["params_file_values"]["batch_size"], 10)
+            self.assertEqual(payload["params"]["effective_values"]["batch_size"], 2)
 
 
 if __name__ == "__main__":

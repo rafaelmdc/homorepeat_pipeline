@@ -173,11 +173,13 @@ docker run --rm \
   -w /work \
   homorepeat-detection:dev \
   python -m homorepeat.cli.detect_threshold \
-  --proteins-tsv runs/run_001/publish/acquisition/proteins.tsv \
-  --proteins-fasta runs/run_001/publish/acquisition/proteins.faa \
+  --proteins-tsv runs/run_001/publish/acquisition/batches/batch_0001/proteins.tsv \
+  --proteins-fasta runs/run_001/publish/acquisition/batches/batch_0001/proteins.faa \
   --repeat-residue Q \
   --outdir runs/run_001/publish/detection/raw/threshold/Q
 ```
+
+If the source run used `--acquisition_publish_mode merged`, the legacy flat paths under `publish/acquisition/` remain valid.
 
 ---
 

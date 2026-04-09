@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -23,13 +24,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--started-at-utc", required=True, help="Run start timestamp")
     parser.add_argument("--finished-at-utc", required=True, help="Run finish timestamp")
     parser.add_argument("--status", default="success", help="Final run status")
+    parser.add_argument(
+        "--acquisition-publish-mode",
+        default="raw",
+        help="Acquisition publish mode: raw or merged",
+    )
     parser.add_argument("--params-file", help="Optional params file")
+    parser.add_argument(
+        "--effective-params-json",
+        help="Optional JSON object describing the effective runtime params after CLI overrides",
+    )
     parser.add_argument("--outpath", required=True, help="Manifest output path")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    effective_params = None
+    if args.effective_params_json:
+        effective_params = json.loads(args.effective_params_json)
+        if not isinstance(effective_params, dict):
+            raise ValueError("--effective-params-json must decode to a JSON object")
     payload = build_run_manifest(
         repo_root=Path(args.pipeline_root),
         run_id=args.run_id,
@@ -43,6 +58,8 @@ def main() -> int:
         started_at_utc=args.started_at_utc,
         finished_at_utc=args.finished_at_utc,
         status=args.status,
+        acquisition_publish_mode=args.acquisition_publish_mode,
+        effective_params=effective_params,
     )
     write_run_manifest(args.outpath, payload)
     return 0

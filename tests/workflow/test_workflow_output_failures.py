@@ -81,5 +81,7 @@ class WorkflowOutputFailureRegressionTest(unittest.TestCase):
 
             self.assertEqual(manifest["status"], "failed")
             self.assertEqual(launch["status"], "failed")
+            self.assertEqual(manifest["acquisition_publish_mode"], "raw")
+            self.assertEqual(launch["acquisition_publish_mode"], "raw")
+            self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
             self.assertFalse((publish_root / "calls").exists())
-

@@ -91,15 +91,18 @@ Stable downstream outputs live under:
 - `runs/<run_id>/publish/calls/`
 - `runs/<run_id>/publish/calls/finalized/`
 - `runs/<run_id>/publish/status/`
-- `runs/<run_id>/publish/database/`
-- `runs/<run_id>/publish/reports/`
 - `runs/<run_id>/publish/metadata/`
 
 Operational note:
+- `params.acquisition_publish_mode` controls the acquisition publish contract; the default is `raw`
+- in `raw` mode, acquisition outputs publish under `publish/acquisition/batches/<batch_id>/`
+- in `merged` mode, acquisition outputs publish as the legacy flat bundle under `publish/acquisition/`
 - `publish/calls/finalized/` contains method-specific finalized artifacts such as per-method call tables, run params, codon warnings, and codon-usage tables, grouped by method, repeat residue, and batch
 - `publish/calls/` contains the canonical merged `repeat_calls.tsv` and `run_params.tsv` used downstream
+- `publish/database/` and `publish/reports/` are present only in `merged` mode
 - `publish/status/` contains the accession-level operational ledger in `accession_status.tsv`, the per-method/per-residue breakdown in `accession_call_counts.tsv`, and run-level counts in `status_summary.json` when the reporting path completes
 - `publish/metadata/` contains `run_manifest.json`, `launch_metadata.json`, and stable relative symlinks under `publish/metadata/nextflow/` pointing back to `internal/nextflow/`
+- `publish/metadata/run_manifest.json` is the authoritative place to detect whether a run is `raw` or `merged`
 - native Nextflow run status and `publish/metadata/nextflow/report.html` are the authoritative failure surface
 
 Execution state lives under:

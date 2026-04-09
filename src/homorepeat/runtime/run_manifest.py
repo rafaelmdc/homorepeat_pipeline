@@ -10,18 +10,19 @@ from pathlib import Path
 from homorepeat.io.tsv_io import ensure_directory
 
 
+MERGED_ACQUISITION_ARTIFACTS = {
+    "genomes_tsv": "acquisition/genomes.tsv",
+    "taxonomy_tsv": "acquisition/taxonomy.tsv",
+    "sequences_tsv": "acquisition/sequences.tsv",
+    "proteins_tsv": "acquisition/proteins.tsv",
+    "cds_fasta": "acquisition/cds.fna",
+    "proteins_fasta": "acquisition/proteins.faa",
+    "download_manifest_tsv": "acquisition/download_manifest.tsv",
+    "normalization_warnings_tsv": "acquisition/normalization_warnings.tsv",
+    "acquisition_validation_json": "acquisition/acquisition_validation.json",
+}
+
 PUBLISHED_ARTIFACTS = {
-    "acquisition": {
-        "genomes_tsv": "acquisition/genomes.tsv",
-        "taxonomy_tsv": "acquisition/taxonomy.tsv",
-        "sequences_tsv": "acquisition/sequences.tsv",
-        "proteins_tsv": "acquisition/proteins.tsv",
-        "cds_fasta": "acquisition/cds.fna",
-        "proteins_fasta": "acquisition/proteins.faa",
-        "download_manifest_tsv": "acquisition/download_manifest.tsv",
-        "normalization_warnings_tsv": "acquisition/normalization_warnings.tsv",
-        "acquisition_validation_json": "acquisition/acquisition_validation.json",
-    },
     "calls": {
         "repeat_calls_tsv": "calls/repeat_calls.tsv",
         "run_params_tsv": "calls/run_params.tsv",
@@ -67,15 +68,19 @@ def build_run_manifest(
     started_at_utc: str,
     finished_at_utc: str,
     status: str,
+    acquisition_publish_mode: str,
+    effective_params: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build a stable JSON payload describing one pipeline run."""
 
+    normalized_publish_mode = _normalize_acquisition_publish_mode(acquisition_publish_mode)
     return {
         "run_id": run_id,
         "status": status,
         "started_at_utc": started_at_utc,
         "finished_at_utc": finished_at_utc,
         "profile": profile,
+        "acquisition_publish_mode": normalized_publish_mode,
         "git_revision": _git_revision(repo_root),
         "inputs": {
             "accessions_file": _relative_or_absolute(accessions_file, repo_root),
@@ -86,10 +91,19 @@ def build_run_manifest(
             "run_root": _relative_or_absolute(run_root, repo_root),
             "publish_root": _relative_or_absolute(publish_root, repo_root),
         },
-        "params": _manifest_params(publish_root=publish_root, params_file=params_file, run_root=run_root),
+        "params": _manifest_params(
+            publish_root=publish_root,
+            params_file=params_file,
+            run_root=run_root,
+            effective_params=effective_params,
+        ),
         "enabled_methods": _enabled_methods(publish_root),
         "repeat_residues": _repeat_residues(publish_root),
-        "artifacts": _collect_artifacts(run_root=run_root, publish_root=publish_root),
+        "artifacts": _collect_artifacts(
+            run_root=run_root,
+            publish_root=publish_root,
+            acquisition_publish_mode=normalized_publish_mode,
+        ),
     }
 
 
@@ -101,16 +115,40 @@ def write_run_manifest(path: Path | str, payload: dict[str, object]) -> None:
     file_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _collect_artifacts(*, run_root: Path, publish_root: Path) -> dict[str, dict[str, str]]:
+def _collect_artifacts(
+    *,
+    run_root: Path,
+    publish_root: Path,
+    acquisition_publish_mode: str,
+) -> dict[str, dict[str, str]]:
     artifacts: dict[str, dict[str, str]] = {}
+    acquisition_payload: dict[str, str] = {}
+    if acquisition_publish_mode == "raw":
+        batches_root = publish_root / "acquisition" / "batches"
+        if os.path.lexists(batches_root):
+            acquisition_payload["batches_root"] = _relative_or_absolute(batches_root, run_root)
+    else:
+        for key, relative_path in MERGED_ACQUISITION_ARTIFACTS.items():
+            candidate = publish_root / relative_path
+            if os.path.lexists(candidate):
+                acquisition_payload[key] = _relative_or_absolute(candidate, run_root)
+    artifacts["acquisition"] = acquisition_payload
+
     for section, files in PUBLISHED_ARTIFACTS.items():
         section_payload: dict[str, str] = {}
         for key, relative_path in files.items():
-            candidate = (publish_root / relative_path).resolve()
+            candidate = publish_root / relative_path
             if os.path.lexists(candidate):
                 section_payload[key] = _relative_or_absolute(candidate, run_root)
         artifacts[section] = section_payload
     return artifacts
+
+
+def _normalize_acquisition_publish_mode(mode: str) -> str:
+    normalized = (mode or "raw").strip().lower()
+    if normalized not in {"raw", "merged"}:
+        raise ValueError("acquisition_publish_mode must be one of: raw, merged")
+    return normalized
 
 
 def _git_revision(repo_root: Path) -> str:
@@ -134,18 +172,27 @@ def _relative_or_absolute(path: Path, root: Path) -> str:
         return str(path.resolve())
 
 
-def _manifest_params(*, publish_root: Path, params_file: Path | None, run_root: Path) -> dict[str, object]:
+def _manifest_params(
+    *,
+    publish_root: Path,
+    params_file: Path | None,
+    run_root: Path,
+    effective_params: dict[str, object] | None,
+) -> dict[str, object]:
+    params_file_values: dict[str, object] = {}
+    if params_file and params_file.is_file():
+        try:
+            params_file_values = json.loads(params_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            params_file_values = {}
+
     payload: dict[str, object] = {
         "run_root": str(run_root.resolve()),
         "publish_root": str(publish_root.resolve()),
-        "params_file_values": {},
+        "params_file_values": params_file_values,
+        "effective_values": effective_params if effective_params is not None else params_file_values,
         "detection": _read_method_params(publish_root),
     }
-    if params_file and params_file.is_file():
-        try:
-            payload["params_file_values"] = json.loads(params_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            payload["params_file_values"] = {}
     return payload
 
 

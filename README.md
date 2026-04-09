@@ -200,6 +200,7 @@ Detection and biology:
 
 Acquisition and batching:
 - `batch_size`
+- `acquisition_publish_mode`
 - `ncbi_api_key`
 - `ncbi_cache_dir`
 - `ncbi_dehydrated`
@@ -234,22 +235,28 @@ By default:
 - `run_root` is `runs/<run_id>`
 - `output_dir` is `runs/<run_id>/publish`
 - `workDir` is `runs/<run_id>/internal/nextflow/work`
+- `acquisition_publish_mode` is `raw`
 
 Published outputs live under `runs/<run_id>/publish/`:
 - `publish/acquisition/`
 - `publish/calls/`
 - `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
-- `publish/database/`
-- `publish/reports/`
 - `publish/status/`
 - `publish/metadata/`
 
+Acquisition publish modes:
+- `raw` publishes batch-scoped acquisition artifacts under `publish/acquisition/batches/<batch_id>/`
+- `merged` publishes the legacy flat acquisition bundle under `publish/acquisition/`
+- `publish/calls/` remains canonical in both modes
+- `publish/database/` and `publish/reports/` are produced only in `merged` mode
+
 Important published artifacts:
+- `publish/metadata/run_manifest.json` records `acquisition_publish_mode`
 - `publish/calls/repeat_calls.tsv`
 - `publish/calls/run_params.tsv`
-- `publish/database/homorepeat.sqlite`
 - `publish/metadata/run_manifest.json`
 - `publish/metadata/launch_metadata.json`
+- `publish/database/homorepeat.sqlite` in `merged` mode only
 
 `publish/metadata/nextflow/` exposes stable relative symlinks back to the live files under `runs/<run_id>/internal/nextflow/`.
 
@@ -350,6 +357,10 @@ For more detail, see:
 - [docs/methods.md](./docs/methods.md)
 - [docs/architecture.md](./docs/architecture.md)
 - [docs/contracts.md](./docs/contracts.md)
+- [docs/containers.md](./docs/containers.md)
+- [docs/scale_guide.md](./docs/scale_guide.md)
+- [docs/benchmark_guide.md](./docs/benchmark_guide.md)
+- [docs/save_state_guide.md](./docs/save_state_guide.md)
 
 ## License
 

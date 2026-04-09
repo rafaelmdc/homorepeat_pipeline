@@ -140,7 +140,8 @@ Acquisition writes normalized FASTA files so downstream scripts do not rely on s
 Rules:
 - CDS FASTA headers become `sequence_id`
 - translated protein FASTA headers become `protein_id`
-- canonical FASTA artifacts live at stable published paths under `publish/acquisition/`
+- merged runs publish canonical FASTA artifacts under `publish/acquisition/`
+- raw runs publish batch-scoped FASTA artifacts under `publish/acquisition/batches/<batch_id>/`
 - canonical TSV rows do not repeat stable artifact paths such as `sequence_path` or `protein_path`
 
 Current identifier policy:

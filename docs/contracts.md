@@ -104,7 +104,9 @@ Rules:
 - local-mode paths must be readable from the execution environment
 - local mode should prefer `cds_fasta` plus `annotation_gff` when translation-driven normalization is desired
 - NCBI download/archive provenance lives in `download_manifest.tsv`, not repeated inside `genomes.tsv`
-- stable published acquisition artifact locations live under `publish/acquisition/` and in `publish/metadata/run_manifest.json`
+- stable published acquisition artifact locations are declared in `publish/metadata/run_manifest.json`
+- `merged` runs publish the legacy flat acquisition bundle under `publish/acquisition/`
+- `raw` runs publish acquisition artifacts under `publish/acquisition/batches/<batch_id>/`
 
 ### Output: `genomes.tsv`
 
@@ -171,7 +173,7 @@ Required columns:
 Rules:
 - all columns above are part of the canonical schema; some biologically optional values may still be emitted as empty strings
 - `sequence_id` is source-derived and should be human-auditable from the accession plus CDS identity
-- row-level sequence tables must not repeat canonical FASTA paths; the normalized CDS FASTA lives at the stable published path `publish/acquisition/cds.fna`
+- row-level sequence tables must not repeat canonical FASTA paths; merged runs use `publish/acquisition/cds.fna`, while raw runs resolve the batch-scoped CDS FASTA through `publish/metadata/run_manifest.json` and `publish/acquisition/batches/<batch_id>/`
 
 ---
 
@@ -198,7 +200,7 @@ Required columns:
 Rules:
 - all columns above are part of the canonical schema; some biologically optional values may still be emitted as empty strings
 - `protein_id` is derived from `sequence_id` and is not an independent opaque hash
-- row-level protein tables must not repeat canonical FASTA paths; the canonical translated protein FASTA lives at the stable published path `publish/acquisition/proteins.faa`
+- row-level protein tables must not repeat canonical FASTA paths; merged runs use `publish/acquisition/proteins.faa`, while raw runs resolve the batch-scoped protein FASTA through `publish/metadata/run_manifest.json` and `publish/acquisition/batches/<batch_id>/`
 
 ---
 
@@ -381,6 +383,7 @@ Required top-level keys:
 - `started_at_utc`
 - `finished_at_utc`
 - `profile`
+- `acquisition_publish_mode`
 - `git_revision`
 - `inputs`
 - `paths`
@@ -390,9 +393,12 @@ Required top-level keys:
 - `artifacts`
 
 Rules:
+- `acquisition_publish_mode` must be one of: `raw`, `merged`
 - `params.detection` is derived from the canonical published `calls/run_params.tsv` when present
 - `params.detection` is shaped as `method -> repeat_residue -> param_name -> param_value`
 - `enabled_methods` is the sorted list of methods present in `params.detection`
+- in `raw` mode, `artifacts.acquisition.batches_root`, when present, points to `publish/acquisition/batches`
+- in `merged` mode, `artifacts.acquisition.*` points to the flat acquisition bundle under `publish/acquisition/`
 - `artifacts.calls.finalized_root`, when present, points to `publish/calls/finalized`
 - `artifacts.metadata.launch_metadata_json`, when present, points to `publish/metadata/launch_metadata.json`
 - `artifacts.metadata.nextflow_report_html`, `artifacts.metadata.nextflow_timeline_html`, and `artifacts.metadata.nextflow_dag_html`, when present, point to `publish/metadata/nextflow/`
@@ -402,6 +408,7 @@ Rules:
 - `artifacts.status.accession_call_counts_tsv`, when present, points to `publish/status/accession_call_counts.tsv`
 - artifact paths are stored relative to the run root when possible; absolute paths are allowed when the publish root lives outside `runs/<run_id>/`
 - `params.params_file_values` may be empty when no params file was provided or when the supplied file is not JSON
+- `params.effective_values` records the effective runtime parameter subset captured at manifest write time and may therefore differ from `params.params_file_values` when CLI overrides were used
 
 ---
 

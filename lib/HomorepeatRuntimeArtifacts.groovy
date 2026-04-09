@@ -12,17 +12,6 @@ import java.time.format.DateTimeFormatter
 
 class HomorepeatRuntimeArtifacts {
     private static final Map<String, Map<String, String>> PUBLISHED_ARTIFACTS = [
-        acquisition: [
-            genomes_tsv                : 'acquisition/genomes.tsv',
-            taxonomy_tsv               : 'acquisition/taxonomy.tsv',
-            sequences_tsv              : 'acquisition/sequences.tsv',
-            proteins_tsv               : 'acquisition/proteins.tsv',
-            cds_fasta                  : 'acquisition/cds.fna',
-            proteins_fasta             : 'acquisition/proteins.faa',
-            download_manifest_tsv      : 'acquisition/download_manifest.tsv',
-            normalization_warnings_tsv : 'acquisition/normalization_warnings.tsv',
-            acquisition_validation_json: 'acquisition/acquisition_validation.json',
-        ],
         calls      : [
             repeat_calls_tsv: 'calls/repeat_calls.tsv',
             run_params_tsv  : 'calls/run_params.tsv',
@@ -52,6 +41,17 @@ class HomorepeatRuntimeArtifacts {
             trace_txt            : 'metadata/nextflow/trace.txt',
         ],
     ]
+    private static final Map<String, String> MERGED_ACQUISITION_ARTIFACTS = [
+        genomes_tsv                : 'acquisition/genomes.tsv',
+        taxonomy_tsv               : 'acquisition/taxonomy.tsv',
+        sequences_tsv              : 'acquisition/sequences.tsv',
+        proteins_tsv               : 'acquisition/proteins.tsv',
+        cds_fasta                  : 'acquisition/cds.fna',
+        proteins_fasta             : 'acquisition/proteins.faa',
+        download_manifest_tsv      : 'acquisition/download_manifest.tsv',
+        normalization_warnings_tsv : 'acquisition/normalization_warnings.tsv',
+        acquisition_validation_json: 'acquisition/acquisition_validation.json',
+    ]
 
     static void finalizeRun(Map ctx) {
         Path repoRoot = asPath(ctx.repoRoot)
@@ -65,6 +65,7 @@ class HomorepeatRuntimeArtifacts {
         Path paramsFile = resolveAgainstLaunchDir(paramsFileValue, launchDir)
         String logFileValue = extractOption(ctx.commandLine?.toString(), ['-log', '--log'])
         Path nextflowLog = resolveAgainstLaunchDir(logFileValue, launchDir)
+        String acquisitionPublishMode = normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw')
 
         Path internalDir = runRoot.resolve('internal').resolve('nextflow')
         Path metadataDir = publishRoot.resolve('metadata')
@@ -99,6 +100,7 @@ class HomorepeatRuntimeArtifacts {
                 runName: ctx.runName?.toString() ?: '',
                 success: !!ctx.success,
                 resumeUsed: hasFlag(ctx.commandLine?.toString(), '-resume'),
+                acquisitionPublishMode: acquisitionPublishMode,
             ),
         )
 
@@ -117,6 +119,8 @@ class HomorepeatRuntimeArtifacts {
                 startedAtUtc: formatUtc(ctx.startedAt),
                 finishedAtUtc: formatUtc(ctx.finishedAt),
                 status: ctx.status?.toString() ?: '',
+                acquisitionPublishMode: acquisitionPublishMode,
+                effectiveParams: ctx.effectiveParams instanceof Map ? ctx.effectiveParams as Map<String, Object> : null,
             ),
         )
 
@@ -140,6 +144,7 @@ class HomorepeatRuntimeArtifacts {
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
+            acquisition_publish_mode: ctx.acquisitionPublishMode,
             launch_dir     : ctx.launchDir?.toString() ?: '',
             project_dir    : ctx.repoRoot?.toString() ?: '',
             inputs         : [
@@ -173,6 +178,7 @@ class HomorepeatRuntimeArtifacts {
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
+            acquisition_publish_mode: normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
             git_revision   : gitRevision(repoRoot),
             inputs         : [
                 accessions_file: relativeOrAbsolute(ctx.accessionsFile as Path, repoRoot),
@@ -187,30 +193,37 @@ class HomorepeatRuntimeArtifacts {
                 publishRoot: publishRoot,
                 paramsFile: ctx.paramsFile as Path,
                 runRoot: runRoot,
+                effectiveParams: ctx.effectiveParams instanceof Map ? ctx.effectiveParams as Map<String, Object> : null,
             ),
             enabled_methods: enabledMethods(publishRoot),
             repeat_residues: repeatResidues(publishRoot),
-            artifacts      : collectArtifacts(runRoot, publishRoot),
+            artifacts      : collectArtifacts(
+                runRoot,
+                publishRoot,
+                normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
+            ),
         ]
     }
 
     private static Map<String, Object> manifestParams(Map ctx) {
-        Map<String, Object> payload = [
-            run_root          : (ctx.runRoot as Path).toString(),
-            publish_root      : (ctx.publishRoot as Path).toString(),
-            params_file_values: [:],
-            detection         : readMethodParams(ctx.publishRoot as Path),
-        ]
-
+        Map<String, Object> paramsFileValues = [:]
         Path paramsFile = ctx.paramsFile as Path
         if (paramsFile && Files.isRegularFile(paramsFile)) {
             try {
                 def parsed = new JsonSlurper().parse(paramsFile.toFile())
-                payload.params_file_values = parsed instanceof Map ? parsed : [:]
+                paramsFileValues = parsed instanceof Map ? parsed as Map<String, Object> : [:]
             } catch (Exception ignored) {
-                payload.params_file_values = [:]
+                paramsFileValues = [:]
             }
         }
+
+        Map<String, Object> payload = [
+            run_root          : (ctx.runRoot as Path).toString(),
+            publish_root      : (ctx.publishRoot as Path).toString(),
+            params_file_values: paramsFileValues,
+            effective_values  : ctx.effectiveParams instanceof Map ? ctx.effectiveParams as Map<String, Object> : paramsFileValues,
+            detection         : readMethodParams(ctx.publishRoot as Path),
+        ]
 
         payload
     }
@@ -253,8 +266,28 @@ class HomorepeatRuntimeArtifacts {
         }
     }
 
-    private static Map<String, Map<String, String>> collectArtifacts(Path runRoot, Path publishRoot) {
+    private static Map<String, Map<String, String>> collectArtifacts(
+        Path runRoot,
+        Path publishRoot,
+        String acquisitionPublishMode
+    ) {
         Map<String, Map<String, String>> payload = [:]
+        Map<String, String> acquisitionPayload = [:]
+        if (acquisitionPublishMode == 'raw') {
+            Path batchesRoot = publishRoot.resolve('acquisition').resolve('batches').normalize()
+            if (Files.exists(batchesRoot) || Files.exists(batchesRoot, LinkOption.NOFOLLOW_LINKS)) {
+                acquisitionPayload['batches_root'] = relativeOrAbsolute(batchesRoot, runRoot)
+            }
+        } else {
+            MERGED_ACQUISITION_ARTIFACTS.each { String key, String relativePath ->
+                Path candidate = publishRoot.resolve(relativePath).normalize()
+                if (Files.exists(candidate) || Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) {
+                    acquisitionPayload[key] = relativeOrAbsolute(candidate, runRoot)
+                }
+            }
+        }
+        payload['acquisition'] = acquisitionPayload
+
         PUBLISHED_ARTIFACTS.each { String section, Map<String, String> files ->
             Map<String, String> sectionPayload = [:]
             files.each { String key, String relativePath ->
@@ -266,6 +299,14 @@ class HomorepeatRuntimeArtifacts {
             payload[section] = sectionPayload
         }
         payload
+    }
+
+    private static String normalizeAcquisitionPublishMode(String rawMode) {
+        String mode = (rawMode ?: 'raw').trim().toLowerCase()
+        if (!(mode in ['raw', 'merged'])) {
+            throw new IllegalArgumentException('acquisition_publish_mode must be one of: raw, merged')
+        }
+        mode
     }
 
     private static List<Map<String, String>> readTsvRows(Path path) {
