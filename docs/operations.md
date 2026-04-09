@@ -14,7 +14,7 @@ Use it for:
 
 - supported Nextflow release: `25.10.4`
 - canonical operator entrypoint: `nextflow run .`
-- canonical publication model: DSL2 workflow `publish:` plus `output {}`
+- canonical publication model: workflow publication for canonical merged outputs and metadata, plus task-level `publishDir` for raw acquisition batches
 - canonical failure surface: native Nextflow task failure and `publish/metadata/nextflow/report.html`
 - `publish/status/` remains a supplemental accession-level ledger when that reporting path completes
 

@@ -371,6 +371,27 @@ Rules:
 - `finalize_status=skipped` is valid when the detect stage succeeded for that accession plus method plus repeat-residue combination but emitted no calls, so no finalize task was launched
 - this table is a companion detail artifact; `accession_status.tsv` remains the accession-level operational ledger
 
+### Output: `publish/status/status_summary.json`
+
+Run-level accession-status summary.
+
+Required top-level keys:
+- `status`
+- `counts`
+- `terminal_status_counts`
+
+Required `counts` keys:
+- `n_requested_accessions`
+- `n_completed`
+- `n_completed_no_calls`
+- `n_failed`
+- `n_skipped_upstream_failed`
+
+Rules:
+- `status` is `success` when no accession finished as `failed` or `skipped_upstream_failed`
+- `status` is `partial` when at least one accession finished as `failed` or `skipped_upstream_failed`
+- `terminal_status_counts` is a frequency map keyed by `terminal_status` values observed in `accession_status.tsv`
+
 ---
 
 ## Run manifest contract
@@ -410,80 +431,133 @@ Rules:
 - `params.params_file_values` may be empty when no params file was provided or when the supplied file is not JSON
 - `params.effective_values` records the effective runtime parameter subset captured at manifest write time and may therefore differ from `params.params_file_values` when CLI overrides were used
 
+### Output: `publish/metadata/launch_metadata.json`
+
+Launch-time operator metadata captured from the workflow runtime.
+
+Required top-level keys:
+- `run_id`
+- `status`
+- `started_at_utc`
+- `finished_at_utc`
+- `profile`
+- `acquisition_publish_mode`
+- `launch_dir`
+- `project_dir`
+- `inputs`
+- `paths`
+- `nextflow`
+
+Required `inputs` keys:
+- `accessions_file`
+- `taxonomy_db`
+- `params_file`
+
+Required `paths` keys:
+- `run_root`
+- `publish_root`
+- `work_dir`
+- `nextflow_log`
+- `trace_txt`
+
+Required `nextflow` keys:
+- `run_name`
+- `success`
+- `resume_used`
+
+Rules:
+- `acquisition_publish_mode` must be one of: `raw`, `merged`
+- `paths.trace_txt` points to the live trace file under `runs/<run_id>/internal/nextflow/trace.txt`
+- `launch_metadata.json` is an operator-facing runtime record; `run_manifest.json` remains the authoritative published artifact index
+
 ---
 
-## Cross-run merged view contract
+## Acquisition side-artifact contracts
 
-### Purpose
+### Output: `download_manifest.tsv`
 
-This contract defines how multiple imported runs may be collapsed for merged browser
-views and merged summaries.
+One row per requested assembly accession download attempt.
 
-It applies to the Django/Postgres web layer only.
-
-It does not change the canonical published TSV artifacts.
-
-### Core rules
-
-- imported biological rows remain run-scoped and immutable after import
-- cross-run merge logic must be derived and read-only
-- never upsert one run’s `Genome`, `Sequence`, `Protein`, or `RepeatCall` rows into another run
-- merged results must be deterministic: the same source rows must produce the same merged rows regardless of import order
-- every merged row must retain links back to all contributing source rows and source runs
-
-### Genome merge contract
-
-Merged genome grouping unit:
-
-- one merged genome group per non-empty `accession`
+Required columns:
+- `batch_id`
+- `assembly_accession`
+- `download_status`
+- `package_mode`
+- `download_path`
+- `rehydrated_path`
+- `checksum`
+- `file_size_bytes`
+- `download_started_at`
+- `download_finished_at`
+- `notes`
 
 Rules:
+- this artifact is published once per batch in `raw` mode and as one merged table in `merged` mode
+- `download_status` records the batch-local download outcome for one accession
+- `package_mode` records how the NCBI package was fetched for that accession
 
-- all imported `Genome` rows with the same `accession` belong to the same merged genome group
-- `accession` is a grouping key, not a destructive upsert key
-- grouped genome rows must remain individually browsable by source run
+### Output: `normalization_warnings.tsv`
 
-### Exact repeat-call collapse contract
+One row per structured acquisition or normalization warning.
 
-Merged repeat-call collapse is exact-match only.
-
-Exact merged call fingerprint:
-
-- `accession`
-- `protein_name`
-- `protein_length`
-- `method`
-- `start`
-- `end`
-- `repeat_residue`
-- `length`
-- normalized `purity`
-
-Rules:
-
-- source rows with identical exact-call fingerprints collapse to one merged call record
-- rows differing on any fingerprint field remain distinct merged call records
-- `normalized purity` means the published numeric value compared through one canonical decimal representation, not raw binary float identity
-- `aa_sequence` remains source provenance and may be displayed or inspected, but does not control cross-run collapse
-- non-fingerprint fields may be displayed from source rows, but must not control collapse unless added to this contract explicitly
-
-### Conflict handling
+Required columns:
+- `warning_code`
+- `warning_scope`
+- `warning_message`
+- `batch_id`
+- `genome_id`
+- `sequence_id`
+- `protein_id`
+- `assembly_accession`
+- `source_file`
+- `source_record_id`
 
 Rules:
+- this artifact is published once per batch in `raw` mode and as one merged table in `merged` mode
+- blank identifier fields are allowed when a warning applies at a broader scope than genome, sequence, or protein
+- `warning_code` is the stable machine-readable category
+- `warning_message` is an operator-facing explanation and may evolve without changing the warning category
 
-- if grouped source rows disagree on fields outside the collapse fingerprint, the disagreement must remain attributable to the source rows
-- merged views may expose explicit conflict flags or source-side detail panels
-- merged views must not silently choose “last imported wins”
+### Output: `acquisition_validation.json`
 
-### Percentage and denominator rules
+Stable acquisition validation summary for one batch or one merged acquisition bundle.
+
+Required top-level keys:
+- `status`
+- `scope`
+- `counts`
+- `checks`
+- `failed_accessions`
+- `warning_summary`
+- `notes`
+
+Optional top-level keys:
+- `batch_id`
+
+Required `counts` keys:
+- `n_selected_assemblies`
+- `n_downloaded_packages`
+- `n_genomes`
+- `n_sequences`
+- `n_proteins`
+- `n_warning_rows`
 
 Rules:
+- `status` is `pass` when all `checks` are true and there are no warning rows or failed accessions
+- `status` is `warn` when all `checks` are true but warning rows or failed accessions are present
+- `status` is `fail` when any `checks` entry is false
+- `scope` identifies whether the payload summarizes one batch or the merged acquisition output
+- `batch_id` is present only for batch-scoped payloads
 
-- run-scoped percentages are computed only from one run’s imported rows
-- cross-run percentages are computed only from the derived merged layer
-- raw rows from multiple runs must not be summed directly when the same `accession` may appear more than once
-- denominators such as analyzed protein count collapse once per merged genome group, not once per source row
-- if grouped genome rows disagree on denominator fields such as analyzed protein count, the merged layer must surface that disagreement explicitly rather than silently overwriting one value with another
+---
+
+## Website planning note
+
+The pipeline release does not implement a cross-run merged browser layer.
+
+Any future website or database import logic that collapses rows across runs is outside
+the current runtime contract and must be documented separately from these published
+artifact contracts.
 
 ---
 

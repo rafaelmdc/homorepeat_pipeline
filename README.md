@@ -20,7 +20,7 @@ Included in `0.1`:
 - accession-driven runs through `nextflow run .`
 - `docker` and `local` profiles
 - NCBI-backed acquisition using the runtime containers
-- merged canonical outputs under `runs/<run_id>/publish/`
+- mode-aware published outputs under `runs/<run_id>/publish/`
 - run metadata and published Nextflow diagnostics
 
 Not included in `0.1`:
@@ -270,7 +270,7 @@ That means:
 - `publish/metadata/nextflow/report.html` is the authoritative run-level failure surface
 - `publish/status/` is supplemental and may be absent or partial on failed runs
 
-DSL2 workflow `publish:` plus `output {}` is the canonical publication model for the repo.
+Publication is mode-aware: canonical merged outputs and metadata are published from the workflow, while raw acquisition batches are published directly from the acquisition tasks.
 
 ## Smoke Commands
 
