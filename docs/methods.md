@@ -1,369 +1,186 @@
-# Methods
+# Methods and Scientific Notes
 
-## Purpose
+## Scientific Scope
 
-This document records the v1 operational decisions that sit between the high-level roadmap and the implementation.
+The current pipeline detects single-residue amino-acid homorepeats in proteins derived from annotated CDS records. The operative data path is:
 
-It answers the questions that were still underspecified in the original docs:
-- how data enters the workflow
-- how local and NCBI-backed acquisition coexist
-- how one isoform per gene is selected
-- what the retained v1 detection methods mean operationally
-- how codon extraction, SQLite import, summaries, and ECharts reporting are bounded
+assembly accession -> NCBI package -> normalized CDS -> translated proteins -> repeat calls -> optional codon slices -> summaries/SQLite
 
-These rules are the implementation target unless a later contract change is made explicitly.
+The main Nextflow workflow is accession-driven. Although the Python package contains reusable helpers, the workflow does not currently expose taxon-name driven acquisition or local FASTA/GFF manifests as first-class runtime inputs.
 
----
+## Acquisition and Normalization
 
-## Scientific scope for v1
+### Accession planning
 
-The first rebuild targets general homorepeat detection rather than a single residue only.
+`plan_accession_batches` reads a plain-text accession list, ignores blank lines and `#` comments, removes duplicates, and writes deterministic batches.
 
-The workflow must support:
-- acquisition of CDS and annotation data, with proteins derived locally when needed
-- one retained isoform per gene
-- three implemented detection strategies: `pure`, `threshold`, and optional `seed_extend`
-- configurable repeat residue targets
-- codon-aware feature extraction when CDS is available
-- SQLite assembly from flat files
-- summary tables and ECharts-based reporting from finalized outputs
+When accession resolution is enabled:
 
-The first rebuild does not require:
-- annotation/domain enrichment
-- browser-facing applications
-- direct database mutation during earlier pipeline stages
-- bespoke downstream reporting for every residue in the first release
-- any residue-specific downstream analysis in the first release
+- `GCF_` accessions are kept as-is
+- other accessions are resolved through NCBI Datasets metadata
+- GenBank accessions can be redirected to a paired RefSeq accession when that is the best downloadable annotated target
+- the resolution outcome is recorded in `accession_resolution.tsv`
 
----
+### Package contents
 
-## Comparability Policy
+The downloader requests annotation-focused NCBI package content:
 
-The rebuild is expected to remain comparable to the earlier project in terms of:
-- acquisition of user-selected taxonomic sequence data and metadata
-- taxonomy-aware homorepeat analysis
-- the retained v1 detection strategies
-- SQLite as a final integrated artifact
-- residue-neutral summary and reporting outputs in the first release
+- `cds`
+- `gff3`
+- `seq-report`
 
-The rebuild is not required to preserve:
-- legacy code layout
-- undocumented tie-breaking behavior
-- exact row ordering of historical outputs
-- any old heuristic that is not explicitly documented in the new specification
+The current workflow does not use genomic FASTA as a required input for repeat detection.
 
-When the rebuilt project differs from the old one, the preferred interpretation order is:
-1. documented new contracts
-2. documented method definitions
-3. scientific plausibility
-4. legacy behavior only where it was already explicit and defensible
+### Sequence filtering and taxonomy
 
----
+Normalization currently:
 
-## Acquisition strategy
+- keeps sequence-report rows from `Primary Assembly` and `non-nuclear`
+- ignores alternate loci and patch units
+- materializes explicit lineage rows into `taxonomy.tsv` using `taxon-weaver`
+- treats a missing lineage as an error for that accession
 
-### Supported input modes
+### CDS to metadata linkage
 
-Two acquisition modes are supported in the same manifest contract:
+The normalizer prefers GFF-backed linkage over FASTA header heuristics. Resolution order is:
 
-1. `ncbi_datasets`
-2. `local`
+1. transcript-like GFF aliases
+2. protein aliases
+3. CDS aliases
+4. a `cds-<gene_symbol>` fallback for rearrangement-dependent immune segment records
+5. FASTA-header fallback with a warning
 
-`ncbi_datasets` is the production path for rebuilding the original project from scratch.
-`local` exists for tests, smoke datasets, and offline development.
+If two CDS rows collapse to the same normalized `sequence_id` but carry different biological content, the code expands the identifier using source-backed fields and records a warning instead of silently overwriting a row.
 
-### NCBI-backed acquisition
+## Translation and Isoform Retention
 
-The current production acquisition path uses the NCBI `datasets` CLI for assembly/package retrieval and `taxon-weaver` as the canonical local taxonomy layer.
+Translation is intentionally conservative:
 
-Current behavior:
-- enumerate candidate assemblies from NCBI metadata before downloading sequence packages
-- select `RefSeq` current annotated assemblies only
-- prefer `reference genome`, allow `representative genome`, and still accept annotated uncategorized RefSeq rows
-- download annotation-focused package contents: CDS, GFF3, and metadata reports
-- avoid raw genomic FASTA in v1
-- translate retained CDS records locally into canonical protein FASTA for detection
-- retain the raw package on disk for reproducibility
-- normalize package contents into the canonical TSVs and normalized FASTA files
+- only NCBI translation tables `1`, `2`, `5`, and `11` are supported
+- ambiguous nucleotides are rejected
+- non-triplet CDS lengths are rejected
+- internal stop codons are rejected
+- a terminal stop codon is stripped when it is the only stop
+- `partial` CDS records are excluded before translation
 
-The implementation should tolerate either a hydrated local package or an already-downloaded package directory.
+If a CDS fails under its recorded translation table but succeeds under another supported table, the warning is surfaced as a likely translation-table mismatch rather than silently switching tables.
 
-Current implementation details and ignore rules live in:
-- [operations.md](./operations.md)
+Protein retention is one-per-gene-group per genome:
 
-### Local acquisition
+- `gene_group` comes from the normalized sequence row
+- the longest translated protein wins
+- ties break lexicographically by `protein_id`
 
-Local mode accepts CDS FASTA and optional annotation GFF paths directly from the manifest.
-Protein FASTA may still be accepted as a smoke-test bypass, but it is not the preferred scientific path.
+This keeps the isoform policy deterministic and easy to reproduce in tests.
 
-This mode must:
-- preserve the same downstream contracts as NCBI-backed acquisition
-- write normalized FASTA files with internal IDs as headers
-- remain deterministic for tests
+## Detection Algorithms
 
-### Taxonomy handling
+All detection methods emit 1-based, inclusive amino-acid coordinates and the same call schema.
 
-Taxonomy metadata is normalized into `taxonomy.tsv`.
-
-For v1:
-- `taxon_id` is the stable reporting identifier
-- `taxon-weaver` lineage inspection is materialized into explicit taxonomy rows
-- each ancestor taxon is stored once with `taxon_id`, `taxon_name`, `parent_taxon_id`, and `rank`
-- missing hierarchy information is allowed, but `taxon_id` must still exist
-
-Operationally:
-- build a local NCBI taxonomy SQLite database with `taxon-weaver`
-- use `taxon-weaver` resolution for user-supplied taxon names
-- use `taxon-weaver` lineage inspection for taxids returned by NCBI assembly metadata
-- keep deterministic resolution authoritative and treat fuzzy suggestions as review-only
-
-### Contamination checking
-
-The original project performed contamination lineage checks during acquisition.
-
-For the rebuild:
-- contamination screening is not a blocker for v1 execution
-- the acquisition layer records notes and source metadata
-- explicit contamination validation can be added later as a separate single-purpose step
-
-Settled v1 policy:
-- contamination remains note-only and does not act as a hard validation gate
-
----
-
-## Sequence preparation
-
-### Normalized FASTA outputs
-
-Acquisition writes normalized FASTA files so downstream scripts do not rely on source-specific headers.
-
-Rules:
-- CDS FASTA headers become `sequence_id`
-- translated protein FASTA headers become `protein_id`
-- merged runs publish canonical FASTA artifacts under `publish/acquisition/`
-- raw runs publish batch-scoped FASTA artifacts under `publish/acquisition/batches/<batch_id>/`
-- canonical TSV rows do not repeat stable artifact paths such as `sequence_path` or `protein_path`
-
-Current identifier policy:
-- `genome_id` is the real assembly accession
-- `sequence_id` is source-derived from `assembly_accession` plus CDS identity, usually the resolved transcript identifier
-- `protein_id` is `sequence_id::protein`
-- call rows derive `call_id` from method, protein, residue, and coordinates rather than from a truncated hash
-
-### CDS normalization and translation
-
-Default normalization authority:
-1. `genomic.gff` feature relationships and attributes
-2. structured package metadata and assembly reports
-3. CDS FASTA header metadata only as a documented fallback
-
-The preferred linkage order is:
-1. GFF transcript-like aliases
-2. GFF protein aliases
-3. GFF CDS ID aliases
-4. GFF gene-segment alias `cds-<gene_symbol>` for rearrangement-dependent immune segment CDS rows lacking transcript and protein IDs
-5. CDS FASTA header fallback with warning
-
-The workflow must not default to pairing records by normalized file order.
-If a confident biological linkage cannot be established from the sources above, the record is emitted with a linkage warning rather than silently guessed.
-
-Default molecule filter:
-- normalize only sequence-report rows in `Primary Assembly` and `non-nuclear`
-- ignore alternate loci and patch units in the canonical v1 path
-
-Derived-protein policy:
-- normalized CDS records are translated locally and become the canonical protein input for detection
-- translation should follow the retained CDS record and documented translation rules, not an external protein FASTA by default
-- if a CDS record cannot be translated confidently, it is excluded from protein-based detection and emitted as a warning state rather than patched heuristically
-- immune receptor segment rows that link successfully but remain `partial` are kept in normalized CDS outputs and excluded from retained protein outputs
-
-### Isoform selection
-
-The workflow keeps one isoform per gene per genome.
-
-v1 selection rule:
-- group by `gene_symbol` when present
-- otherwise group by a stable fallback key derived from transcript or sequence identity
-- keep the longest protein sequence in each group
-- break ties lexicographically by protein identifier
-
-This rule is deterministic and easy to validate, even if it does not recover all historical choices.
-
----
-
-## Detection methods
-
-All methods emit the shared call contract.
-
-Coordinates are 1-based and inclusive in amino-acid space.
-All methods must trim leading and trailing non-target residues from the final called tract.
-
-Each run is expected to define:
-- a target `repeat_residue` for single-residue homorepeats
-
-### Pure method
+### Pure
 
 Intent:
-- capture canonical contiguous homorepeat tracts for the chosen repeat residue
 
-Default rule:
-- detect maximal contiguous target-residue runs only
-- default `min_repeat_count = 6`
+- find uninterrupted runs of the target residue
 
-Reported features:
-- `repeat_count`
-- `non_repeat_count`
-- `purity = repeat_count / length`
+Implementation:
 
-### Threshold method
+- scan the protein sequence once
+- emit maximal contiguous runs of the target residue
+- require `min_repeat_count` residues in the final tract
 
-Intent:
-- capture biologically plausible but slightly impure tracts for the chosen repeat residue using a density rule
+Default:
 
-Default rule:
-- sliding window size `8`
-- default target-residue count `6` within the window
-- every qualifying sliding window is threshold-positive
-- merge overlapping or directly adjacent qualifying windows into one reported tract
+- `pure_min_repeat_count = 6`
 
-The default window definition is expected to be recorded in residue-aware form such as `<residue>6/8`.
-
-### Seed-extend method
+### Threshold
 
 Intent:
-- capture long interrupted tracts that contain a strong repeat-rich core and can be extended by a looser density rule
 
-Default rule:
-- strict seed window size `8`
-- default target-residue count `6` inside the seed window
-- looser extend window size `12`
-- default target-residue count `8` inside the extend window
-- merge connected seed and extend windows into one reported tract
-- trim the final tract back to leading and trailing target residues
-- require final tract length `>= 10`
+- find repeat-rich tracts that tolerate limited interruptions
 
-The default window definition is recorded in residue-aware form such as `seed:Q6/8|extend:Q8/12`.
+Implementation:
 
-### Similarity method status
+- slide a fixed window across the protein
+- mark windows with at least `min_target_count` target residues as positive
+- merge overlapping or directly adjacent positive windows
+- trim leading and trailing non-target residues from the merged interval
 
-Similarity-based detection is not part of the current implementation scope.
+Defaults:
 
-Current policy:
-- `pure`, `threshold`, and `seed_extend` are implemented and supported
-- no similarity-method output is part of the current workflow contracts
-- if similarity-based detection is reintroduced later, it should return through a new explicit contract change rather than through hidden partial support
+- `threshold_window_size = 8`
+- `threshold_min_target_count = 6`
 
----
+The emitted `window_definition` looks like `<residue><count>/<window>`, for example `Q6/8`.
 
-## Codon extraction and repeat features
+### Seed-extend
 
-Codon extraction is attempted only when a CDS sequence can be linked to the detected protein.
+Intent:
 
-Rules:
-- derive codon coordinates directly from amino-acid coordinates
-- use the normalized CDS sequence as the nucleotide source of truth
-- detection should run on proteins derived from validated CDS records by default
-- accepted CDS translation requires conservative validation before a protein is emitted:
-  - translation table from annotation when available, otherwise table `1`
-  - coding length divisible by `3` after terminal-stop handling
-  - no internal stop codons
-  - no unsupported ambiguity that would yield unresolved amino acids
-- if codon slicing or downstream translation checks fail for a retained record, leave `codon_sequence` empty and emit a warning rather than guessing
-- emit a normalized `codon_usage.tsv` companion artifact for validated codon slices
-- keep the legacy `codon_metric_name` and `codon_metric_value` fields reserved unless a later contract promotes a single derived metric into the main call row
+- find longer interrupted tracts with a stricter repeat-rich core
 
-Codon extraction remains residue-neutral in the main call table while still exposing per-call codon usage in the companion artifact.
+Implementation:
 
-Reported feature semantics:
-- `length` counts the full amino-acid tract after trimming termini
-- `repeat_count` counts only residues matching `repeat_residue`
-- `non_repeat_count = length - repeat_count`
-- `purity` is a decimal fraction in `[0, 1]`
+- find seed windows using a stricter density rule
+- find extend windows using a looser rule
+- merge connected seed/extend windows into components
+- keep only components that contain at least one seed window
+- trim non-target edges
+- enforce a minimum final tract length
 
-Finalized detection outputs publish under:
+Defaults:
 
-- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
+- `seed_window_size = 8`
+- `seed_min_target_count = 6`
+- `extend_window_size = 12`
+- `extend_min_target_count = 8`
+- `min_total_length = 10`
 
-Canonical merged downstream outputs remain under:
+## Codon Finalization
 
-- `publish/calls/`
+After detection, the pipeline tries to map each amino-acid tract back onto the normalized CDS.
 
-`run_params.tsv` is residue-scoped, so one method may publish multiple parameter blocks in a single run when multiple repeat residues are enabled.
+For a call to receive a `codon_sequence`, the finalizer must be able to:
 
----
+- find the `sequence_id` in `sequences.tsv`
+- find the matching CDS in `cds.fna`
+- slice the nucleotide interval implied by the amino-acid coordinates
+- translate that nucleotide slice under the sequence's translation table
+- confirm that the translated peptide exactly matches the call `aa_sequence`
 
-## Database assembly
+If any of those checks fail:
 
-SQLite is assembled only after metadata and call files validate.
+- the call row is still retained
+- `codon_sequence` stays empty
+- a warning row is written
+- the codon failure does not invalidate the amino-acid call itself
 
-v1 rules:
-- create schema from `assets/sql/schema.sql`
-- import flat files inside transactions
-- import method outputs into a unified `repeat_calls` table
-- create indexes after bulk import
-- validate row counts and foreign-key reachability after import
+The finalizer also writes per-call codon-usage tables, but those tables are not currently merged into the top-level reporting outputs.
 
-SQLite remains a build artifact, not a workspace.
+## Reporting Calculations
 
----
+The reporting layer is deliberately simple and residue-neutral.
 
-## Summary exports
+`summary_by_taxon.tsv` groups finalized calls by:
 
-### `summary_by_taxon.tsv`
-
-Grouped by:
 - `method`
 - `repeat_residue`
 - `taxon_id`
-- `taxon_name`
 
-Metrics:
-- unique genomes
-- unique proteins
-- call counts
-- tract length summary statistics
-- purity summary statistics
-- mean start fraction when protein length is known
+It reports:
 
-### `regression_input.tsv`
+- counts of genomes, proteins, and calls
+- mean, median, and max repeat length
+- mean purity
+- mean start fraction within the source protein
 
-Grouped by:
-- `method`
-- `repeat_residue`
-- `group_label`
-- `repeat_length`
+`regression_input.tsv` records repeat-length observation counts by method, residue, and taxon label.
 
-For v1:
-- regression grouping should default directly to taxon in v1
-- the `group_label` field should mirror `taxon_name` or another explicit taxon label derived directly from the selected taxon grouping
-- curated higher-level macro-groups can be added later as an optional reporting layer
+`echarts_options.json` and `echarts_report.html` are render artifacts built from those tables. The HTML layer does not recompute biology.
 
----
+## Current Limitations
 
-## ECharts reporting
-
-The reporting layer is downstream only.
-
-v1 reporting outputs:
-- a grouped bar chart summarizing calls by taxon and method
-- a length-distribution view by taxon, method, and repeat residue
-- a residue-composition or residue-frequency view across taxa and methods
-- a single reproducible HTML report backed by serialized ECharts options
-
-Rules:
-- report generation depends only on finalized tables or SQLite
-- chart configuration is emitted as JSON for inspection and reuse
-- the HTML report ships with a local `echarts.min.js` bundle so the report works offline
-
----
-
-## Known v1 boundaries
-
-- NCBI-backed acquisition depends on the `datasets` CLI being installed in the execution environment
-- similarity-based detection is deferred from the current v1 implementation baseline
-- annotation and domain context are deferred
-- contamination checks are documented but not enforced as a hard failure path
-- the first ECharts rebuild is expected to cover core comparative outputs before supplementary figure families
-- residue-agnostic detection and reporting should exist in v1
-- residue-specific downstream analyses may roll out only after the first residue-neutral release
-- the first repeat-length distribution view should use a histogram or other explicit binned layout rather than a donut-style chart
+- The main workflow starts from assembly accessions only.
+- Reporting is intentionally lightweight; the codon metric fields in call and summary outputs are present but currently left blank.
+- Domain enrichment, annotation-heavy downstream biology, and bespoke residue-specific analytics are not part of the current workflow.
+- SQLite and reports are available only in `merged` acquisition mode.

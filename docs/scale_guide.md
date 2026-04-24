@@ -1,60 +1,70 @@
 # Scale Guide
 
-This guide summarizes the current scaling model, default resource shape, and operational advice for larger runs.
+This guide summarizes the current scaling model, resource defaults, and operational advice for larger runs.
 
-Related stable docs:
-- [Benchmark Guide](./benchmark_guide.md)
+Related docs:
+
 - [Operations](./operations.md)
-- [Contracts](./contracts.md)
+- [Benchmark Guide](./benchmark_guide.md)
+- [Save State Guide](./save_state_guide.md)
 
-## Current scaling model
+## Current Scaling Model
 
-The pipeline now parallelizes both major heavy phases:
-- acquisition fans out by planned batch
-- detection and codon finalization fan out by `batch_id x method x repeat_residue`
+The main fan-out points are:
 
-Current published-layout rule:
-- `raw` is now the default acquisition publish mode and publishes acquisition artifacts under `publish/acquisition/batches/<batch_id>/`
-- `merged` keeps the legacy flat acquisition bundle under `publish/acquisition/`
-- canonical `publish/calls/` remains present in both modes
-- `publish/database/` and `publish/reports/` are merged-only
-- run metadata publishes separately under `publish/metadata/` and is the authoritative place to detect the mode
+- acquisition by `batch_id`
+- detection and codon finalization by `batch_id x method x repeat_residue`
 
-## Default concurrency and memory
+The main fan-in points are:
 
-The current defaults in [`conf/base.config`](../conf/base.config) are:
-- `params.batch_size = 10`
-- `planning.maxForks = 1`
-- `acquisition_download.maxForks = 2`
-- `acquisition_normalize.maxForks = 2`
-- `acquisition_translate.maxForks = 2`
-- `acquisition_merge.maxForks = 1`
-- `detection.maxForks = 4`
-- `database.maxForks = 1`
-- `reporting.maxForks = 1`
+- merged acquisition assembly in `merged` mode
+- canonical call table merge
+- accession status reduction
+- SQLite and reporting in `merged` mode
 
-Each task still requests `cpus = 1`. The bounded defaults now also set explicit memory requests:
-- `acquisition_download.memory = 2 GB`
-- `acquisition_normalize.memory = 6 GB`
-- `acquisition_translate.memory = 4 GB`
-- `acquisition_merge.memory = 2 GB`
-- `detection.memory = 2 GB`
+`raw` mode is the lighter operational shape because it skips the merged acquisition bundle, SQLite build, and report generation while still publishing canonical merged call tables.
 
-Scaling still comes from more concurrent tasks, not from multithreaded Python CLIs.
+## Default Resource Profile
 
-## Recommended shape for ~900 genomes
+Current defaults from `conf/base.config`:
 
-For a one-host Docker run:
-- keep the `docker` profile
-- keep batches small enough to balance uneven genomes and make `-resume` useful
-- keep the default `batch_size = 10` unless benchmark data on that host supports raising it
-- prefer a scratch-backed `workDir` on local NVMe or other fast local storage for large runs
+| Label | CPUs | Memory | Max forks |
+| --- | --- | --- | --- |
+| `planning` | 1 | `1 GB` | 1 |
+| `acquisition_download` | 1 | `2 GB` | 2 |
+| `acquisition_normalize` | 1 | `6 GB` | 2 |
+| `acquisition_translate` | 1 | `4 GB` | 2 |
+| `acquisition_merge` | 1 | `2 GB` | 1 |
+| `detection` | 1 | `2 GB` | 4 |
+| `database` | 1 | `2 GB` | 1 |
+| `reporting` | 1 | `1 GB` | 1 |
 
-The intended operational pattern is:
-1. prepare a plain-text accession list with one assembly accession per line
-2. run `nextflow run .` with the `docker` profile, a stable `--run_id`, and an explicit scratch `--work_dir` when available
-3. use `-resume` if the run is interrupted or if container images are rebuilt mid-run
-4. use `publish/status/accession_status.tsv` to identify accession-level failures instead of reconstructing them from Nextflow work dirs
+Other relevant defaults:
+
+- `batch_size = 10`
+- `run_pure = true`
+- `run_threshold = true`
+- `run_seed_extend = false`
+
+The Python CLIs are effectively single-core tasks. Scaling comes from bounded task parallelism, not from multithreaded workers inside each task.
+
+## Practical Tuning Order
+
+1. Put `--work_dir` on fast local scratch before changing workflow parallelism.
+2. Keep `batch_size` near the default until you have trace data showing that larger batches help on your host.
+3. Use `--ncbi_cache_dir` if repeated downloads are a significant cost in your environment.
+4. Increase concurrency only after checking peak RSS from the Nextflow trace.
+5. Use `raw` mode when you want to defer merged-only steps and focus on acquisition plus calling throughput.
+
+## Large-Run Recommendations
+
+For a larger single-host Docker run:
+
+- use the `docker` profile
+- use a stable `--run_id`
+- set an explicit `--work_dir` on fast scratch when available
+- keep `NXF_HOME` persistent
+- use `-resume` rather than restarting from scratch
 
 Example:
 
@@ -68,22 +78,26 @@ nextflow run . \
   -resume
 ```
 
-## What is published for recovery
+## Recovery at Scale
 
-Large runs now publish a stable operational ledger under `publish/status/`:
-- `accession_status.tsv`: one row per requested accession
-- `accession_call_counts.tsv`: one row per accession x method x repeat residue
-- `status_summary.json`: accession-level outcome counts when the reporting path completes
+Large runs should rely on both:
 
-This complements Nextflow caching:
-- `-resume` knows which tasks do not need to rerun
-- the status ledger tells you which accessions succeeded, failed, or produced no calls
+- Nextflow cache recovery via `-resume`
+- accession-level ledgers under `publish/status/`
 
-## What was verified
+That combination lets you:
 
-As of April 9, 2026:
-- live Docker smokes against NCBI completed successfully in both `raw` and `merged` acquisition publish modes
-- live multi-batch Docker runs with `batch_size=2` completed successfully in both `raw` and `merged` modes
-- `raw` runs published flat batch roots under `publish/acquisition/batches/<batch_id>/`
-- `merged` runs published the legacy flat acquisition bundle plus merged-only database and report artifacts
-- manifests now distinguish `params.params_file_values` from `params.effective_values`, so CLI overrides such as `--batch_size 1` are recorded correctly
+- avoid recomputing successful tasks
+- identify which accessions actually failed or produced no calls
+- build smaller rerun lists when needed
+
+## Benchmark Before Tuning
+
+Before changing `batch_size`, `maxForks`, or publish mode for a large accession set:
+
+- run a representative benchmark
+- record `trace.txt`
+- summarize it with `homorepeat.cli.summarize_benchmark_run`
+- compare peak RSS and time-to-first-result across runs
+
+Use the [Benchmark Guide](./benchmark_guide.md) for the recommended workflow.

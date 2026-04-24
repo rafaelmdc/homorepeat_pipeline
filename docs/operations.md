@@ -1,32 +1,36 @@
 # Operations
 
-## Purpose
+## Requirements
 
-This is the minimal operator-facing guide for the pipeline product root.
+- Nextflow `25.10.4`
+- an existing taxonomy database at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`, unless you override `--taxonomy_db`
+- Docker and the repo runtime images for the `docker` profile
+- a local Python environment with the repo package dependencies for the `local` profile
 
-Use it for:
-- building local runtime images
-- running the pipeline smoke path
-- knowing where stable outputs land
-- checking the supported runtime contract for this MVP
+The canonical operator entrypoint is:
 
-## Supported runtime
+```bash
+nextflow run .
+```
 
-- supported Nextflow release: `25.10.4`
-- canonical operator entrypoint: `nextflow run .`
-- canonical publication model: workflow publication for canonical merged outputs and metadata, plus task-level `publishDir` for raw acquisition batches
-- canonical failure surface: native Nextflow task failure and `publish/metadata/nextflow/report.html`
-- `publish/status/` remains a supplemental accession-level ledger when that reporting path completes
+There is no repo-specific wrapper around the main workflow.
 
-## Standard entrypoints
+## Build Runtime Images
 
-Build the runtime images expected by the Nextflow `docker` profile:
+Build the images expected by the `docker` profile:
 
 ```bash
 bash scripts/build_dev_containers.sh
 ```
 
-Run the checked-in pipeline smoke:
+That produces:
+
+- `homorepeat-acquisition:dev`
+- `homorepeat-detection:dev`
+
+## Quick Start
+
+Run the checked-in smoke example in the default `raw` publish mode:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -39,88 +43,119 @@ nextflow \
   --accessions_file examples/accessions/smoke_human.txt
 ```
 
-Run the intentional failure probe:
+Run the same workflow in `merged` mode so SQLite and reports are produced:
 
 ```bash
-cat > /tmp/homorepeat_failure_probe.txt <<'EOF'
-GCF_000001405.40
-GCF_BOGUS_FAILURE_TEST.1
-EOF
-
 NXF_HOME=runtime/cache/nextflow \
 nextflow \
-  -log runs/failure_probe/internal/nextflow/nextflow.log \
+  -log runs/smoke_human_merged/internal/nextflow/nextflow.log \
   run . \
   -profile docker \
-  --run_id failure_probe \
-  --batch_size 1 \
-  --run_pure true \
-  --run_threshold true \
-  --run_seed_extend false \
-  --accessions_file /tmp/homorepeat_failure_probe.txt
+  -params-file examples/params/smoke_default.json \
+  --run_id smoke_human_merged \
+  --accessions_file examples/accessions/smoke_human.txt \
+  --acquisition_publish_mode merged
 ```
 
-Expected result:
-- the run exits nonzero
-- `report.html` shows the failed task
-- `publish/metadata/run_manifest.json` reports `failed`
+## Profiles
 
-## Focused smoke scripts
+| Profile | Execution model | Typical use |
+| --- | --- | --- |
+| `docker` | Local executor with pinned acquisition and detection containers | Standard operator path |
+| `local` | Local executor on the host | Tests, debugging, or environments where you want to use host-installed tools |
+
+## Common Parameters
+
+| Parameter | Default | Notes |
+| --- | --- | --- |
+| `--run_id` | timestamped value | Names the run root under `runs/` unless `--run_root` is overridden |
+| `--run_root` | `runs/<run_id>` | Root for published outputs and internal Nextflow state |
+| `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Put this on fast scratch for larger runs |
+| `--acquisition_publish_mode` | `raw` | `raw` keeps batch-scoped acquisition outputs; `merged` also builds SQLite and reports |
+| `--repeat_residues` | `Q` | Comma-separated one-letter amino-acid codes |
+| `--run_pure` | `true` | Enables contiguous-run detection |
+| `--run_threshold` | `true` | Enables sliding-window density detection |
+| `--run_seed_extend` | `false` | Enables seed-and-extend detection |
+| `--pure_min_repeat_count` | `6` | Pure-method minimum tract length |
+| `--threshold_window_size` | `8` | Threshold-method window size |
+| `--threshold_min_target_count` | `6` | Threshold-method minimum target count per window |
+| `--seed_extend_seed_window_size` | `8` | Seed window size |
+| `--seed_extend_seed_min_target_count` | `6` | Seed minimum target count |
+| `--seed_extend_extend_window_size` | `12` | Extend window size |
+| `--seed_extend_extend_min_target_count` | `8` | Extend minimum target count |
+| `--seed_extend_min_total_length` | `10` | Minimum final tract length |
+| `--batch_size` | `10` | Planner target batch size |
+| `--ncbi_api_key` | unset | Passed through to the NCBI Datasets CLI |
+| `--ncbi_cache_dir` | unset | Optional persistent download cache |
+| `--ncbi_dehydrated` | `false` | Use dehydrated NCBI package download mode |
+| `--ncbi_rehydrate` | `false` | Rehydrate after download |
+
+Checked-in parameter examples:
+
+- `examples/params/smoke_default.json`
+- `examples/params/multi_residue_qn.json`
+
+## Published Output Layout
+
+Every run publishes under `runs/<run_id>/publish/`.
+
+Mode-independent outputs:
+
+- `publish/calls/`
+- `publish/calls/finalized/`
+- `publish/status/`
+- `publish/metadata/`
+
+Mode-specific outputs:
+
+- `raw`
+  - `publish/acquisition/batches/<batch_id>/`
+- `merged`
+  - `publish/acquisition/`
+  - `publish/database/`
+  - `publish/reports/`
+
+Important operational files:
+
+- `publish/calls/repeat_calls.tsv`
+- `publish/calls/run_params.tsv`
+- `publish/status/accession_status.tsv`
+- `publish/status/accession_call_counts.tsv`
+- `publish/status/status_summary.json`
+- `publish/metadata/run_manifest.json`
+- `publish/metadata/launch_metadata.json`
+- `publish/metadata/nextflow/report.html`
+
+`run_manifest.json` is the authoritative place to determine:
+
+- whether the run used `raw` or `merged` acquisition publishing
+- which methods and residues were enabled
+- which top-level artifacts were produced
+
+## Failure Handling and Troubleshooting
+
+Primary failure surface:
+
+- native Nextflow exit status
+- `publish/metadata/nextflow/report.html`
+
+Supplemental recovery and diagnosis:
+
+- `publish/status/` when the status builder completes
+- `publish/metadata/run_manifest.json` and `publish/metadata/launch_metadata.json`
+
+Recommended operator workflow after a failed or partial run:
+
+1. Check the Nextflow report and trace under `publish/metadata/nextflow/`.
+2. If present, inspect `publish/status/status_summary.json`.
+3. Use `publish/status/accession_status.tsv` to find accession-level failures or no-call completions.
+4. Use `-resume` when continuing the same run root.
+
+## Focused Smoke Scripts
 
 When you do not need a full pipeline run:
+
 - `scripts/smoke_live_acquisition.sh`
 - `scripts/smoke_live_detection.sh`
 
-These are opt-in live checks. They are narrower than the full Nextflow smoke path.
-They do not define the canonical published output contract for full pipeline runs.
-
-## Runtime expectations
-
-- taxonomy DB path defaults to `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`
-- the Nextflow `docker` profile expects `homorepeat-acquisition:dev` and `homorepeat-detection:dev`
-- the canonical operator entrypoint is `nextflow run .`
-- the `local` profile still requires the repo CLIs and Python environment on the host; the `docker` profile keeps task execution inside the runtime images
-- batch planning defaults to `params.batch_size = 10`
-- task-level parallelism is controlled by Nextflow labels in `conf/base.config`
-- for larger runs, prefer `--work_dir` on fast local scratch; if unset, Nextflow work data defaults to `runs/<run_id>/internal/nextflow/work`
-
-## Published outputs
-
-Stable downstream outputs live under:
-- `runs/<run_id>/publish/acquisition/`
-- `runs/<run_id>/publish/calls/`
-- `runs/<run_id>/publish/calls/finalized/`
-- `runs/<run_id>/publish/status/`
-- `runs/<run_id>/publish/metadata/`
-
-Operational note:
-- `params.acquisition_publish_mode` controls the acquisition publish contract; the default is `raw`
-- in `raw` mode, acquisition outputs publish under `publish/acquisition/batches/<batch_id>/`
-- in `merged` mode, acquisition outputs publish as the legacy flat bundle under `publish/acquisition/`
-- `publish/calls/finalized/` contains method-specific finalized artifacts such as per-method call tables, run params, codon warnings, and codon-usage tables, grouped by method, repeat residue, and batch
-- `publish/calls/` contains the canonical merged `repeat_calls.tsv` and `run_params.tsv` used downstream
-- `publish/database/` and `publish/reports/` are present only in `merged` mode
-- `publish/status/` contains the accession-level operational ledger in `accession_status.tsv`, the per-method/per-residue breakdown in `accession_call_counts.tsv`, and run-level counts in `status_summary.json` when the reporting path completes
-- `publish/metadata/` contains `run_manifest.json`, `launch_metadata.json`, and stable relative symlinks under `publish/metadata/nextflow/` pointing back to `internal/nextflow/`
-- `publish/metadata/run_manifest.json` is the authoritative place to detect whether a run is `raw` or `merged`
-- native Nextflow run status and `publish/metadata/nextflow/report.html` are the authoritative failure surface
-
-Execution state lives under:
-- `runs/<run_id>/internal/`
-- `runs/<run_id>/internal/nextflow/` stores the live Nextflow logs and source diagnostics used to build the published metadata bundle
-
-## Verified baseline
-
-Verified on April 8, 2026:
-- `bash scripts/build_dev_containers.sh`
-- full live Nextflow smoke run through the `docker` profile on 1 real NCBI accession with `batch_size=1`
-- canonical outputs confirmed after the contract cleanup removing row-level `download_path`, `sequence_path`, `protein_path`, and `source_file`
-- one-accession Docker benchmark run confirmed the published layout under `publish/`, including `publish/metadata/nextflow/` symlinks and `publish/calls/finalized/`
-- source-derived canonical IDs were verified in live outputs:
-  - `genome_id = assembly_accession`
-  - `sequence_id = assembly_accession::...`
-  - `protein_id = sequence_id::protein`
-  - `call_id = method::protein_id::repeat_residue::start-end`
-
-Latest verified run:
-- `runs/live_benchmark_small_2026_04_08`
+These are narrow live checks. They are useful for toolchain debugging, but they do not define the full published contract of `nextflow run .`.

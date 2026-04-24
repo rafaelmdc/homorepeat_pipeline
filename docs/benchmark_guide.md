@@ -1,55 +1,30 @@
 # Benchmark Guide
 
-## Reference benchmark
+## Benchmark Inputs
 
-The reference scale benchmark for this optimization phase is:
+Use fixed accession sets when comparing changes.
 
-- [`examples/accessions/chr_accessions.txt`](../examples/accessions/chr_accessions.txt)
+Checked-in inputs:
 
-This file contains the same `897` accessions used by the April 8, 2026 chromosome-scale run stored under `runs/real_run_chr_v2/internal/planning/selected_accessions.txt`.
+- smoke-scale input: [`examples/accessions/smoke_human.txt`](../examples/accessions/smoke_human.txt)
+- larger reference input: [`examples/accessions/chr_accessions.txt`](../examples/accessions/chr_accessions.txt)
 
-Use this accession set when comparing performance changes across slices unless a change explicitly needs a smaller fixture first.
+Do not compare ad hoc runs against benchmark runs unless the input list, publish mode, and key parameters are the same.
 
-## Current baseline
+## What to Measure
 
-The current baseline came from `runs/real_run_chr_v2`:
-
-- run root size was roughly `491G`
-- `NORMALIZE_CDS_BATCH` peak RSS ranged from roughly `2.3 GB` to `4.2 GB`
-- the run failed during normalize, before translate or detection began
-
-That means later improvements should be judged against the same benchmark input and these same measurement categories, not against ad hoc smoke runs alone.
-
-## Latest live verification
-
-The latest post-fix live verification run is:
-
-- `runs/live_benchmark_small_2026_04_08`
-
-This was a one-accession Docker run against `examples/accessions/smoke_human.txt` after the canonical ID migration from truncated hashes to source-derived text IDs.
-
-Observed summary:
-- elapsed time was about `89.4s`
-- run root size was about `3.1 GB`
-- `NORMALIZE_CDS_BATCH` peak RSS was about `533 MB`
-- `TRANSLATE_CDS_BATCH` peak RSS was about `223 MB`
-- `MERGE_ACQUISITION_BATCHES` completed successfully
-- published outputs confirmed source-derived IDs end to end
-
-This run is a correctness and smoke-scale benchmark, not the scale reference benchmark.
-
-## Measurement checklist
-
-For each benchmark rerun, capture:
+For each benchmark run, capture:
 
 - peak RSS by process from `trace.txt`
-- total size of the run root and any external work directory
+- total disk footprint of the run root
+- total disk footprint of any external `workDir`
 - time to first translated batch completion
-- time to first detection task completion
+- time to first detection-task completion
+- number of accessions in the benchmark input
 
-## Summary command
+## Summary CLI
 
-Use the benchmark summary CLI to normalize these measurements into one JSON artifact:
+Use the benchmark summary CLI to turn a run into one JSON comparison artifact:
 
 ```bash
 env PYTHONPATH=src python -m homorepeat.cli.summarize_benchmark_run \
@@ -59,7 +34,7 @@ env PYTHONPATH=src python -m homorepeat.cli.summarize_benchmark_run \
   --outpath runs/<run_id>/internal/benchmark_summary.json
 ```
 
-If `workDir` lives outside the run root, add another `--size-path`:
+If `workDir` lives outside the run root, include it explicitly:
 
 ```bash
 env PYTHONPATH=src python -m homorepeat.cli.summarize_benchmark_run \
@@ -70,4 +45,33 @@ env PYTHONPATH=src python -m homorepeat.cli.summarize_benchmark_run \
   --outpath runs/<run_id>/internal/benchmark_summary.json
 ```
 
-The summary JSON is the comparison artifact for later slices. It is intentionally simple and trace-derived, so it can be regenerated after every optimization change.
+## What the Summary Contains
+
+The summary JSON is derived from the Nextflow trace and the requested size paths. It records:
+
+- total task counts and completed-task counts
+- estimated elapsed time
+- peak RSS by process
+- milestone timings for first normalize, translate, and detection completions
+- optional accession-count metadata
+- optional size measurements for the run root and work directory
+
+## Recommended Comparison Workflow
+
+1. Choose a fixed accession set.
+2. Keep the profile, publish mode, and key params stable between runs.
+3. Save `benchmark_summary.json` beside each run.
+4. Compare the JSON artifacts rather than relying on memory or terminal logs.
+5. If a change improves throughput but increases memory or disk sharply, record that tradeoff explicitly.
+
+## Implementation Notes
+
+The summary CLI expects the standard Nextflow trace columns:
+
+- `name`
+- `status`
+- `submit`
+- `realtime`
+- `peak_rss`
+
+If those columns are missing, the benchmark summary will fail fast rather than silently under-reporting run characteristics.
