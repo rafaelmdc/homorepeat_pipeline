@@ -248,6 +248,8 @@ class RuntimeArtifactsTest(unittest.TestCase):
             (publish_root / "metadata" / "nextflow").mkdir(parents=True, exist_ok=True)
             (publish_root / "reports").mkdir(parents=True, exist_ok=True)
             (publish_root / "status").mkdir(parents=True, exist_ok=True)
+            (publish_root / "tables").mkdir(parents=True, exist_ok=True)
+            (publish_root / "summaries").mkdir(parents=True, exist_ok=True)
 
             for path in [
                 publish_root / "acquisition" / "genomes.tsv",
@@ -258,6 +260,11 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 publish_root / "status" / "accession_status.tsv",
                 publish_root / "status" / "accession_call_counts.tsv",
                 publish_root / "metadata" / "nextflow" / "trace.txt",
+                publish_root / "tables" / "genomes.tsv",
+                publish_root / "tables" / "download_manifest.tsv",
+                publish_root / "tables" / "accession_status.tsv",
+                publish_root / "summaries" / "status_summary.json",
+                publish_root / "summaries" / "acquisition_validation.json",
             ]:
                 if path.name == "run_params.tsv":
                     path.write_text(
@@ -340,6 +347,14 @@ class RuntimeArtifactsTest(unittest.TestCase):
             self.assertEqual(payload["artifacts"]["status"]["accession_status_tsv"], "publish/status/accession_status.tsv")
             self.assertEqual(payload["artifacts"]["status"]["accession_call_counts_tsv"], "publish/status/accession_call_counts.tsv")
             self.assertEqual(payload["artifacts"]["status"]["status_summary_json"], "publish/status/status_summary.json")
+            self.assertEqual(payload["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
+            self.assertEqual(payload["artifacts"]["tables"]["download_manifest_tsv"], "publish/tables/download_manifest.tsv")
+            self.assertEqual(payload["artifacts"]["tables"]["accession_status_tsv"], "publish/tables/accession_status.tsv")
+            self.assertEqual(payload["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
+            self.assertEqual(
+                payload["artifacts"]["summaries"]["acquisition_validation_json"],
+                "publish/summaries/acquisition_validation.json",
+            )
             self.assertEqual(payload["artifacts"]["metadata"]["launch_metadata_json"], "publish/metadata/launch_metadata.json")
             self.assertEqual(payload["artifacts"]["metadata"]["trace_txt"], "publish/metadata/nextflow/trace.txt")
 

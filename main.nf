@@ -4,6 +4,7 @@ include { ACQUISITION_FROM_ACCESSIONS } from './workflows/acquisition_from_acces
 include { DETECTION_FROM_ACQUISITION } from './workflows/detection_from_acquisition'
 include { DATABASE_REPORTING } from './workflows/database_reporting'
 include { BUILD_ACCESSION_STATUS } from './modules/local/reporting/build_accession_status'
+include { EXPORT_PUBLISH_TABLES } from './modules/local/reporting/export_publish_tables'
 include { MERGE_CALL_TABLES } from './modules/local/reporting/merge_call_tables'
 
 def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
@@ -82,6 +83,13 @@ workflow {
     detection.call_tsvs,
     detection.run_params_tsvs,
   )
+  flatPublishTables = EXPORT_PUBLISH_TABLES(
+    acquisition.batch_table,
+    acquisition.batch_inputs,
+    statusBuild.accession_status_tsv,
+    statusBuild.accession_call_counts_tsv,
+    statusBuild.status_summary_json,
+  )
   def databaseSqliteCh = Channel.empty()
   def databaseSqliteValidationCh = Channel.empty()
   def reportsSummaryByTaxonCh = Channel.empty()
@@ -131,6 +139,14 @@ workflow {
   status_accession = publishablePathChannel(statusBuild.accession_status_tsv)
   status_accession_call_counts = publishablePathChannel(statusBuild.accession_call_counts_tsv)
   status_summary = publishablePathChannel(statusBuild.status_summary_json)
+  tables_genomes = publishablePathChannel(flatPublishTables.genomes_tsv)
+  tables_taxonomy = publishablePathChannel(flatPublishTables.taxonomy_tsv)
+  tables_download_manifest = publishablePathChannel(flatPublishTables.download_manifest_tsv)
+  tables_normalization_warnings = publishablePathChannel(flatPublishTables.normalization_warnings_tsv)
+  tables_accession_status = publishablePathChannel(flatPublishTables.accession_status_tsv)
+  tables_accession_call_counts = publishablePathChannel(flatPublishTables.accession_call_counts_tsv)
+  summaries_status = publishablePathChannel(flatPublishTables.status_summary_json)
+  summaries_acquisition_validation = publishablePathChannel(flatPublishTables.acquisition_validation_json)
 
   emit:
   genomes_tsv = acquisition.genomes_tsv
@@ -155,6 +171,14 @@ workflow {
   accession_status = statusBuild.accession_status_tsv
   accession_call_counts = statusBuild.accession_call_counts_tsv
   status_summary = statusBuild.status_summary_json
+  tables_genomes_tsv = flatPublishTables.genomes_tsv
+  tables_taxonomy_tsv = flatPublishTables.taxonomy_tsv
+  tables_download_manifest_tsv = flatPublishTables.download_manifest_tsv
+  tables_normalization_warnings_tsv = flatPublishTables.normalization_warnings_tsv
+  tables_accession_status_tsv = flatPublishTables.accession_status_tsv
+  tables_accession_call_counts_tsv = flatPublishTables.accession_call_counts_tsv
+  summaries_status_summary_json = flatPublishTables.status_summary_json
+  summaries_acquisition_validation_json = flatPublishTables.acquisition_validation_json
 }
 
 output {
@@ -184,6 +208,14 @@ output {
   status_accession { path { artifact -> publishTarget('status', artifact) } }
   status_accession_call_counts { path { artifact -> publishTarget('status', artifact) } }
   status_summary { path { artifact -> publishTarget('status', artifact) } }
+  tables_genomes { path { artifact -> publishTarget('tables', artifact) } }
+  tables_taxonomy { path { artifact -> publishTarget('tables', artifact) } }
+  tables_download_manifest { path { artifact -> publishTarget('tables', artifact) } }
+  tables_normalization_warnings { path { artifact -> publishTarget('tables', artifact) } }
+  tables_accession_status { path { artifact -> publishTarget('tables', artifact) } }
+  tables_accession_call_counts { path { artifact -> publishTarget('tables', artifact) } }
+  summaries_status { path { artifact -> publishTarget('summaries', artifact) } }
+  summaries_acquisition_validation { path { artifact -> publishTarget('summaries', artifact) } }
 }
 
 workflow.onComplete {

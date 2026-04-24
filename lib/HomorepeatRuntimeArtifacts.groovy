@@ -34,6 +34,22 @@ class HomorepeatRuntimeArtifacts {
             accession_call_counts_tsv: 'status/accession_call_counts.tsv',
             status_summary_json      : 'status/status_summary.json',
         ],
+        tables     : [
+            genomes_tsv                : 'tables/genomes.tsv',
+            taxonomy_tsv               : 'tables/taxonomy.tsv',
+            matched_sequences_tsv      : 'tables/matched_sequences.tsv',
+            matched_proteins_tsv       : 'tables/matched_proteins.tsv',
+            repeat_call_codon_usage_tsv: 'tables/repeat_call_codon_usage.tsv',
+            repeat_context_tsv         : 'tables/repeat_context.tsv',
+            download_manifest_tsv      : 'tables/download_manifest.tsv',
+            normalization_warnings_tsv : 'tables/normalization_warnings.tsv',
+            accession_status_tsv       : 'tables/accession_status.tsv',
+            accession_call_counts_tsv  : 'tables/accession_call_counts.tsv',
+        ],
+        summaries  : [
+            status_summary_json      : 'summaries/status_summary.json',
+            acquisition_validation_json: 'summaries/acquisition_validation.json',
+        ],
         metadata   : [
             launch_metadata_json : 'metadata/launch_metadata.json',
             nextflow_report_html : 'metadata/nextflow/report.html',

@@ -39,6 +39,8 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(manifest["acquisition_publish_mode"], "raw")
             self.assertEqual(launch["acquisition_publish_mode"], "raw")
             self.assertEqual(manifest["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
+            self.assertEqual(manifest["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
+            self.assertEqual(manifest["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
             self.assertEqual(manifest["params"]["params_file_values"], {})
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
             self.assertFalse((publish_root / ".nf_placeholders").exists())
@@ -62,6 +64,17 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertTrue((publish_root / "status" / "accession_status.tsv").is_file())
             self.assertTrue((publish_root / "status" / "accession_call_counts.tsv").is_file())
             self.assertTrue((publish_root / "status" / "status_summary.json").is_file())
+            for filename in [
+                "genomes.tsv",
+                "taxonomy.tsv",
+                "download_manifest.tsv",
+                "normalization_warnings.tsv",
+                "accession_status.tsv",
+                "accession_call_counts.tsv",
+            ]:
+                self.assertTrue((publish_root / "tables" / filename).is_file(), publish_root / "tables" / filename)
+            self.assertTrue((publish_root / "summaries" / "status_summary.json").is_file())
+            self.assertTrue((publish_root / "summaries" / "acquisition_validation.json").is_file())
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())
 
@@ -86,6 +99,8 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(launch["publish_contract_version"], 1)
             self.assertEqual(manifest["acquisition_publish_mode"], "merged")
             self.assertEqual(launch["acquisition_publish_mode"], "merged")
+            self.assertEqual(manifest["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
+            self.assertEqual(manifest["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
             self.assertEqual(manifest["params"]["params_file_values"], {})
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
             self.assertFalse((publish_root / ".nf_placeholders").exists())
@@ -116,6 +131,17 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertTrue((publish_root / "status" / "accession_status.tsv").is_file())
             self.assertTrue((publish_root / "status" / "accession_call_counts.tsv").is_file())
             self.assertTrue((publish_root / "status" / "status_summary.json").is_file())
+            for filename in [
+                "genomes.tsv",
+                "taxonomy.tsv",
+                "download_manifest.tsv",
+                "normalization_warnings.tsv",
+                "accession_status.tsv",
+                "accession_call_counts.tsv",
+            ]:
+                self.assertTrue((publish_root / "tables" / filename).is_file(), publish_root / "tables" / filename)
+            self.assertTrue((publish_root / "summaries" / "status_summary.json").is_file())
+            self.assertTrue((publish_root / "summaries" / "acquisition_validation.json").is_file())
 
     def _run_pipeline(
         self,
