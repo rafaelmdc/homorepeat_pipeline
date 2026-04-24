@@ -22,6 +22,7 @@ Use the current-state docs when you want to understand or operate the repository
 - [Scale Guide](./scale_guide.md): concurrency model, resource defaults, and large-run advice.
 - [Benchmark Guide](./benchmark_guide.md): benchmark inputs, the summary CLI, and comparison workflow.
 - [Save State Guide](./save_state_guide.md): `-resume`, accession-level ledgers, and rerun strategy.
+- [Publish Contract Codebase Slices](./publish_contract_codebase_slices.md): implementation-sized slices derived from the frozen publish-contract plan.
 
 ## Current Scope
 

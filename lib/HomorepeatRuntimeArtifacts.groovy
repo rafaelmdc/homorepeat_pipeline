@@ -11,6 +11,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 class HomorepeatRuntimeArtifacts {
+    private static final Integer CURRENT_PUBLISH_CONTRACT_VERSION = 1
     private static final Map<String, Map<String, String>> PUBLISHED_ARTIFACTS = [
         calls      : [
             repeat_calls_tsv: 'calls/repeat_calls.tsv',
@@ -144,6 +145,7 @@ class HomorepeatRuntimeArtifacts {
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
+            publish_contract_version: CURRENT_PUBLISH_CONTRACT_VERSION,
             acquisition_publish_mode: ctx.acquisitionPublishMode,
             launch_dir     : ctx.launchDir?.toString() ?: '',
             project_dir    : ctx.repoRoot?.toString() ?: '',
@@ -178,6 +180,7 @@ class HomorepeatRuntimeArtifacts {
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
+            publish_contract_version: CURRENT_PUBLISH_CONTRACT_VERSION,
             acquisition_publish_mode: normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
             git_revision   : gitRevision(repoRoot),
             inputs         : [

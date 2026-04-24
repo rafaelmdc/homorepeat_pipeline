@@ -10,6 +10,9 @@ from pathlib import Path
 from homorepeat.io.tsv_io import ensure_directory
 
 
+CURRENT_PUBLISH_CONTRACT_VERSION = 1
+
+
 MERGED_ACQUISITION_ARTIFACTS = {
     "genomes_tsv": "acquisition/genomes.tsv",
     "taxonomy_tsv": "acquisition/taxonomy.tsv",
@@ -80,6 +83,7 @@ def build_run_manifest(
         "started_at_utc": started_at_utc,
         "finished_at_utc": finished_at_utc,
         "profile": profile,
+        "publish_contract_version": CURRENT_PUBLISH_CONTRACT_VERSION,
         "acquisition_publish_mode": normalized_publish_mode,
         "git_revision": _git_revision(repo_root),
         "inputs": {

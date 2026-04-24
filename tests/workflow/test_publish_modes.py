@@ -34,6 +34,8 @@ class WorkflowPublishModesTest(unittest.TestCase):
             launch = json.loads((publish_root / "metadata" / "launch_metadata.json").read_text(encoding="utf-8"))
 
             self.assertEqual(manifest["status"], "success")
+            self.assertEqual(manifest["publish_contract_version"], 1)
+            self.assertEqual(launch["publish_contract_version"], 1)
             self.assertEqual(manifest["acquisition_publish_mode"], "raw")
             self.assertEqual(launch["acquisition_publish_mode"], "raw")
             self.assertEqual(manifest["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
@@ -80,6 +82,8 @@ class WorkflowPublishModesTest(unittest.TestCase):
             launch = json.loads((publish_root / "metadata" / "launch_metadata.json").read_text(encoding="utf-8"))
 
             self.assertEqual(manifest["status"], "success")
+            self.assertEqual(manifest["publish_contract_version"], 1)
+            self.assertEqual(launch["publish_contract_version"], 1)
             self.assertEqual(manifest["acquisition_publish_mode"], "merged")
             self.assertEqual(launch["acquisition_publish_mode"], "merged")
             self.assertEqual(manifest["params"]["params_file_values"], {})

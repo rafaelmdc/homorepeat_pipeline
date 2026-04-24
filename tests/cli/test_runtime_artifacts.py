@@ -327,6 +327,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run_id"], "run_001")
             self.assertEqual(payload["status"], "success")
+            self.assertEqual(payload["publish_contract_version"], 1)
             self.assertEqual(payload["acquisition_publish_mode"], "merged")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
@@ -398,6 +399,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish_contract_version"], 1)
             self.assertEqual(payload["acquisition_publish_mode"], "raw")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["N", "Q"])
@@ -479,6 +481,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish_contract_version"], 1)
             self.assertEqual(payload["acquisition_publish_mode"], "raw")
             self.assertEqual(payload["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
             self.assertNotIn("genomes_tsv", payload["artifacts"]["acquisition"])
@@ -565,6 +568,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish_contract_version"], 1)
             self.assertEqual(payload["params"]["params_file_values"]["batch_size"], 10)
             self.assertEqual(payload["params"]["effective_values"]["batch_size"], 2)
 
