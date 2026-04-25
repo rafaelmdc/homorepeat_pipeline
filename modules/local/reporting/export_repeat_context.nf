@@ -20,8 +20,8 @@ process EXPORT_REPEAT_CONTEXT_TASK {
         def translatedDir = translatedInputs[idx]
         """
         mkdir -p "repeat_context_batch_views/${batchId}"
-        cp '${normalizedDir}/cds.fna' "repeat_context_batch_views/${batchId}/cds.fna"
-        cp '${translatedDir}/proteins.faa' "repeat_context_batch_views/${batchId}/proteins.faa"
+        ln '${normalizedDir}/cds.fna' "repeat_context_batch_views/${batchId}/cds.fna" || cp '${normalizedDir}/cds.fna' "repeat_context_batch_views/${batchId}/cds.fna"
+        ln '${translatedDir}/proteins.faa' "repeat_context_batch_views/${batchId}/proteins.faa" || cp '${translatedDir}/proteins.faa' "repeat_context_batch_views/${batchId}/proteins.faa"
         """
     }.join('\n')
     def batchArgs = batchIdInputs.collect { "--batch-dir 'repeat_context_batch_views/${it}'" }.join(' ')

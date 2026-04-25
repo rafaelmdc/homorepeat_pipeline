@@ -33,13 +33,13 @@ process EXPORT_PUBLISH_TABLES_TASK {
         def translatedDir = translatedInputs[idx]
         """
         mkdir -p "publish_batch_views/${batchId}"
-        cp '${normalizedDir}/genomes.tsv' "publish_batch_views/${batchId}/genomes.tsv"
-        cp '${normalizedDir}/taxonomy.tsv' "publish_batch_views/${batchId}/taxonomy.tsv"
-        cp '${normalizedDir}/sequences.tsv' "publish_batch_views/${batchId}/sequences.tsv"
-        cp '${translatedDir}/proteins.tsv' "publish_batch_views/${batchId}/proteins.tsv"
-        cp '${translatedDir}/download_manifest.tsv' "publish_batch_views/${batchId}/download_manifest.tsv"
-        cp '${translatedDir}/normalization_warnings.tsv' "publish_batch_views/${batchId}/normalization_warnings.tsv"
-        cp '${translatedDir}/acquisition_validation.json' "publish_batch_views/${batchId}/acquisition_validation.json"
+        ln '${normalizedDir}/genomes.tsv' "publish_batch_views/${batchId}/genomes.tsv" || cp '${normalizedDir}/genomes.tsv' "publish_batch_views/${batchId}/genomes.tsv"
+        ln '${normalizedDir}/taxonomy.tsv' "publish_batch_views/${batchId}/taxonomy.tsv" || cp '${normalizedDir}/taxonomy.tsv' "publish_batch_views/${batchId}/taxonomy.tsv"
+        ln '${normalizedDir}/sequences.tsv' "publish_batch_views/${batchId}/sequences.tsv" || cp '${normalizedDir}/sequences.tsv' "publish_batch_views/${batchId}/sequences.tsv"
+        ln '${translatedDir}/proteins.tsv' "publish_batch_views/${batchId}/proteins.tsv" || cp '${translatedDir}/proteins.tsv' "publish_batch_views/${batchId}/proteins.tsv"
+        ln '${translatedDir}/download_manifest.tsv' "publish_batch_views/${batchId}/download_manifest.tsv" || cp '${translatedDir}/download_manifest.tsv' "publish_batch_views/${batchId}/download_manifest.tsv"
+        ln '${translatedDir}/normalization_warnings.tsv' "publish_batch_views/${batchId}/normalization_warnings.tsv" || cp '${translatedDir}/normalization_warnings.tsv' "publish_batch_views/${batchId}/normalization_warnings.tsv"
+        ln '${translatedDir}/acquisition_validation.json' "publish_batch_views/${batchId}/acquisition_validation.json" || cp '${translatedDir}/acquisition_validation.json' "publish_batch_views/${batchId}/acquisition_validation.json"
         """
     }.join('\n')
     def batchArgs = batchIdInputs.collect { "--batch-dir 'publish_batch_views/${it}'" }.join(' ')
