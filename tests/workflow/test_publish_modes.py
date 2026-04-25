@@ -45,6 +45,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 manifest["artifacts"]["tables"]["repeat_call_codon_usage_tsv"],
                 "publish/tables/repeat_call_codon_usage.tsv",
             )
+            self.assertEqual(manifest["artifacts"]["tables"]["repeat_context_tsv"], "publish/tables/repeat_context.tsv")
             self.assertEqual(manifest["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
             self.assertEqual(manifest["params"]["params_file_values"], {})
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
@@ -75,6 +76,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 "matched_sequences.tsv",
                 "matched_proteins.tsv",
                 "repeat_call_codon_usage.tsv",
+                "repeat_context.tsv",
                 "download_manifest.tsv",
                 "normalization_warnings.tsv",
                 "accession_status.tsv",
@@ -98,10 +100,20 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 for row in read_tsv(publish_root / "calls" / "repeat_calls.tsv")
                 if row.get("protein_id", "")
             }
+            call_ids = {
+                row["call_id"]
+                for row in read_tsv(publish_root / "calls" / "repeat_calls.tsv")
+                if row.get("call_id", "")
+            }
             matched_protein_ids = {
                 row["protein_id"]
                 for row in read_tsv(publish_root / "tables" / "matched_proteins.tsv")
                 if row.get("protein_id", "")
+            }
+            context_call_ids = {
+                row["call_id"]
+                for row in read_tsv(publish_root / "tables" / "repeat_context.tsv")
+                if row.get("call_id", "")
             }
             all_sequence_ids = {
                 row["sequence_id"]
@@ -117,6 +129,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
             }
             self.assertEqual(matched_sequence_ids, call_sequence_ids)
             self.assertEqual(matched_protein_ids, call_protein_ids)
+            self.assertEqual(context_call_ids, call_ids)
             self.assertTrue(all_sequence_ids - matched_sequence_ids)
             self.assertTrue(all_protein_ids - matched_protein_ids)
             self.assertFalse((publish_root / "database").exists())
@@ -148,6 +161,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 manifest["artifacts"]["tables"]["repeat_call_codon_usage_tsv"],
                 "publish/tables/repeat_call_codon_usage.tsv",
             )
+            self.assertEqual(manifest["artifacts"]["tables"]["repeat_context_tsv"], "publish/tables/repeat_context.tsv")
             self.assertEqual(manifest["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
             self.assertEqual(manifest["params"]["params_file_values"], {})
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
@@ -185,6 +199,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 "matched_sequences.tsv",
                 "matched_proteins.tsv",
                 "repeat_call_codon_usage.tsv",
+                "repeat_context.tsv",
                 "download_manifest.tsv",
                 "normalization_warnings.tsv",
                 "accession_status.tsv",
