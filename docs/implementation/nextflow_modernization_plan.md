@@ -35,6 +35,25 @@ Expected outcome:
 - Blank node count from the raw-mode DAG is recorded here and used as the upper
   threshold for the Phase 6 regression guard.
 
+## Phase 0 Results (recorded 2026-04-25)
+
+Pre-refactor baseline:
+
+- `nextflow config .` — passes, NF 25.10.4.
+- `tests.workflow.test_publish_modes` — 2/2 pass.
+- `tests.workflow.test_workflow_output_failures` — 1/1 pass.
+- Raw-mode blank node count: **68** (run `smoke_human`,
+  `runs/smoke_human/internal/nextflow/dag.html`).
+  - 38 square `v[" "]` nodes — anonymous channel sources / sinks.
+  - 30 circle `v(( ))` nodes — anonymous operator merge/fan-out points.
+  - Attributed to two sources: `publishablePathChannel` placeholder injection in
+    `main.nf` and un-emitted `publish_batch/*` outputs in `NORMALIZE_CDS_BATCH`
+    / `TRANSLATE_CDS_BATCH`.
+- Helper script added: `scripts/count_dag_noise.sh [dag.html]`.
+
+The Phase 6 regression guard should assert blank node count ≤ 0 (or a small
+single-digit number if Nextflow itself introduces unavoidable internals).
+
 ## Phase 1: Verify Empty Workflow Output Semantics
 
 Goal: decide whether Option 1 from the design is safe in Nextflow 25.10.
