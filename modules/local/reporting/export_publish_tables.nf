@@ -4,6 +4,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
     input:
     path(batch_table)
     tuple val(batch_ids), path(normalized_batch_dirs, stageAs: 'normalized_batch??'), path(translated_batch_dirs, stageAs: 'translated_batch??')
+    path(repeat_calls_tsv)
     path(accession_status_tsv)
     path(accession_call_counts_tsv)
     path(status_summary_json)
@@ -11,6 +12,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
     output:
     path('genomes.tsv'), emit: genomes_tsv
     path('taxonomy.tsv'), emit: taxonomy_tsv
+    path('matched_sequences.tsv'), emit: matched_sequences_tsv
     path('download_manifest.tsv'), emit: download_manifest_tsv
     path('normalization_warnings.tsv'), emit: normalization_warnings_tsv
     path('accession_status.tsv'), emit: accession_status_tsv
@@ -32,6 +34,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
         mkdir -p "publish_batch_views/${batchId}"
         cp '${normalizedDir}/genomes.tsv' "publish_batch_views/${batchId}/genomes.tsv"
         cp '${normalizedDir}/taxonomy.tsv' "publish_batch_views/${batchId}/taxonomy.tsv"
+        cp '${normalizedDir}/sequences.tsv' "publish_batch_views/${batchId}/sequences.tsv"
         cp '${translatedDir}/download_manifest.tsv' "publish_batch_views/${batchId}/download_manifest.tsv"
         cp '${translatedDir}/normalization_warnings.tsv' "publish_batch_views/${batchId}/normalization_warnings.tsv"
         cp '${translatedDir}/acquisition_validation.json' "publish_batch_views/${batchId}/acquisition_validation.json"
@@ -45,6 +48,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
     ${params.python_bin} -m homorepeat.cli.export_publish_tables \
       --batch-table ${batch_table} \
       ${batchArgs} \
+      --repeat-calls-tsv ${repeat_calls_tsv} \
       --accession-status-tsv ${accession_status_tsv} \
       --accession-call-counts-tsv ${accession_call_counts_tsv} \
       --status-summary-json ${status_summary_json} \
@@ -52,6 +56,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
 
     mv export_publish_tables_tmp/tables/genomes.tsv genomes.tsv
     mv export_publish_tables_tmp/tables/taxonomy.tsv taxonomy.tsv
+    mv export_publish_tables_tmp/tables/matched_sequences.tsv matched_sequences.tsv
     mv export_publish_tables_tmp/tables/download_manifest.tsv download_manifest.tsv
     mv export_publish_tables_tmp/tables/normalization_warnings.tsv normalization_warnings.tsv
     mv export_publish_tables_tmp/tables/accession_status.tsv accession_status.tsv
@@ -65,6 +70,7 @@ workflow EXPORT_PUBLISH_TABLES {
     take:
     batch_table
     batch_inputs
+    repeat_calls_tsv
     accession_status_tsv
     accession_call_counts_tsv
     status_summary_json
@@ -73,6 +79,7 @@ workflow EXPORT_PUBLISH_TABLES {
     exports = EXPORT_PUBLISH_TABLES_TASK(
         batch_table,
         batch_inputs,
+        repeat_calls_tsv,
         accession_status_tsv,
         accession_call_counts_tsv,
         status_summary_json,
@@ -81,6 +88,7 @@ workflow EXPORT_PUBLISH_TABLES {
     emit:
     genomes_tsv = exports.genomes_tsv
     taxonomy_tsv = exports.taxonomy_tsv
+    matched_sequences_tsv = exports.matched_sequences_tsv
     download_manifest_tsv = exports.download_manifest_tsv
     normalization_warnings_tsv = exports.normalization_warnings_tsv
     accession_status_tsv = exports.accession_status_tsv

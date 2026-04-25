@@ -11,6 +11,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from homorepeat.io.tsv_io import read_tsv
 from tests.test_support import CLI_ENV, REPO_ROOT
 
 
@@ -67,6 +68,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
             for filename in [
                 "genomes.tsv",
                 "taxonomy.tsv",
+                "matched_sequences.tsv",
                 "download_manifest.tsv",
                 "normalization_warnings.tsv",
                 "accession_status.tsv",
@@ -75,6 +77,24 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 self.assertTrue((publish_root / "tables" / filename).is_file(), publish_root / "tables" / filename)
             self.assertTrue((publish_root / "summaries" / "status_summary.json").is_file())
             self.assertTrue((publish_root / "summaries" / "acquisition_validation.json").is_file())
+            call_sequence_ids = {
+                row["sequence_id"]
+                for row in read_tsv(publish_root / "calls" / "repeat_calls.tsv")
+                if row.get("sequence_id", "")
+            }
+            matched_sequence_ids = {
+                row["sequence_id"]
+                for row in read_tsv(publish_root / "tables" / "matched_sequences.tsv")
+                if row.get("sequence_id", "")
+            }
+            all_sequence_ids = {
+                row["sequence_id"]
+                for batch_id in ["batch_0001", "batch_0002"]
+                for row in read_tsv(publish_root / "acquisition" / "batches" / batch_id / "sequences.tsv")
+                if row.get("sequence_id", "")
+            }
+            self.assertEqual(matched_sequence_ids, call_sequence_ids)
+            self.assertTrue(all_sequence_ids - matched_sequence_ids)
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())
 
@@ -134,6 +154,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
             for filename in [
                 "genomes.tsv",
                 "taxonomy.tsv",
+                "matched_sequences.tsv",
                 "download_manifest.tsv",
                 "normalization_warnings.tsv",
                 "accession_status.tsv",

@@ -86,6 +86,7 @@ workflow {
   flatPublishTables = EXPORT_PUBLISH_TABLES(
     acquisition.batch_table,
     acquisition.batch_inputs,
+    canonicalCalls.repeat_calls_tsv,
     statusBuild.accession_status_tsv,
     statusBuild.accession_call_counts_tsv,
     statusBuild.status_summary_json,
@@ -141,6 +142,7 @@ workflow {
   status_summary = publishablePathChannel(statusBuild.status_summary_json)
   tables_genomes = publishablePathChannel(flatPublishTables.genomes_tsv)
   tables_taxonomy = publishablePathChannel(flatPublishTables.taxonomy_tsv)
+  tables_matched_sequences = publishablePathChannel(flatPublishTables.matched_sequences_tsv)
   tables_download_manifest = publishablePathChannel(flatPublishTables.download_manifest_tsv)
   tables_normalization_warnings = publishablePathChannel(flatPublishTables.normalization_warnings_tsv)
   tables_accession_status = publishablePathChannel(flatPublishTables.accession_status_tsv)
@@ -173,6 +175,7 @@ workflow {
   status_summary = statusBuild.status_summary_json
   tables_genomes_tsv = flatPublishTables.genomes_tsv
   tables_taxonomy_tsv = flatPublishTables.taxonomy_tsv
+  tables_matched_sequences_tsv = flatPublishTables.matched_sequences_tsv
   tables_download_manifest_tsv = flatPublishTables.download_manifest_tsv
   tables_normalization_warnings_tsv = flatPublishTables.normalization_warnings_tsv
   tables_accession_status_tsv = flatPublishTables.accession_status_tsv
@@ -210,6 +213,7 @@ output {
   status_summary { path { artifact -> publishTarget('status', artifact) } }
   tables_genomes { path { artifact -> publishTarget('tables', artifact) } }
   tables_taxonomy { path { artifact -> publishTarget('tables', artifact) } }
+  tables_matched_sequences { path { artifact -> publishTarget('tables', artifact) } }
   tables_download_manifest { path { artifact -> publishTarget('tables', artifact) } }
   tables_normalization_warnings { path { artifact -> publishTarget('tables', artifact) } }
   tables_accession_status { path { artifact -> publishTarget('tables', artifact) } }

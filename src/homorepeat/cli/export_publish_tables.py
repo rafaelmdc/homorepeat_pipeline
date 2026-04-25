@@ -15,6 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch-table", required=True, help="Path to accession_batches.tsv")
     parser.add_argument("--batch-dir", action="append", default=[], help="Path to one staged batch export directory")
+    parser.add_argument("--repeat-calls-tsv", required=True, help="Path to canonical repeat_calls.tsv")
     parser.add_argument("--accession-status-tsv", required=True, help="Path to accession_status.tsv")
     parser.add_argument("--accession-call-counts-tsv", required=True, help="Path to accession_call_counts.tsv")
     parser.add_argument("--status-summary-json", required=True, help="Path to status_summary.json")
@@ -35,6 +36,7 @@ def main() -> int:
     export_publish_tables(
         batch_table_rows=batch_table_rows,
         batch_dirs=[Path(path) for path in args.batch_dir],
+        repeat_calls_tsv=Path(args.repeat_calls_tsv),
         accession_status_tsv=Path(args.accession_status_tsv),
         accession_call_counts_tsv=Path(args.accession_call_counts_tsv),
         status_summary_json=Path(args.status_summary_json),

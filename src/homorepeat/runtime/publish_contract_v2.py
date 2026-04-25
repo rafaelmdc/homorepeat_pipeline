@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Mapping, Sequence
 
 from homorepeat.acquisition.acquisition_validation import build_acquisition_validation_from_summary, write_validation_json
 from homorepeat.contracts.publish_contract_v2 import (
@@ -13,12 +13,14 @@ from homorepeat.contracts.publish_contract_v2 import (
     ACCESSION_STATUS_FIELDNAMES,
     DOWNLOAD_MANIFEST_FIELDNAMES,
     GENOMES_FIELDNAMES,
+    MATCHED_SEQUENCES_FIELDNAMES,
     NORMALIZATION_WARNINGS_FIELDNAMES,
     TAXONOMY_FIELDNAMES,
     validate_accession_call_count_row,
     validate_accession_status_row,
     validate_download_manifest_row,
     validate_genome_row,
+    validate_matched_sequence_row,
     validate_normalization_warning_row,
     validate_taxonomy_row,
 )
@@ -40,6 +42,7 @@ def export_publish_tables(
     *,
     batch_table_rows: Sequence[dict[str, str]],
     batch_dirs: Sequence[Path],
+    repeat_calls_tsv: Path,
     accession_status_tsv: Path,
     accession_call_counts_tsv: Path,
     status_summary_json: Path,
@@ -60,11 +63,18 @@ def export_publish_tables(
 
     tables_dir = outdir / "tables"
     summaries_dir = outdir / "summaries"
+    retained_sequence_ids = _read_retained_ids(repeat_calls_tsv, id_field="sequence_id", label="repeat_calls.tsv")
+    unmatched_sequence_ids = set(retained_sequence_ids)
+    matched_sequence_ids: set[str] = set()
     taxonomy_by_id: dict[str, dict[str, str]] = {}
     acquisition_validation_payloads: list[dict[str, object]] = []
 
     with (
         open_tsv_writer(tables_dir / "genomes.tsv", fieldnames=GENOMES_FIELDNAMES) as genomes_writer,
+        open_tsv_writer(
+            tables_dir / "matched_sequences.tsv",
+            fieldnames=MATCHED_SEQUENCES_FIELDNAMES,
+        ) as matched_sequences_writer,
         open_tsv_writer(tables_dir / "download_manifest.tsv", fieldnames=DOWNLOAD_MANIFEST_FIELDNAMES) as manifest_writer,
         open_tsv_writer(
             tables_dir / "normalization_warnings.tsv",
@@ -90,6 +100,21 @@ def export_publish_tables(
                 validate_genome_row(export_row)
                 genomes_writer.write_row(export_row)
 
+            for sequence_row in iter_tsv(
+                batch_dir / "sequences.tsv",
+                required_columns=MATCHED_SEQUENCES_FIELDNAMES[1:],
+            ):
+                sequence_id = sequence_row.get("sequence_id", "")
+                if sequence_id not in retained_sequence_ids:
+                    continue
+                if sequence_id in matched_sequence_ids:
+                    raise ContractError(f"matched_sequences.tsv would contain duplicate sequence_id {sequence_id}")
+                export_row = {"batch_id": batch_id, **sequence_row}
+                validate_matched_sequence_row(export_row)
+                matched_sequences_writer.write_row(export_row)
+                matched_sequence_ids.add(sequence_id)
+                unmatched_sequence_ids.discard(sequence_id)
+
             for taxonomy_row in iter_tsv(batch_dir / "taxonomy.tsv"):
                 validate_taxonomy_row(taxonomy_row)
                 taxon_id = taxonomy_row.get("taxon_id", "")
@@ -113,6 +138,10 @@ def export_publish_tables(
             validation_path = batch_dir / "acquisition_validation.json"
             if validation_path.is_file():
                 acquisition_validation_payloads.append(_read_json_payload(validation_path))
+
+    if unmatched_sequence_ids:
+        missing_ids = ", ".join(sorted(unmatched_sequence_ids)[:5])
+        raise ContractError(f"repeat_calls.tsv references missing sequence_id values: {missing_ids}")
 
     write_tsv(
         tables_dir / "taxonomy.tsv",
@@ -207,11 +236,27 @@ def read_batch_table(path: Path | str) -> list[dict[str, str]]:
     return read_tsv(path, required_columns=BATCH_TABLE_REQUIRED)
 
 
-def _stream_validated_table(path: Path, outpath: Path, *, fieldnames: Sequence[str], validate_row) -> None:
+def _stream_validated_table(
+    path: Path,
+    outpath: Path,
+    *,
+    fieldnames: Sequence[str],
+    validate_row: Callable[[Mapping[str, object]], None],
+) -> None:
     with open_tsv_writer(outpath, fieldnames=fieldnames) as writer:
         for row in iter_tsv(path, required_columns=fieldnames):
             validate_row(row)
             writer.write_row(row)
+
+
+def _read_retained_ids(path: Path, *, id_field: str, label: str) -> set[str]:
+    retained_ids: set[str] = set()
+    for row in iter_tsv(path, required_columns=[id_field]):
+        retained_id = row.get(id_field, "")
+        if not retained_id:
+            raise ContractError(f"{label} contains an empty {id_field}")
+        retained_ids.add(retained_id)
+    return retained_ids
 
 
 def _ordered_batch_ids(batch_table_rows: Sequence[dict[str, str]]) -> list[str]:

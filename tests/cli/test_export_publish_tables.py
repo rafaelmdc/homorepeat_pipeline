@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from homorepeat.contracts.publish_contract_v2 import MATCHED_SEQUENCES_FIELDNAMES
+from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, build_call_row
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES
 from homorepeat.io.tsv_io import read_tsv, write_tsv
 
@@ -126,7 +128,36 @@ class ExportPublishTablesCliTest(unittest.TestCase):
 
             accession_status_tsv = status_dir / "accession_status.tsv"
             accession_call_counts_tsv = status_dir / "accession_call_counts.tsv"
+            repeat_calls_tsv = status_dir / "repeat_calls.tsv"
             status_summary_json = status_dir / "status_summary.json"
+            write_tsv(
+                repeat_calls_tsv,
+                [
+                    build_call_row(
+                        method="pure",
+                        genome_id="genome_GCF_A.1",
+                        taxon_id="9606",
+                        sequence_id="seq_GCF_A.1_1",
+                        protein_id="protein_GCF_A.1_1",
+                        repeat_residue="Q",
+                        start=1,
+                        end=3,
+                        aa_sequence="QQQ",
+                    ),
+                    build_call_row(
+                        method="threshold",
+                        genome_id="genome_GCF_A.1",
+                        taxon_id="9606",
+                        sequence_id="seq_GCF_A.1_1",
+                        protein_id="protein_GCF_A.1_1",
+                        repeat_residue="Q",
+                        start=5,
+                        end=7,
+                        aa_sequence="QQQ",
+                    ),
+                ],
+                fieldnames=CALL_FIELDNAMES,
+            )
             write_tsv(
                 accession_status_tsv,
                 [
@@ -237,6 +268,8 @@ class ExportPublishTablesCliTest(unittest.TestCase):
                     str(batch_one),
                     "--batch-dir",
                     str(batch_two),
+                    "--repeat-calls-tsv",
+                    str(repeat_calls_tsv),
                     "--accession-status-tsv",
                     str(accession_status_tsv),
                     "--accession-call-counts-tsv",
@@ -260,6 +293,7 @@ class ExportPublishTablesCliTest(unittest.TestCase):
                 )
 
             genomes_rows = read_tsv(outdir / "tables" / "genomes.tsv")
+            matched_sequence_rows = read_tsv(outdir / "tables" / "matched_sequences.tsv")
             taxonomy_rows = read_tsv(outdir / "tables" / "taxonomy.tsv")
             manifest_rows = read_tsv(outdir / "tables" / "download_manifest.tsv")
             warning_rows = read_tsv(outdir / "tables" / "normalization_warnings.tsv")
@@ -276,6 +310,10 @@ class ExportPublishTablesCliTest(unittest.TestCase):
                     ("batch_0001", "GCF_A.1", "9606"),
                     ("batch_0002", "GCF_B.1", "10090"),
                 ],
+            )
+            self.assertEqual(
+                [(row["batch_id"], row["sequence_id"]) for row in matched_sequence_rows],
+                [("batch_0001", "seq_GCF_A.1_1")],
             )
             self.assertEqual([row["taxon_id"] for row in taxonomy_rows], ["10090", "9606"])
             self.assertEqual([row["assembly_accession"] for row in manifest_rows], ["GCF_A.1", "GCF_B.1"])
@@ -342,6 +380,43 @@ class ExportPublishTablesCliTest(unittest.TestCase):
             ],
             fieldnames=["taxon_id", "taxon_name", "parent_taxon_id", "rank", "source"],
         )
+        sequence_rows = [
+            {
+                "sequence_id": f"seq_{accession}_1",
+                "genome_id": f"genome_{accession}",
+                "sequence_name": "tx1",
+                "sequence_length": "99",
+                "gene_symbol": "GENE1",
+                "transcript_id": "tx1",
+                "isoform_id": "protein1",
+                "assembly_accession": accession,
+                "taxon_id": taxon_id,
+                "source_record_id": "cds-1",
+                "protein_external_id": "protein1",
+                "translation_table": "1",
+                "gene_group": "GENE1",
+                "linkage_status": "protein_id_linked",
+                "partial_status": "",
+            },
+            {
+                "sequence_id": f"seq_{accession}_unmatched",
+                "genome_id": f"genome_{accession}",
+                "sequence_name": "tx-unmatched",
+                "sequence_length": "42",
+                "gene_symbol": "GENE2",
+                "transcript_id": "tx-unmatched",
+                "isoform_id": "protein-unmatched",
+                "assembly_accession": accession,
+                "taxon_id": taxon_id,
+                "source_record_id": "cds-unmatched",
+                "protein_external_id": "protein-unmatched",
+                "translation_table": "1",
+                "gene_group": "GENE2",
+                "linkage_status": "protein_id_linked",
+                "partial_status": "",
+            },
+        ]
+        write_tsv(batch_dir / "sequences.tsv", sequence_rows, fieldnames=MATCHED_SEQUENCES_FIELDNAMES[1:])
         write_tsv(
             batch_dir / "download_manifest.tsv",
             [
