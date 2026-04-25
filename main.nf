@@ -143,6 +143,7 @@ workflow {
   tables_genomes = publishablePathChannel(flatPublishTables.genomes_tsv)
   tables_taxonomy = publishablePathChannel(flatPublishTables.taxonomy_tsv)
   tables_matched_sequences = publishablePathChannel(flatPublishTables.matched_sequences_tsv)
+  tables_matched_proteins = publishablePathChannel(flatPublishTables.matched_proteins_tsv)
   tables_download_manifest = publishablePathChannel(flatPublishTables.download_manifest_tsv)
   tables_normalization_warnings = publishablePathChannel(flatPublishTables.normalization_warnings_tsv)
   tables_accession_status = publishablePathChannel(flatPublishTables.accession_status_tsv)
@@ -176,6 +177,7 @@ workflow {
   tables_genomes_tsv = flatPublishTables.genomes_tsv
   tables_taxonomy_tsv = flatPublishTables.taxonomy_tsv
   tables_matched_sequences_tsv = flatPublishTables.matched_sequences_tsv
+  tables_matched_proteins_tsv = flatPublishTables.matched_proteins_tsv
   tables_download_manifest_tsv = flatPublishTables.download_manifest_tsv
   tables_normalization_warnings_tsv = flatPublishTables.normalization_warnings_tsv
   tables_accession_status_tsv = flatPublishTables.accession_status_tsv
@@ -214,6 +216,7 @@ output {
   tables_genomes { path { artifact -> publishTarget('tables', artifact) } }
   tables_taxonomy { path { artifact -> publishTarget('tables', artifact) } }
   tables_matched_sequences { path { artifact -> publishTarget('tables', artifact) } }
+  tables_matched_proteins { path { artifact -> publishTarget('tables', artifact) } }
   tables_download_manifest { path { artifact -> publishTarget('tables', artifact) } }
   tables_normalization_warnings { path { artifact -> publishTarget('tables', artifact) } }
   tables_accession_status { path { artifact -> publishTarget('tables', artifact) } }

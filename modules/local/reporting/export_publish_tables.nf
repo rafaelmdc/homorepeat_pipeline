@@ -13,6 +13,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
     path('genomes.tsv'), emit: genomes_tsv
     path('taxonomy.tsv'), emit: taxonomy_tsv
     path('matched_sequences.tsv'), emit: matched_sequences_tsv
+    path('matched_proteins.tsv'), emit: matched_proteins_tsv
     path('download_manifest.tsv'), emit: download_manifest_tsv
     path('normalization_warnings.tsv'), emit: normalization_warnings_tsv
     path('accession_status.tsv'), emit: accession_status_tsv
@@ -35,6 +36,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
         cp '${normalizedDir}/genomes.tsv' "publish_batch_views/${batchId}/genomes.tsv"
         cp '${normalizedDir}/taxonomy.tsv' "publish_batch_views/${batchId}/taxonomy.tsv"
         cp '${normalizedDir}/sequences.tsv' "publish_batch_views/${batchId}/sequences.tsv"
+        cp '${translatedDir}/proteins.tsv' "publish_batch_views/${batchId}/proteins.tsv"
         cp '${translatedDir}/download_manifest.tsv' "publish_batch_views/${batchId}/download_manifest.tsv"
         cp '${translatedDir}/normalization_warnings.tsv' "publish_batch_views/${batchId}/normalization_warnings.tsv"
         cp '${translatedDir}/acquisition_validation.json' "publish_batch_views/${batchId}/acquisition_validation.json"
@@ -57,6 +59,7 @@ process EXPORT_PUBLISH_TABLES_TASK {
     mv export_publish_tables_tmp/tables/genomes.tsv genomes.tsv
     mv export_publish_tables_tmp/tables/taxonomy.tsv taxonomy.tsv
     mv export_publish_tables_tmp/tables/matched_sequences.tsv matched_sequences.tsv
+    mv export_publish_tables_tmp/tables/matched_proteins.tsv matched_proteins.tsv
     mv export_publish_tables_tmp/tables/download_manifest.tsv download_manifest.tsv
     mv export_publish_tables_tmp/tables/normalization_warnings.tsv normalization_warnings.tsv
     mv export_publish_tables_tmp/tables/accession_status.tsv accession_status.tsv
@@ -89,6 +92,7 @@ workflow EXPORT_PUBLISH_TABLES {
     genomes_tsv = exports.genomes_tsv
     taxonomy_tsv = exports.taxonomy_tsv
     matched_sequences_tsv = exports.matched_sequences_tsv
+    matched_proteins_tsv = exports.matched_proteins_tsv
     download_manifest_tsv = exports.download_manifest_tsv
     normalization_warnings_tsv = exports.normalization_warnings_tsv
     accession_status_tsv = exports.accession_status_tsv

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from homorepeat.contracts.publish_contract_v2 import MATCHED_SEQUENCES_FIELDNAMES
+from homorepeat.contracts.publish_contract_v2 import MATCHED_PROTEINS_FIELDNAMES, MATCHED_SEQUENCES_FIELDNAMES
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, build_call_row
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES
 from homorepeat.io.tsv_io import read_tsv, write_tsv
@@ -294,6 +294,7 @@ class ExportPublishTablesCliTest(unittest.TestCase):
 
             genomes_rows = read_tsv(outdir / "tables" / "genomes.tsv")
             matched_sequence_rows = read_tsv(outdir / "tables" / "matched_sequences.tsv")
+            matched_protein_rows = read_tsv(outdir / "tables" / "matched_proteins.tsv")
             taxonomy_rows = read_tsv(outdir / "tables" / "taxonomy.tsv")
             manifest_rows = read_tsv(outdir / "tables" / "download_manifest.tsv")
             warning_rows = read_tsv(outdir / "tables" / "normalization_warnings.tsv")
@@ -314,6 +315,10 @@ class ExportPublishTablesCliTest(unittest.TestCase):
             self.assertEqual(
                 [(row["batch_id"], row["sequence_id"]) for row in matched_sequence_rows],
                 [("batch_0001", "seq_GCF_A.1_1")],
+            )
+            self.assertEqual(
+                [(row["batch_id"], row["protein_id"], row["sequence_id"]) for row in matched_protein_rows],
+                [("batch_0001", "protein_GCF_A.1_1", "seq_GCF_A.1_1")],
             )
             self.assertEqual([row["taxon_id"] for row in taxonomy_rows], ["10090", "9606"])
             self.assertEqual([row["assembly_accession"] for row in manifest_rows], ["GCF_A.1", "GCF_B.1"])
@@ -417,6 +422,37 @@ class ExportPublishTablesCliTest(unittest.TestCase):
             },
         ]
         write_tsv(batch_dir / "sequences.tsv", sequence_rows, fieldnames=MATCHED_SEQUENCES_FIELDNAMES[1:])
+        protein_rows = [
+            {
+                "protein_id": f"protein_{accession}_1",
+                "sequence_id": f"seq_{accession}_1",
+                "genome_id": f"genome_{accession}",
+                "protein_name": "protein1",
+                "protein_length": "33",
+                "gene_symbol": "GENE1",
+                "translation_method": "local_cds_translation",
+                "translation_status": "translated",
+                "assembly_accession": accession,
+                "taxon_id": taxon_id,
+                "gene_group": "GENE1",
+                "protein_external_id": "protein1",
+            },
+            {
+                "protein_id": f"protein_{accession}_unmatched",
+                "sequence_id": f"seq_{accession}_unmatched",
+                "genome_id": f"genome_{accession}",
+                "protein_name": "protein-unmatched",
+                "protein_length": "14",
+                "gene_symbol": "GENE2",
+                "translation_method": "local_cds_translation",
+                "translation_status": "translated",
+                "assembly_accession": accession,
+                "taxon_id": taxon_id,
+                "gene_group": "GENE2",
+                "protein_external_id": "protein-unmatched",
+            },
+        ]
+        write_tsv(batch_dir / "proteins.tsv", protein_rows, fieldnames=MATCHED_PROTEINS_FIELDNAMES[1:])
         write_tsv(
             batch_dir / "download_manifest.tsv",
             [

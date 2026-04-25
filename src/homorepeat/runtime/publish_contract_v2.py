@@ -13,6 +13,7 @@ from homorepeat.contracts.publish_contract_v2 import (
     ACCESSION_STATUS_FIELDNAMES,
     DOWNLOAD_MANIFEST_FIELDNAMES,
     GENOMES_FIELDNAMES,
+    MATCHED_PROTEINS_FIELDNAMES,
     MATCHED_SEQUENCES_FIELDNAMES,
     NORMALIZATION_WARNINGS_FIELDNAMES,
     TAXONOMY_FIELDNAMES,
@@ -20,6 +21,7 @@ from homorepeat.contracts.publish_contract_v2 import (
     validate_accession_status_row,
     validate_download_manifest_row,
     validate_genome_row,
+    validate_matched_protein_row,
     validate_matched_sequence_row,
     validate_normalization_warning_row,
     validate_taxonomy_row,
@@ -64,8 +66,11 @@ def export_publish_tables(
     tables_dir = outdir / "tables"
     summaries_dir = outdir / "summaries"
     retained_sequence_ids = _read_retained_ids(repeat_calls_tsv, id_field="sequence_id", label="repeat_calls.tsv")
+    retained_protein_ids = _read_retained_ids(repeat_calls_tsv, id_field="protein_id", label="repeat_calls.tsv")
     unmatched_sequence_ids = set(retained_sequence_ids)
+    unmatched_protein_ids = set(retained_protein_ids)
     matched_sequence_ids: set[str] = set()
+    matched_protein_ids: set[str] = set()
     taxonomy_by_id: dict[str, dict[str, str]] = {}
     acquisition_validation_payloads: list[dict[str, object]] = []
 
@@ -75,6 +80,10 @@ def export_publish_tables(
             tables_dir / "matched_sequences.tsv",
             fieldnames=MATCHED_SEQUENCES_FIELDNAMES,
         ) as matched_sequences_writer,
+        open_tsv_writer(
+            tables_dir / "matched_proteins.tsv",
+            fieldnames=MATCHED_PROTEINS_FIELDNAMES,
+        ) as matched_proteins_writer,
         open_tsv_writer(tables_dir / "download_manifest.tsv", fieldnames=DOWNLOAD_MANIFEST_FIELDNAMES) as manifest_writer,
         open_tsv_writer(
             tables_dir / "normalization_warnings.tsv",
@@ -115,6 +124,21 @@ def export_publish_tables(
                 matched_sequence_ids.add(sequence_id)
                 unmatched_sequence_ids.discard(sequence_id)
 
+            for protein_row in iter_tsv(
+                batch_dir / "proteins.tsv",
+                required_columns=MATCHED_PROTEINS_FIELDNAMES[1:],
+            ):
+                protein_id = protein_row.get("protein_id", "")
+                if protein_id not in retained_protein_ids:
+                    continue
+                if protein_id in matched_protein_ids:
+                    raise ContractError(f"matched_proteins.tsv would contain duplicate protein_id {protein_id}")
+                export_row = {"batch_id": batch_id, **protein_row}
+                validate_matched_protein_row(export_row)
+                matched_proteins_writer.write_row(export_row)
+                matched_protein_ids.add(protein_id)
+                unmatched_protein_ids.discard(protein_id)
+
             for taxonomy_row in iter_tsv(batch_dir / "taxonomy.tsv"):
                 validate_taxonomy_row(taxonomy_row)
                 taxon_id = taxonomy_row.get("taxon_id", "")
@@ -142,6 +166,9 @@ def export_publish_tables(
     if unmatched_sequence_ids:
         missing_ids = ", ".join(sorted(unmatched_sequence_ids)[:5])
         raise ContractError(f"repeat_calls.tsv references missing sequence_id values: {missing_ids}")
+    if unmatched_protein_ids:
+        missing_ids = ", ".join(sorted(unmatched_protein_ids)[:5])
+        raise ContractError(f"repeat_calls.tsv references missing protein_id values: {missing_ids}")
 
     write_tsv(
         tables_dir / "taxonomy.tsv",
