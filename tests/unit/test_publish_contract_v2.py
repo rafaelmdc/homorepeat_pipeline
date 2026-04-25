@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 
 from homorepeat.contracts.publish_contract_v2 import (
+    ACCESSION_CALL_COUNTS_FIELDNAMES,
+    ACCESSION_STATUS_FIELDNAMES,
     DOWNLOAD_MANIFEST_FIELDNAMES,
     GENOMES_FIELDNAMES,
     MATCHED_PROTEINS_FIELDNAMES,
@@ -10,6 +12,8 @@ from homorepeat.contracts.publish_contract_v2 import (
     NORMALIZATION_WARNINGS_FIELDNAMES,
     REPEAT_CONTEXT_FIELDNAMES,
     TABLE_FIELDNAMES,
+    validate_accession_call_count_row,
+    validate_accession_status_row,
     validate_download_manifest_row,
     validate_matched_sequence_row,
     validate_repeat_call_codon_usage_row,
@@ -27,6 +31,8 @@ class PublishContractV2Test(unittest.TestCase):
         self.assertEqual(TABLE_FIELDNAMES["repeat_context.tsv"], REPEAT_CONTEXT_FIELDNAMES)
         self.assertEqual(TABLE_FIELDNAMES["download_manifest.tsv"], DOWNLOAD_MANIFEST_FIELDNAMES)
         self.assertEqual(TABLE_FIELDNAMES["normalization_warnings.tsv"], NORMALIZATION_WARNINGS_FIELDNAMES)
+        self.assertEqual(TABLE_FIELDNAMES["accession_status.tsv"], ACCESSION_STATUS_FIELDNAMES)
+        self.assertEqual(TABLE_FIELDNAMES["accession_call_counts.tsv"], ACCESSION_CALL_COUNTS_FIELDNAMES)
 
         self.assertEqual(GENOMES_FIELDNAMES[0], "batch_id")
         self.assertEqual(MATCHED_SEQUENCES_FIELDNAMES[0], "batch_id")
@@ -125,6 +131,40 @@ class PublishContractV2Test(unittest.TestCase):
         }
 
         validate_download_manifest_row(row)
+
+    def test_validate_accession_status_row_rejects_negative_counts(self) -> None:
+        row = {
+            "assembly_accession": "GCF_TEST_1.1",
+            "batch_id": "batch_001",
+            "download_status": "downloaded",
+            "normalize_status": "success",
+            "translate_status": "success",
+            "detect_status": "success",
+            "finalize_status": "success",
+            "terminal_status": "completed",
+            "failure_stage": "",
+            "failure_reason": "",
+            "n_genomes": "1",
+            "n_proteins": "1",
+            "n_repeat_calls": "-1",
+            "notes": "",
+        }
+
+        with self.assertRaisesRegex(ContractError, "out-of-range n_repeat_calls"):
+            validate_accession_status_row(row)
+
+    def test_validate_accession_call_count_row_accepts_zero_calls(self) -> None:
+        row = {
+            "assembly_accession": "GCF_TEST_1.1",
+            "batch_id": "batch_001",
+            "method": "pure",
+            "repeat_residue": "Q",
+            "detect_status": "success",
+            "finalize_status": "skipped",
+            "n_repeat_calls": "0",
+        }
+
+        validate_accession_call_count_row(row)
 
     def test_validate_table_row_rejects_unknown_table(self) -> None:
         with self.assertRaisesRegex(ContractError, "Unsupported publish-contract v2 table"):

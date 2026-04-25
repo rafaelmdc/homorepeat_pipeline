@@ -9,21 +9,21 @@ from typing import Sequence
 
 from homorepeat.acquisition.acquisition_validation import build_acquisition_validation_from_summary, write_validation_json
 from homorepeat.contracts.publish_contract_v2 import (
+    ACCESSION_CALL_COUNTS_FIELDNAMES,
+    ACCESSION_STATUS_FIELDNAMES,
     DOWNLOAD_MANIFEST_FIELDNAMES,
     GENOMES_FIELDNAMES,
     NORMALIZATION_WARNINGS_FIELDNAMES,
     TAXONOMY_FIELDNAMES,
+    validate_accession_call_count_row,
+    validate_accession_status_row,
     validate_download_manifest_row,
     validate_genome_row,
     validate_normalization_warning_row,
     validate_taxonomy_row,
 )
 from homorepeat.io.tsv_io import ContractError, iter_tsv, open_tsv_writer, read_tsv, write_tsv
-from homorepeat.runtime.accession_status import (
-    ACCESSION_CALL_COUNTS_FIELDNAMES,
-    ACCESSION_STATUS_FIELDNAMES,
-    BATCH_TABLE_REQUIRED,
-)
+from homorepeat.runtime.accession_status import BATCH_TABLE_REQUIRED
 
 
 ACQUISITION_VALIDATION_COUNT_KEYS = (
@@ -120,14 +120,17 @@ def export_publish_tables(
         fieldnames=TAXONOMY_FIELDNAMES,
     )
 
-    status_rows = read_tsv(accession_status_tsv, required_columns=ACCESSION_STATUS_FIELDNAMES)
-    write_tsv(tables_dir / "accession_status.tsv", status_rows, fieldnames=ACCESSION_STATUS_FIELDNAMES)
-
-    count_rows = read_tsv(accession_call_counts_tsv, required_columns=ACCESSION_CALL_COUNTS_FIELDNAMES)
-    write_tsv(
+    _stream_validated_table(
+        accession_status_tsv,
+        tables_dir / "accession_status.tsv",
+        fieldnames=ACCESSION_STATUS_FIELDNAMES,
+        validate_row=validate_accession_status_row,
+    )
+    _stream_validated_table(
+        accession_call_counts_tsv,
         tables_dir / "accession_call_counts.tsv",
-        count_rows,
         fieldnames=ACCESSION_CALL_COUNTS_FIELDNAMES,
+        validate_row=validate_accession_call_count_row,
     )
 
     status_summary_payload = _read_json_payload(status_summary_json)
@@ -202,6 +205,13 @@ def read_batch_table(path: Path | str) -> list[dict[str, str]]:
     """Read the canonical batch table used to order export inputs."""
 
     return read_tsv(path, required_columns=BATCH_TABLE_REQUIRED)
+
+
+def _stream_validated_table(path: Path, outpath: Path, *, fieldnames: Sequence[str], validate_row) -> None:
+    with open_tsv_writer(outpath, fieldnames=fieldnames) as writer:
+        for row in iter_tsv(path, required_columns=fieldnames):
+            validate_row(row)
+            writer.write_row(row)
 
 
 def _ordered_batch_ids(batch_table_rows: Sequence[dict[str, str]]) -> list[str]:

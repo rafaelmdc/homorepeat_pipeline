@@ -100,6 +100,31 @@ NORMALIZATION_WARNINGS_FIELDNAMES = [
     "source_file",
     "source_record_id",
 ]
+ACCESSION_STATUS_FIELDNAMES = [
+    "assembly_accession",
+    "batch_id",
+    "download_status",
+    "normalize_status",
+    "translate_status",
+    "detect_status",
+    "finalize_status",
+    "terminal_status",
+    "failure_stage",
+    "failure_reason",
+    "n_genomes",
+    "n_proteins",
+    "n_repeat_calls",
+    "notes",
+]
+ACCESSION_CALL_COUNTS_FIELDNAMES = [
+    "assembly_accession",
+    "batch_id",
+    "method",
+    "repeat_residue",
+    "detect_status",
+    "finalize_status",
+    "n_repeat_calls",
+]
 
 TABLE_FIELDNAMES: dict[str, list[str]] = {
     "genomes.tsv": GENOMES_FIELDNAMES,
@@ -110,6 +135,8 @@ TABLE_FIELDNAMES: dict[str, list[str]] = {
     "repeat_context.tsv": REPEAT_CONTEXT_FIELDNAMES,
     "download_manifest.tsv": DOWNLOAD_MANIFEST_FIELDNAMES,
     "normalization_warnings.tsv": NORMALIZATION_WARNINGS_FIELDNAMES,
+    "accession_status.tsv": ACCESSION_STATUS_FIELDNAMES,
+    "accession_call_counts.tsv": ACCESSION_CALL_COUNTS_FIELDNAMES,
 }
 
 
@@ -212,6 +239,45 @@ def validate_normalization_warning_row(row: Mapping[str, object]) -> None:
     )
 
 
+def validate_accession_status_row(row: Mapping[str, object]) -> None:
+    _validate_required_fields(
+        row,
+        fieldnames=ACCESSION_STATUS_FIELDNAMES,
+        required_fields=(
+            "assembly_accession",
+            "batch_id",
+            "download_status",
+            "normalize_status",
+            "translate_status",
+            "detect_status",
+            "finalize_status",
+            "terminal_status",
+        ),
+        label="accession_status.tsv",
+    )
+    _parse_int(row, fieldname="n_genomes", label="accession_status.tsv", minimum=0)
+    _parse_int(row, fieldname="n_proteins", label="accession_status.tsv", minimum=0)
+    _parse_int(row, fieldname="n_repeat_calls", label="accession_status.tsv", minimum=0)
+
+
+def validate_accession_call_count_row(row: Mapping[str, object]) -> None:
+    _validate_required_fields(
+        row,
+        fieldnames=ACCESSION_CALL_COUNTS_FIELDNAMES,
+        required_fields=(
+            "assembly_accession",
+            "batch_id",
+            "method",
+            "repeat_residue",
+            "detect_status",
+            "finalize_status",
+            "n_repeat_calls",
+        ),
+        label="accession_call_counts.tsv",
+    )
+    _parse_int(row, fieldname="n_repeat_calls", label="accession_call_counts.tsv", minimum=0)
+
+
 TABLE_ROW_VALIDATORS: dict[str, Callable[[Mapping[str, object]], None]] = {
     "genomes.tsv": validate_genome_row,
     "taxonomy.tsv": validate_taxonomy_row,
@@ -221,6 +287,8 @@ TABLE_ROW_VALIDATORS: dict[str, Callable[[Mapping[str, object]], None]] = {
     "repeat_context.tsv": validate_repeat_context_row,
     "download_manifest.tsv": validate_download_manifest_row,
     "normalization_warnings.tsv": validate_normalization_warning_row,
+    "accession_status.tsv": validate_accession_status_row,
+    "accession_call_counts.tsv": validate_accession_call_count_row,
 }
 
 
