@@ -6,6 +6,7 @@ include { DATABASE_REPORTING } from './workflows/database_reporting'
 include { BUILD_ACCESSION_STATUS } from './modules/local/reporting/build_accession_status'
 include { EXPORT_PUBLISH_TABLES } from './modules/local/reporting/export_publish_tables'
 include { MERGE_CALL_TABLES } from './modules/local/reporting/merge_call_tables'
+include { MERGE_CODON_USAGE_TABLES } from './modules/local/reporting/merge_codon_usage_tables'
 
 def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
   "${projectDir}/runtime/output_placeholders/workflow_output_placeholder.txt",
@@ -83,6 +84,9 @@ workflow {
     detection.call_tsvs,
     detection.run_params_tsvs,
   )
+  canonicalCodonUsage = MERGE_CODON_USAGE_TABLES(
+    detection.codon_usage_tsvs,
+  )
   flatPublishTables = EXPORT_PUBLISH_TABLES(
     acquisition.batch_table,
     acquisition.batch_inputs,
@@ -144,6 +148,7 @@ workflow {
   tables_taxonomy = publishablePathChannel(flatPublishTables.taxonomy_tsv)
   tables_matched_sequences = publishablePathChannel(flatPublishTables.matched_sequences_tsv)
   tables_matched_proteins = publishablePathChannel(flatPublishTables.matched_proteins_tsv)
+  tables_repeat_call_codon_usage = publishablePathChannel(canonicalCodonUsage.repeat_call_codon_usage_tsv)
   tables_download_manifest = publishablePathChannel(flatPublishTables.download_manifest_tsv)
   tables_normalization_warnings = publishablePathChannel(flatPublishTables.normalization_warnings_tsv)
   tables_accession_status = publishablePathChannel(flatPublishTables.accession_status_tsv)
@@ -178,6 +183,7 @@ workflow {
   tables_taxonomy_tsv = flatPublishTables.taxonomy_tsv
   tables_matched_sequences_tsv = flatPublishTables.matched_sequences_tsv
   tables_matched_proteins_tsv = flatPublishTables.matched_proteins_tsv
+  tables_repeat_call_codon_usage_tsv = canonicalCodonUsage.repeat_call_codon_usage_tsv
   tables_download_manifest_tsv = flatPublishTables.download_manifest_tsv
   tables_normalization_warnings_tsv = flatPublishTables.normalization_warnings_tsv
   tables_accession_status_tsv = flatPublishTables.accession_status_tsv
@@ -217,6 +223,7 @@ output {
   tables_taxonomy { path { artifact -> publishTarget('tables', artifact) } }
   tables_matched_sequences { path { artifact -> publishTarget('tables', artifact) } }
   tables_matched_proteins { path { artifact -> publishTarget('tables', artifact) } }
+  tables_repeat_call_codon_usage { path { artifact -> publishTarget('tables', artifact) } }
   tables_download_manifest { path { artifact -> publishTarget('tables', artifact) } }
   tables_normalization_warnings { path { artifact -> publishTarget('tables', artifact) } }
   tables_accession_status { path { artifact -> publishTarget('tables', artifact) } }

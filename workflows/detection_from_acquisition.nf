@@ -100,6 +100,13 @@ workflow DETECTION_FROM_ACQUISITION {
         def finalizedDir = row[3]
         finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_run_params.tsv")
     }
+    codon_usage_tsvs = finalizedCallCh.map { row ->
+        def batch_id = row[0]
+        def method = row[1]
+        def repeatResidue = row[2]
+        def finalizedDir = row[3]
+        finalizedDir.resolve("final_${method}_${repeatResidue}_${batch_id}_codon_usage.tsv")
+    }
     detect_status_jsons = detectStatusCh.map { row ->
         row[3]
     }

@@ -41,6 +41,10 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(launch["acquisition_publish_mode"], "raw")
             self.assertEqual(manifest["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
             self.assertEqual(manifest["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
+            self.assertEqual(
+                manifest["artifacts"]["tables"]["repeat_call_codon_usage_tsv"],
+                "publish/tables/repeat_call_codon_usage.tsv",
+            )
             self.assertEqual(manifest["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
             self.assertEqual(manifest["params"]["params_file_values"], {})
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
@@ -70,6 +74,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 "taxonomy.tsv",
                 "matched_sequences.tsv",
                 "matched_proteins.tsv",
+                "repeat_call_codon_usage.tsv",
                 "download_manifest.tsv",
                 "normalization_warnings.tsv",
                 "accession_status.tsv",
@@ -139,6 +144,10 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(manifest["acquisition_publish_mode"], "merged")
             self.assertEqual(launch["acquisition_publish_mode"], "merged")
             self.assertEqual(manifest["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
+            self.assertEqual(
+                manifest["artifacts"]["tables"]["repeat_call_codon_usage_tsv"],
+                "publish/tables/repeat_call_codon_usage.tsv",
+            )
             self.assertEqual(manifest["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
             self.assertEqual(manifest["params"]["params_file_values"], {})
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
@@ -175,6 +184,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 "taxonomy.tsv",
                 "matched_sequences.tsv",
                 "matched_proteins.tsv",
+                "repeat_call_codon_usage.tsv",
                 "download_manifest.tsv",
                 "normalization_warnings.tsv",
                 "accession_status.tsv",
