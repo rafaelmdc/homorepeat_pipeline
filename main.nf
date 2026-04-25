@@ -13,27 +13,9 @@ def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
   "${projectDir}/runtime/output_placeholders/workflow_output_placeholder.txt",
   checkIfExists: true,
 )
-def WORKFLOW_OUTPUT_PLACEHOLDER_DIR = file(
-  "${projectDir}/runtime/output_placeholders/finalized_placeholder",
-  checkIfExists: true,
-)
-def WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID = '__workflow_output_placeholder__'
-def WORKFLOW_OUTPUT_PLACEHOLDER_METHOD = '__workflow_output_placeholder__'
-def WORKFLOW_OUTPUT_PLACEHOLDER_RESIDUE = '__workflow_output_placeholder__'
 
 def publishablePathChannel = { channel ->
   channel.mix(Channel.value(WORKFLOW_OUTPUT_PLACEHOLDER_FILE))
-}
-
-def publishableFinalizedChannel = { channel ->
-  channel.mix(Channel.value(
-    tuple(
-      WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID,
-      WORKFLOW_OUTPUT_PLACEHOLDER_METHOD,
-      WORKFLOW_OUTPUT_PLACEHOLDER_RESIDUE,
-      WORKFLOW_OUTPUT_PLACEHOLDER_DIR,
-    )
-  ))
 }
 
 def publishTarget = { targetDir, artifact ->
@@ -41,12 +23,6 @@ def publishTarget = { targetDir, artifact ->
     artifact?.toString()?.endsWith("/${WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName()}")
     ? ".nf_placeholders/${targetDir}"
     : targetDir
-}
-
-def finalizedPublishTarget = { batchId, method, repeatResidue, finalizedDir ->
-  batchId == WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID
-    ? '.nf_placeholders/finalized'
-    : "calls/finalized/${method}/${repeatResidue}"
 }
 
 def normalizedAcquisitionPublishMode = {
@@ -127,18 +103,8 @@ workflow {
   }
 
   publish:
-  acquisition_genomes = publishablePathChannel(acquisition.genomes_tsv)
-  acquisition_taxonomy = publishablePathChannel(acquisition.taxonomy_tsv)
-  acquisition_sequences = publishablePathChannel(acquisition.sequences_tsv)
-  acquisition_proteins = publishablePathChannel(acquisition.proteins_tsv)
-  acquisition_cds = publishablePathChannel(acquisition.cds_fasta)
-  acquisition_proteins_fasta = publishablePathChannel(acquisition.proteins_fasta)
-  acquisition_download_manifest = publishablePathChannel(acquisition.download_manifest_tsv)
-  acquisition_normalization_warnings = publishablePathChannel(acquisition.normalization_warnings_tsv)
-  acquisition_validation = publishablePathChannel(acquisition.acquisition_validation)
   calls_repeat = publishablePathChannel(canonicalCalls.repeat_calls_tsv)
   calls_params = publishablePathChannel(canonicalCalls.run_params_tsv)
-  calls_finalized = publishableFinalizedChannel(detection.finalized_dirs)
   database_sqlite = publishablePathChannel(databaseSqliteCh)
   database_sqlite_validation = publishablePathChannel(databaseSqliteValidationCh)
   reports_summary_by_taxon = publishablePathChannel(reportsSummaryByTaxonCh)
@@ -146,9 +112,6 @@ workflow {
   reports_echarts_options = publishablePathChannel(reportsEchartsOptionsCh)
   reports_echarts_html = publishablePathChannel(reportsEchartsHtmlCh)
   reports_echarts_js = publishablePathChannel(reportsEchartsJsCh)
-  status_accession = publishablePathChannel(statusBuild.accession_status_tsv)
-  status_accession_call_counts = publishablePathChannel(statusBuild.accession_call_counts_tsv)
-  status_summary = publishablePathChannel(statusBuild.status_summary_json)
   tables_genomes = publishablePathChannel(flatPublishTables.genomes_tsv)
   tables_taxonomy = publishablePathChannel(flatPublishTables.taxonomy_tsv)
   tables_matched_sequences = publishablePathChannel(flatPublishTables.matched_sequences_tsv)
@@ -200,22 +163,8 @@ workflow {
 }
 
 output {
-  acquisition_genomes { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_taxonomy { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_sequences { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_proteins { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_cds { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_proteins_fasta { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_download_manifest { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_normalization_warnings { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_validation { path { artifact -> publishTarget('acquisition', artifact) } }
   calls_repeat { path { artifact -> publishTarget('calls', artifact) } }
   calls_params { path { artifact -> publishTarget('calls', artifact) } }
-  calls_finalized {
-    path { batchId, method, repeatResidue, finalizedDir ->
-      finalizedPublishTarget(batchId, method, repeatResidue, finalizedDir)
-    }
-  }
   database_sqlite { path { artifact -> publishTarget('database', artifact) } }
   database_sqlite_validation { path { artifact -> publishTarget('database', artifact) } }
   reports_summary_by_taxon { path { artifact -> publishTarget('reports', artifact) } }
@@ -223,9 +172,6 @@ output {
   reports_echarts_options { path { artifact -> publishTarget('reports', artifact) } }
   reports_echarts_html { path { artifact -> publishTarget('reports', artifact) } }
   reports_echarts_js { path { artifact -> publishTarget('reports', artifact) } }
-  status_accession { path { artifact -> publishTarget('status', artifact) } }
-  status_accession_call_counts { path { artifact -> publishTarget('status', artifact) } }
-  status_summary { path { artifact -> publishTarget('status', artifact) } }
   tables_genomes { path { artifact -> publishTarget('tables', artifact) } }
   tables_taxonomy { path { artifact -> publishTarget('tables', artifact) } }
   tables_matched_sequences { path { artifact -> publishTarget('tables', artifact) } }

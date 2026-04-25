@@ -81,8 +81,8 @@ class WorkflowOutputFailureRegressionTest(unittest.TestCase):
 
             self.assertEqual(manifest["status"], "failed")
             self.assertEqual(launch["status"], "failed")
-            self.assertEqual(manifest["publish_contract_version"], 1)
-            self.assertEqual(launch["publish_contract_version"], 1)
+            self.assertEqual(manifest["publish_contract_version"], 2)
+            self.assertEqual(launch["publish_contract_version"], 2)
             self.assertEqual(manifest["acquisition_publish_mode"], "raw")
             self.assertEqual(launch["acquisition_publish_mode"], "raw")
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)

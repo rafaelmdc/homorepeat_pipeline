@@ -10,26 +10,13 @@ from pathlib import Path
 from homorepeat.io.tsv_io import ensure_directory
 
 
-CURRENT_PUBLISH_CONTRACT_VERSION = 1
+CURRENT_PUBLISH_CONTRACT_VERSION = 2
 
-
-MERGED_ACQUISITION_ARTIFACTS = {
-    "genomes_tsv": "acquisition/genomes.tsv",
-    "taxonomy_tsv": "acquisition/taxonomy.tsv",
-    "sequences_tsv": "acquisition/sequences.tsv",
-    "proteins_tsv": "acquisition/proteins.tsv",
-    "cds_fasta": "acquisition/cds.fna",
-    "proteins_fasta": "acquisition/proteins.faa",
-    "download_manifest_tsv": "acquisition/download_manifest.tsv",
-    "normalization_warnings_tsv": "acquisition/normalization_warnings.tsv",
-    "acquisition_validation_json": "acquisition/acquisition_validation.json",
-}
 
 PUBLISHED_ARTIFACTS = {
     "calls": {
         "repeat_calls_tsv": "calls/repeat_calls.tsv",
         "run_params_tsv": "calls/run_params.tsv",
-        "finalized_root": "calls/finalized",
     },
     "database": {
         "sqlite": "database/homorepeat.sqlite",
@@ -42,11 +29,7 @@ PUBLISHED_ARTIFACTS = {
         "echarts_report_html": "reports/echarts_report.html",
         "echarts_js": "reports/echarts.min.js",
     },
-    "status": {
-        "accession_status_tsv": "status/accession_status.tsv",
-        "accession_call_counts_tsv": "status/accession_call_counts.tsv",
-        "status_summary_json": "status/status_summary.json",
-    },
+    "status": {},
     "tables": {
         "genomes_tsv": "tables/genomes.tsv",
         "taxonomy_tsv": "tables/taxonomy.tsv",
@@ -122,7 +105,6 @@ def build_run_manifest(
         "artifacts": _collect_artifacts(
             run_root=run_root,
             publish_root=publish_root,
-            acquisition_publish_mode=normalized_publish_mode,
         ),
     }
 
@@ -139,20 +121,9 @@ def _collect_artifacts(
     *,
     run_root: Path,
     publish_root: Path,
-    acquisition_publish_mode: str,
 ) -> dict[str, dict[str, str]]:
     artifacts: dict[str, dict[str, str]] = {}
-    acquisition_payload: dict[str, str] = {}
-    if acquisition_publish_mode == "raw":
-        batches_root = publish_root / "acquisition" / "batches"
-        if os.path.lexists(batches_root):
-            acquisition_payload["batches_root"] = _relative_or_absolute(batches_root, run_root)
-    else:
-        for key, relative_path in MERGED_ACQUISITION_ARTIFACTS.items():
-            candidate = publish_root / relative_path
-            if os.path.lexists(candidate):
-                acquisition_payload[key] = _relative_or_absolute(candidate, run_root)
-    artifacts["acquisition"] = acquisition_payload
+    artifacts["acquisition"] = {}
 
     for section, files in PUBLISHED_ARTIFACTS.items():
         section_payload: dict[str, str] = {}

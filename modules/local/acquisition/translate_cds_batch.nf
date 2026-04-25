@@ -4,7 +4,7 @@ process TRANSLATE_CDS_BATCH {
     publishDir(
         "${params.run_root}/publish/acquisition/batches/${batch_id}",
         mode: 'copy',
-        enabled: ((params.acquisition_publish_mode ?: 'raw').toString().trim().toLowerCase() == 'raw'),
+        enabled: false,
         saveAs: { filename ->
         def sourceName = filename.toString()
         if( !sourceName.startsWith('publish_batch/') ) {

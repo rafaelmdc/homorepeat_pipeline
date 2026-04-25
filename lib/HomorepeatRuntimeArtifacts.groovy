@@ -11,12 +11,11 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 class HomorepeatRuntimeArtifacts {
-    private static final Integer CURRENT_PUBLISH_CONTRACT_VERSION = 1
+    private static final Integer CURRENT_PUBLISH_CONTRACT_VERSION = 2
     private static final Map<String, Map<String, String>> PUBLISHED_ARTIFACTS = [
         calls      : [
             repeat_calls_tsv: 'calls/repeat_calls.tsv',
             run_params_tsv  : 'calls/run_params.tsv',
-            finalized_root : 'calls/finalized',
         ],
         database   : [
             sqlite                : 'database/homorepeat.sqlite',
@@ -29,11 +28,7 @@ class HomorepeatRuntimeArtifacts {
             echarts_report_html : 'reports/echarts_report.html',
             echarts_js          : 'reports/echarts.min.js',
         ],
-        status     : [
-            accession_status_tsv     : 'status/accession_status.tsv',
-            accession_call_counts_tsv: 'status/accession_call_counts.tsv',
-            status_summary_json      : 'status/status_summary.json',
-        ],
+        status     : [:],
         tables     : [
             genomes_tsv                : 'tables/genomes.tsv',
             taxonomy_tsv               : 'tables/taxonomy.tsv',
@@ -58,18 +53,6 @@ class HomorepeatRuntimeArtifacts {
             trace_txt            : 'metadata/nextflow/trace.txt',
         ],
     ]
-    private static final Map<String, String> MERGED_ACQUISITION_ARTIFACTS = [
-        genomes_tsv                : 'acquisition/genomes.tsv',
-        taxonomy_tsv               : 'acquisition/taxonomy.tsv',
-        sequences_tsv              : 'acquisition/sequences.tsv',
-        proteins_tsv               : 'acquisition/proteins.tsv',
-        cds_fasta                  : 'acquisition/cds.fna',
-        proteins_fasta             : 'acquisition/proteins.faa',
-        download_manifest_tsv      : 'acquisition/download_manifest.tsv',
-        normalization_warnings_tsv : 'acquisition/normalization_warnings.tsv',
-        acquisition_validation_json: 'acquisition/acquisition_validation.json',
-    ]
-
     static void finalizeRun(Map ctx) {
         Path repoRoot = asPath(ctx.repoRoot)
         Path launchDir = asPath(ctx.launchDir)
@@ -219,7 +202,6 @@ class HomorepeatRuntimeArtifacts {
             artifacts      : collectArtifacts(
                 runRoot,
                 publishRoot,
-                normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
             ),
         ]
     }
@@ -287,25 +269,10 @@ class HomorepeatRuntimeArtifacts {
 
     private static Map<String, Map<String, String>> collectArtifacts(
         Path runRoot,
-        Path publishRoot,
-        String acquisitionPublishMode
+        Path publishRoot
     ) {
         Map<String, Map<String, String>> payload = [:]
-        Map<String, String> acquisitionPayload = [:]
-        if (acquisitionPublishMode == 'raw') {
-            Path batchesRoot = publishRoot.resolve('acquisition').resolve('batches').normalize()
-            if (Files.exists(batchesRoot) || Files.exists(batchesRoot, LinkOption.NOFOLLOW_LINKS)) {
-                acquisitionPayload['batches_root'] = relativeOrAbsolute(batchesRoot, runRoot)
-            }
-        } else {
-            MERGED_ACQUISITION_ARTIFACTS.each { String key, String relativePath ->
-                Path candidate = publishRoot.resolve(relativePath).normalize()
-                if (Files.exists(candidate) || Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) {
-                    acquisitionPayload[key] = relativeOrAbsolute(candidate, runRoot)
-                }
-            }
-        }
-        payload['acquisition'] = acquisitionPayload
+        payload['acquisition'] = [:]
 
         PUBLISHED_ARTIFACTS.each { String section, Map<String, String> files ->
             Map<String, String> sectionPayload = [:]

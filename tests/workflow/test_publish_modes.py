@@ -20,7 +20,7 @@ FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures" / "packages"
 
 class WorkflowPublishModesTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")
-    def test_successful_default_raw_run_publishes_batch_first_acquisition_tree(self) -> None:
+    def test_successful_default_raw_run_publishes_v2_flat_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             run_root = tmp / "run_raw"
@@ -35,11 +35,12 @@ class WorkflowPublishModesTest(unittest.TestCase):
             launch = json.loads((publish_root / "metadata" / "launch_metadata.json").read_text(encoding="utf-8"))
 
             self.assertEqual(manifest["status"], "success")
-            self.assertEqual(manifest["publish_contract_version"], 1)
-            self.assertEqual(launch["publish_contract_version"], 1)
+            self.assertEqual(manifest["publish_contract_version"], 2)
+            self.assertEqual(launch["publish_contract_version"], 2)
             self.assertEqual(manifest["acquisition_publish_mode"], "raw")
             self.assertEqual(launch["acquisition_publish_mode"], "raw")
-            self.assertEqual(manifest["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
+            self.assertEqual(manifest["artifacts"]["acquisition"], {})
+            self.assertEqual(manifest["artifacts"]["status"], {})
             self.assertEqual(manifest["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
             self.assertEqual(
                 manifest["artifacts"]["tables"]["repeat_call_codon_usage_tsv"],
@@ -51,25 +52,13 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
             self.assertFalse((publish_root / ".nf_placeholders").exists())
 
-            for batch_id in ["batch_0001", "batch_0002"]:
-                batch_dir = publish_root / "acquisition" / "batches" / batch_id
-                self.assertTrue((batch_dir / "taxonomy.tsv").is_file(), batch_dir / "taxonomy.tsv")
-                self.assertTrue((batch_dir / "sequences.tsv").is_file(), batch_dir / "sequences.tsv")
-                self.assertTrue((batch_dir / "cds.fna").is_file(), batch_dir / "cds.fna")
-                self.assertTrue((batch_dir / "genomes.tsv").is_file(), batch_dir / "genomes.tsv")
-                self.assertTrue((batch_dir / "proteins.tsv").is_file(), batch_dir / "proteins.tsv")
-                self.assertTrue((batch_dir / "proteins.faa").is_file(), batch_dir / "proteins.faa")
-                self.assertTrue((batch_dir / "download_manifest.tsv").is_file(), batch_dir / "download_manifest.tsv")
-                self.assertTrue((batch_dir / "normalization_warnings.tsv").is_file(), batch_dir / "normalization_warnings.tsv")
-                self.assertTrue((batch_dir / "acquisition_validation.json").is_file(), batch_dir / "acquisition_validation.json")
-
-            self.assertFalse((publish_root / "acquisition" / "genomes.tsv").exists())
-            self.assertFalse((publish_root / "acquisition" / "taxonomy.tsv").exists())
+            self.assertFalse((publish_root / "acquisition").exists())
+            self.assertFalse((publish_root / "status").exists())
+            self.assertFalse((publish_root / "calls" / "finalized").exists())
+            self.assertFalse(list(publish_root.rglob("cds.fna")))
+            self.assertFalse(list(publish_root.rglob("proteins.faa")))
             self.assertTrue((publish_root / "calls" / "repeat_calls.tsv").is_file())
             self.assertTrue((publish_root / "calls" / "run_params.tsv").is_file())
-            self.assertTrue((publish_root / "status" / "accession_status.tsv").is_file())
-            self.assertTrue((publish_root / "status" / "accession_call_counts.tsv").is_file())
-            self.assertTrue((publish_root / "status" / "status_summary.json").is_file())
             for filename in [
                 "genomes.tsv",
                 "taxonomy.tsv",
@@ -115,23 +104,9 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 for row in read_tsv(publish_root / "tables" / "repeat_context.tsv")
                 if row.get("call_id", "")
             }
-            all_sequence_ids = {
-                row["sequence_id"]
-                for batch_id in ["batch_0001", "batch_0002"]
-                for row in read_tsv(publish_root / "acquisition" / "batches" / batch_id / "sequences.tsv")
-                if row.get("sequence_id", "")
-            }
-            all_protein_ids = {
-                row["protein_id"]
-                for batch_id in ["batch_0001", "batch_0002"]
-                for row in read_tsv(publish_root / "acquisition" / "batches" / batch_id / "proteins.tsv")
-                if row.get("protein_id", "")
-            }
             self.assertEqual(matched_sequence_ids, call_sequence_ids)
             self.assertEqual(matched_protein_ids, call_protein_ids)
             self.assertEqual(context_call_ids, call_ids)
-            self.assertTrue(all_sequence_ids - matched_sequence_ids)
-            self.assertTrue(all_protein_ids - matched_protein_ids)
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())
 
@@ -152,10 +127,12 @@ class WorkflowPublishModesTest(unittest.TestCase):
             launch = json.loads((publish_root / "metadata" / "launch_metadata.json").read_text(encoding="utf-8"))
 
             self.assertEqual(manifest["status"], "success")
-            self.assertEqual(manifest["publish_contract_version"], 1)
-            self.assertEqual(launch["publish_contract_version"], 1)
+            self.assertEqual(manifest["publish_contract_version"], 2)
+            self.assertEqual(launch["publish_contract_version"], 2)
             self.assertEqual(manifest["acquisition_publish_mode"], "merged")
             self.assertEqual(launch["acquisition_publish_mode"], "merged")
+            self.assertEqual(manifest["artifacts"]["acquisition"], {})
+            self.assertEqual(manifest["artifacts"]["status"], {})
             self.assertEqual(manifest["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
             self.assertEqual(
                 manifest["artifacts"]["tables"]["repeat_call_codon_usage_tsv"],
@@ -167,20 +144,11 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
             self.assertFalse((publish_root / ".nf_placeholders").exists())
 
-            for filename in [
-                "genomes.tsv",
-                "taxonomy.tsv",
-                "sequences.tsv",
-                "proteins.tsv",
-                "cds.fna",
-                "proteins.faa",
-                "download_manifest.tsv",
-                "normalization_warnings.tsv",
-                "acquisition_validation.json",
-            ]:
-                self.assertTrue((publish_root / "acquisition" / filename).is_file(), publish_root / "acquisition" / filename)
-
-            self.assertFalse((publish_root / "acquisition" / "batches").exists())
+            self.assertFalse((publish_root / "acquisition").exists())
+            self.assertFalse((publish_root / "status").exists())
+            self.assertFalse((publish_root / "calls" / "finalized").exists())
+            self.assertFalse(list(publish_root.rglob("cds.fna")))
+            self.assertFalse(list(publish_root.rglob("proteins.faa")))
             self.assertTrue((publish_root / "calls" / "repeat_calls.tsv").is_file())
             self.assertTrue((publish_root / "calls" / "run_params.tsv").is_file())
             self.assertTrue((publish_root / "database" / "homorepeat.sqlite").is_file())
@@ -190,9 +158,6 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertTrue((publish_root / "reports" / "echarts_options.json").is_file())
             self.assertTrue((publish_root / "reports" / "echarts_report.html").is_file())
             self.assertTrue((publish_root / "reports" / "echarts.min.js").is_file())
-            self.assertTrue((publish_root / "status" / "accession_status.tsv").is_file())
-            self.assertTrue((publish_root / "status" / "accession_call_counts.tsv").is_file())
-            self.assertTrue((publish_root / "status" / "status_summary.json").is_file())
             for filename in [
                 "genomes.tsv",
                 "taxonomy.tsv",
