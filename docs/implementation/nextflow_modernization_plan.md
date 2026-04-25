@@ -84,6 +84,26 @@ Expected outcome:
 - A clear recorded decision in this document or a session log:
   `empty workflow outputs supported: yes/no`.
 
+## Phase 1 Results (recorded 2026-04-25)
+
+**Empty workflow outputs supported: YES.**
+
+Probe: `runtime/probe/empty_output_probe.nf` with `runtime/probe/probe.config`.
+NF 25.10.4, local executor.
+
+| Scenario | Channel | Outcome |
+|---|---|---|
+| `always_present` | real file | published to `present/out.txt` ✓ |
+| `always_empty` | `Channel.empty()` | no file, no directory, no crash ✓ |
+| `conditional_out` (emit_real=true) | real file | published to `cond/out.txt` ✓ |
+| `conditional_out` (emit_real=false) | `Channel.empty()` | no file, no directory, no crash ✓ |
+
+NF 25.10 treats an empty-channel `publish:` binding as a silent no-op — it does
+not create the target directory and does not raise an error. The placeholder
+mechanism is no longer needed.
+
+**Proceed with Phase 2A.**
+
 ## Phase 2A: Remove Placeholder Publishing
 
 Use this phase only if Phase 1 confirms empty workflow outputs are safe.
