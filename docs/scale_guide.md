@@ -22,7 +22,8 @@ The main fan-in points are:
 - accession status reduction
 - SQLite and reporting in `merged` mode
 
-`raw` mode is the lighter operational shape because it skips the merged acquisition bundle, SQLite build, and report generation while still publishing canonical merged call tables.
+`raw` mode is the lighter operational shape because it skips SQLite build and
+report generation while still publishing the default v2 table contract.
 
 ## Default Resource Profile
 
@@ -83,13 +84,16 @@ nextflow run . \
 Large runs should rely on both:
 
 - Nextflow cache recovery via `-resume`
-- accession-level ledgers under `publish/status/`
+- accession-level ledgers under `publish/tables/` and `publish/summaries/`
 
 That combination lets you:
 
 - avoid recomputing successful tasks
 - identify which accessions actually failed or produced no calls
 - build smaller rerun lists when needed
+
+Use `publish/tables/accession_status.tsv` for accession-level diagnosis and
+`publish/summaries/status_summary.json` for run-level reduction.
 
 ## Benchmark Before Tuning
 

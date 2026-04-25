@@ -1,44 +1,53 @@
 # Documentation
 
-This directory holds the maintained documentation for the current HomoRepeat pipeline.
-
-The repo has two documentation layers:
-
-- Current-state docs in this directory.
-- Frozen implementation plans in [`docs/implementation/`](./implementation/).
-
-Use the current-state docs when you want to understand or operate the repository as it exists today. Treat `docs/implementation/` as planning material for upcoming work, not as the source of truth for the current workflow.
+This directory contains the maintained documentation for the current HomoRepeat pipeline. It is the source of truth for users and contributors. Planning notes under `docs/implementation/`, if present, are historical or forward-looking material and should not override these current-state docs.
 
 ## Start Here
 
-- [Operations](./operations.md): install, build, run, and inspect pipeline outputs.
-- [Architecture](./architecture.md): workflow structure, code layout, and data flow.
-- [Methods and Scientific Notes](./methods.md): acquisition, translation, repeat detection, and reporting logic.
-- [Data Contracts](./contracts.md): published files, canonical identifiers, and table schemas.
+- [Operations](./operations.md): install, build images, run the workflow, and inspect output.
+- [Architecture](./architecture.md): how Nextflow, Python CLIs, reducers, and metadata fit together.
+- [Methods and Scientific Notes](./methods.md): biological assumptions, detection methods, codon validation, and limitations.
+- [Data Contracts](./contracts.md): v2 published files, identifiers, schemas, and manifest behavior.
+- [Development Guide](./development.md): contributor workflow, testing strategy, and code organization.
 
 ## Supporting Guides
 
-- [Containers](./containers.md): runtime images and Docker profile details.
-- [Scale Guide](./scale_guide.md): concurrency model, resource defaults, and large-run advice.
-- [Benchmark Guide](./benchmark_guide.md): benchmark inputs, the summary CLI, and comparison workflow.
-- [Save State Guide](./save_state_guide.md): `-resume`, accession-level ledgers, and rerun strategy.
-- [Publish Contract Codebase Slices](./publish_contract_codebase_slices.md): implementation-sized slices derived from the frozen publish-contract plan.
+- [Containers](./containers.md): runtime image split and Docker profile details.
+- [Scale Guide](./scale_guide.md): fan-out/fan-in model, resource defaults, and larger-run advice.
+- [Benchmark Guide](./benchmark_guide.md): benchmark inputs and trace summarization.
+- [Resume and Recovery](./save_state_guide.md): Nextflow `-resume`, metadata, and accession-level diagnostics.
 
-## Current Scope
+## Current Public Contract
 
-The current pipeline:
+HomoRepeat now publishes contract version `2`.
 
-- starts from a plain-text assembly accession list
-- downloads annotation-focused NCBI packages
-- normalizes CDS records and taxonomy into canonical TSV/FASTA artifacts
-- translates CDS conservatively and retains one protein isoform per gene group
-- runs `pure`, `threshold`, and optional `seed_extend` homorepeat detection
-- attaches codon slices when they can be validated against the normalized CDS
-- always publishes canonical merged call tables under `publish/calls/`
-- optionally builds SQLite and report artifacts when `--acquisition_publish_mode merged`
+Default public outputs are compact and table-oriented:
 
-Not currently implemented in the main Nextflow workflow:
+- `publish/calls/repeat_calls.tsv`
+- `publish/calls/run_params.tsv`
+- `publish/tables/*.tsv`
+- `publish/summaries/*.json`
+- `publish/metadata/*.json`
+- `publish/metadata/nextflow/*`
 
-- taxon-name driven acquisition
-- local FASTA/GFF manifest input as a first-class workflow entrypoint
-- annotation/domain enrichment downstream of repeat calling
+The default contract does not publish broad batch acquisition directories, full CDS FASTA, full protein FASTA, per-finalizer call fragments, or duplicate status directories. Those remain internal execution artifacts.
+
+## Current Workflow Scope
+
+Implemented:
+
+- assembly-accession input
+- NCBI Datasets acquisition
+- taxonomy-aware CDS normalization
+- conservative translation and deterministic isoform retention
+- `pure`, `threshold`, and optional `seed_extend` repeat detection
+- validated codon slicing and merged codon-usage export
+- compact repeat-context export
+- optional SQLite and HTML/JSON reports in `merged` mode
+
+Not implemented as first-class workflow features:
+
+- taxon-name input workflow
+- local FASTA/GFF manifest input workflow
+- domain enrichment or annotation-heavy downstream biology
+- web UI
