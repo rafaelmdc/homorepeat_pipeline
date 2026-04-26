@@ -2,11 +2,11 @@
 
 ## Overview
 
-HomoRepeat is a Nextflow workflow backed by Python CLIs. Nextflow owns orchestration, task fan-out, container/profile selection, and output publication. Python owns biological transformations, repeat detection, contract validation, SQLite import, and reporting calculations.
+HomoRepeat is a Nextflow workflow backed by Python CLIs. Nextflow owns orchestration, task fan-out, container/profile selection, and public output routing through workflow outputs. Python owns biological transformations, repeat detection, contract validation, SQLite import, and reporting calculations.
 
 Primary entrypoints:
 
-- `main.nf`: top-level workflow and public output wiring
+- `main.nf`: top-level workflow and public workflow-output wiring
 - `workflows/*.nf`: stage-level workflow composition
 - `modules/local/**/*.nf`: process wrappers around Python CLIs
 - `src/homorepeat/cli/*.py`: task entrypoints
@@ -26,11 +26,11 @@ Primary entrypoints:
    - `DETECT_PURE`, `DETECT_THRESHOLD`, and `DETECT_SEED_EXTEND` run independently for each `batch_id x repeat_residue`.
    - `FINALIZE_CALL_CODONS` validates nucleotide slices against normalized CDS and writes finalized call, warning, and codon-usage fragments.
 4. Contract reducers
-   - `MERGE_CALL_TABLES` publishes canonical `calls/repeat_calls.tsv` and `calls/run_params.tsv`.
-   - `MERGE_CODON_USAGE_TABLES` publishes `tables/repeat_call_codon_usage.tsv`.
-   - `EXPORT_REPEAT_CONTEXT` publishes `tables/repeat_context.tsv`.
+   - `MERGE_CALL_TABLES` emits canonical `repeat_calls.tsv` and `run_params.tsv` for publication as `calls/repeat_calls.tsv` and `calls/run_params.tsv`.
+   - `MERGE_CODON_USAGE_TABLES` emits `repeat_call_codon_usage.tsv` for publication under `tables/`.
+   - `EXPORT_REPEAT_CONTEXT` emits `repeat_context.tsv` for publication under `tables/`.
    - `BUILD_ACCESSION_STATUS` builds accession status ledgers internally.
-   - `EXPORT_PUBLISH_TABLES` publishes the remaining v2 `tables/` and `summaries/` artifacts.
+   - `EXPORT_PUBLISH_TABLES` emits the remaining v2 `tables/` and `summaries/` artifacts.
 5. Optional merged-mode reporting
    - `BUILD_SQLITE` imports canonical flat files into SQLite.
    - `EXPORT_SUMMARY_TABLES`, `PREPARE_REPORT_TABLES`, and `RENDER_ECHARTS_REPORT` build report artifacts.
@@ -49,14 +49,14 @@ The v2 public contract is compact and table-first. It publishes:
 
 The workflow still generates broad internal artifacts such as batch `sequences.tsv`, `proteins.tsv`, `cds.fna`, `proteins.faa`, and finalized method fragments. Those artifacts are used for downstream reducers but are not published by default.
 
-This separation keeps the public contract stable and small while preserving the internal data needed for validation and reporting.
+This separation keeps the public contract stable and small while preserving the internal data needed for validation and reporting. Public artifact destinations are assigned only in the entry workflow `publish:` section and top-level `output {}` block; reusable process modules emit files and directories without owning public contract paths.
 
 ## Workflow Topology
 
 | Layer | Files | Responsibility |
 | --- | --- | --- |
 | Configuration | `nextflow.config`, `conf/*.config` | Supported Nextflow version, profiles, defaults, resource labels |
-| Entry point | `main.nf` | Global workflow graph, public output wiring, completion hook |
+| Entry point | `main.nf` | Global workflow graph, public workflow-output wiring, completion hook |
 | Subworkflows | `workflows/*.nf` | Acquisition, detection, and database/report composition |
 | Processes | `modules/local/**/*.nf` | One operational task per process |
 | Python CLIs | `src/homorepeat/cli/*.py` | Stable task interfaces used by Nextflow and tests |
@@ -94,7 +94,7 @@ The v2 `tables/` and `summaries/` outputs are published in both modes.
 
 | Path | Contents |
 | --- | --- |
-| `main.nf` | Top-level workflow and output publication |
+| `main.nf` | Top-level workflow and workflow-output publication |
 | `workflows/` | Stage-level subworkflows |
 | `modules/local/` | Nextflow process wrappers |
 | `src/homorepeat/acquisition/` | NCBI package inspection, normalization, translation helpers |
@@ -113,6 +113,7 @@ The v2 `tables/` and `summaries/` outputs are published in both modes.
 
 - Flat files are the source of truth; SQLite and reports are derived artifacts.
 - Public contract tables are explicit, validated, and versioned.
+- Public artifacts are published through workflow outputs in `main.nf`; processes emit structured outputs for downstream composition.
 - Internal broad FASTA artifacts are not part of the default public contract.
 - Failed runs still try to publish metadata and Nextflow diagnostics.
 - Tests mirror the architecture: pure unit tests for algorithms, CLI tests for task contracts, workflow tests for Nextflow wiring and output shape.

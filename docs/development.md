@@ -26,7 +26,7 @@ The workflow expects a taxonomy SQLite database at
 
 | Path | Responsibility |
 | --- | --- |
-| `main.nf` | Top-level Nextflow graph and publication wiring |
+| `main.nf` | Top-level Nextflow graph and workflow-output publication wiring |
 | `workflows/` | Reusable Nextflow workflow fragments |
 | `modules/local/` | Process definitions grouped by pipeline stage |
 | `conf/` | Base, Docker, and local execution configuration |
@@ -42,7 +42,9 @@ The workflow expects a taxonomy SQLite database at
 The pipeline should keep a clear boundary between internal execution artifacts
 and the public `publish/` contract. Default v2 outputs are compact tables,
 summaries, and metadata; broad FASTA/acquisition/status directories are not part
-of the default public surface.
+of the default public surface. Public artifact paths are owned by the entry
+workflow's `publish:` section and top-level `output {}` block; process modules
+emit structured outputs and remain reusable.
 
 ## Testing Strategy
 
@@ -82,7 +84,7 @@ renaming a published artifact:
 
 - update `src/homorepeat/contracts/` schema expectations
 - update run-manifest artifact collection in `src/homorepeat/runtime/`
-- update Nextflow publication wiring in `main.nf` or the relevant module
+- update Nextflow workflow-output wiring in `main.nf`
 - update contract tests and workflow tests
 - update `README.md`, [Contracts](./contracts.md), and operational docs
 
@@ -103,7 +105,8 @@ Nextflow processes should:
 
 - use labels from `conf/base.config` so resources and containers remain
   centrally controlled
-- publish only intentional public artifacts
+- emit explicit structured files or directories for downstream workflows
+- leave public contract routing to workflow outputs in `main.nf`
 - keep internal scratch and broad intermediates under the run's internal state
 - pass metadata through explicit files rather than parsing terminal logs
 
@@ -139,6 +142,9 @@ Before handing off non-trivial work:
 - run the narrowest relevant tests
 - run `git diff --check`
 - inspect `git diff --stat`
+- for workflow-output changes, run `tests.workflow.test_publish_modes` so the
+  DAG regression guard checks anonymous-node count and removed publication
+  scaffolding
 - confirm docs do not mention removed public paths such as
   `publish/status/`, `publish/acquisition/`, or `publish/calls/finalized/`
   unless the text explicitly says they are not default v2 outputs

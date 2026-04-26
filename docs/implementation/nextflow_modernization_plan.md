@@ -381,6 +381,18 @@ Expected outcome:
 - Documentation describes current behavior rather than historical scaffolding.
 - No placeholder artifact remains in code, tests, docs, or runtime support.
 
+## Phase 7 Results (recorded 2026-04-26)
+
+- `docs/architecture.md` now states that public artifact destinations are owned
+  by the entry workflow `publish:` section and top-level `output {}` block.
+- `docs/development.md` now directs process modules to emit structured outputs
+  and keep public contract routing in `main.nf` workflow outputs.
+- `docs/contracts.md` did not need changes because public artifact paths did not
+  change.
+- Current user-facing docs no longer mention removed placeholder scaffolding or
+  process-level public publication. Historical mentions remain only in
+  `docs/journal/` and these implementation notes.
+
 ## Final Acceptance
 
 Run the focused suite:
