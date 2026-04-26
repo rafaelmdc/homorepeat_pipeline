@@ -108,42 +108,6 @@ workflow {
   tables_accession_call_counts = flatPublishTables.accession_call_counts_tsv.ifEmpty([])
   summaries_status = flatPublishTables.status_summary_json.ifEmpty([])
   summaries_acquisition_validation = flatPublishTables.acquisition_validation_json.ifEmpty([])
-
-  emit:
-  genomes_tsv = acquisition.genomes_tsv
-  taxonomy_tsv = acquisition.taxonomy_tsv
-  sequences_tsv = acquisition.sequences_tsv
-  proteins_tsv = acquisition.proteins_tsv
-  cds_fasta = acquisition.cds_fasta
-  proteins_fasta = acquisition.proteins_fasta
-  download_manifest_tsv = acquisition.download_manifest_tsv
-  normalization_warnings_tsv = acquisition.normalization_warnings_tsv
-  acquisition_validation = acquisition.acquisition_validation
-  finalized_dirs = detection.finalized_dirs
-  repeat_calls = canonicalCalls.repeat_calls_tsv
-  run_params = canonicalCalls.run_params_tsv
-  sqlite = databaseSqliteCh
-  sqlite_validation = databaseSqliteValidationCh
-  summary_by_taxon = reportsSummaryByTaxonCh
-  regression_input = reportsRegressionInputCh
-  echarts_options = reportsEchartsOptionsCh
-  echarts_report = reportsEchartsHtmlCh
-  echarts_js = reportsEchartsJsCh
-  accession_status = statusBuild.accession_status_tsv
-  accession_call_counts = statusBuild.accession_call_counts_tsv
-  status_summary = statusBuild.status_summary_json
-  tables_genomes_tsv = flatPublishTables.genomes_tsv
-  tables_taxonomy_tsv = flatPublishTables.taxonomy_tsv
-  tables_matched_sequences_tsv = flatPublishTables.matched_sequences_tsv
-  tables_matched_proteins_tsv = flatPublishTables.matched_proteins_tsv
-  tables_repeat_call_codon_usage_tsv = canonicalCodonUsage.repeat_call_codon_usage_tsv
-  tables_repeat_context_tsv = repeatContext.repeat_context_tsv
-  tables_download_manifest_tsv = flatPublishTables.download_manifest_tsv
-  tables_normalization_warnings_tsv = flatPublishTables.normalization_warnings_tsv
-  tables_accession_status_tsv = flatPublishTables.accession_status_tsv
-  tables_accession_call_counts_tsv = flatPublishTables.accession_call_counts_tsv
-  summaries_status_summary_json = flatPublishTables.status_summary_json
-  summaries_acquisition_validation_json = flatPublishTables.acquisition_validation_json
 }
 
 output {
