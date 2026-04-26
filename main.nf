@@ -89,13 +89,13 @@ workflow {
   publish:
   calls_repeat = canonicalCalls.repeat_calls_tsv.ifEmpty([])
   calls_params = canonicalCalls.run_params_tsv.ifEmpty([])
-  database_sqlite = databaseSqliteCh.ifEmpty([])
-  database_sqlite_validation = databaseSqliteValidationCh.ifEmpty([])
-  reports_summary_by_taxon = reportsSummaryByTaxonCh.ifEmpty([])
-  reports_regression_input = reportsRegressionInputCh.ifEmpty([])
-  reports_echarts_options = reportsEchartsOptionsCh.ifEmpty([])
-  reports_echarts_html = reportsEchartsHtmlCh.ifEmpty([])
-  reports_echarts_js = reportsEchartsJsCh.ifEmpty([])
+  database_sqlite = databaseSqliteCh
+  database_sqlite_validation = databaseSqliteValidationCh
+  reports_summary_by_taxon = reportsSummaryByTaxonCh
+  reports_regression_input = reportsRegressionInputCh
+  reports_echarts_options = reportsEchartsOptionsCh
+  reports_echarts_html = reportsEchartsHtmlCh
+  reports_echarts_js = reportsEchartsJsCh
   tables_genomes = flatPublishTables.genomes_tsv.ifEmpty([])
   tables_taxonomy = flatPublishTables.taxonomy_tsv.ifEmpty([])
   tables_matched_sequences = flatPublishTables.matched_sequences_tsv.ifEmpty([])
@@ -154,24 +154,31 @@ output {
     path 'calls'
   }
   database_sqlite {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'database'
   }
   database_sqlite_validation {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'database'
   }
   reports_summary_by_taxon {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'reports'
   }
   reports_regression_input {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'reports'
   }
   reports_echarts_options {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'reports'
   }
   reports_echarts_html {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'reports'
   }
   reports_echarts_js {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
     path 'reports'
   }
   tables_genomes {
