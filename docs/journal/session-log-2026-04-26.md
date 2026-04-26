@@ -52,3 +52,81 @@
 
 ## Next step
 - Implement Phase 3: remove acquisition publication-only outputs from `NORMALIZE_CDS_BATCH` and `TRANSLATE_CDS_BATCH`, then rerun the focused workflow tests and inspect the DAG.
+
+---
+
+# Session Log
+
+**Date:** 2026-04-26
+
+## Objective
+- Continue the Nextflow modernization/DAG cleanup after Slice 2A.
+- Implement Phases 2B through 7 from the modernization plan.
+- Document practical CPU, memory, and concurrency controls for large runs.
+
+## What happened
+- Implemented a mode-specific optional output structure for database/report artifacts:
+  - removed `.ifEmpty([])` from optional `database_*` and `reports_*` publish bindings.
+  - added `enabled normalizedAcquisitionPublishMode() == 'merged'` to the matching `output {}` entries.
+  - kept `.ifEmpty([])` on always-public outputs because failed workflows can still trigger Nextflow's empty-output crash without it.
+- Tested a literal split into raw/merged named workflows, but Nextflow 25.10 rejects `publish:` sections outside the entry workflow.
+- Removed acquisition publication-only leftovers from `NORMALIZE_CDS_BATCH` and `TRANSLATE_CDS_BATCH`:
+  - deleted disabled `publishDir` blocks.
+  - deleted un-emitted `publish_batch/*` outputs.
+  - deleted `publish_batch` symlink setup.
+- Collapsed the duplicate acquisition `.join()` in `ACQUISITION_FROM_ACCESSIONS` into one shared `batchRows` channel used by both `batchInputs` and `batch_rows`.
+- Removed the dead top-level `emit:` block from `main.nf`; public publication remains through `publish:` plus `output {}`.
+- Added a DAG regression guard to `tests.workflow.test_publish_modes`:
+  - counts blank Mermaid nodes in generated raw and merged DAGs.
+  - asserts the current threshold of 44 blank nodes.
+  - rejects reintroduction of old placeholder symbols in executable workflow/runtime files.
+- Updated architecture/development documentation to state that public artifacts are routed through workflow outputs in `main.nf`; process modules emit structured outputs only.
+- Updated the implementation plan with Phase 7 results.
+- After the user confirmed the smoke test worked, added documentation for resource controls:
+  - `-qs`
+  - `-process.withLabel:<label>.maxForks`
+  - `-process.withLabel:<label>.memory`
+  - `-process.withLabel:<label>.cpus`
+  - distinction from `--batch_size`
+  - conservative all-methods CHR example command.
+
+## Files touched
+- `main.nf`: made optional database/report outputs mode-specific and removed dead entry workflow emits.
+- `modules/local/acquisition/normalize_cds_batch.nf`: removed disabled publication-only outputs and symlink setup.
+- `modules/local/acquisition/translate_cds_batch.nf`: removed disabled publication-only outputs and symlink setup.
+- `workflows/acquisition_from_accessions.nf`: collapsed duplicate batch-row join.
+- `tests/workflow/test_publish_modes.py`: added DAG blank-node and placeholder-symbol regression checks.
+- `docs/architecture.md`: clarified workflow-output publication ownership.
+- `docs/development.md`: updated process/publication guidance and handoff checklist.
+- `docs/implementation/nextflow_modernization_plan.md`: recorded Phase 7 results.
+- `docs/scale_guide.md`: added resource-control knobs and conservative CHR all-methods command.
+- `docs/operations.md`: linked common-parameter guidance to the scale guide.
+- `README.md`: linked common-parameter guidance to the scale guide.
+- `docs/journal/session-log-2026-04-26.md`: appended this session log.
+
+## Validation
+- `nextflow config .` passed after workflow edits and after docs cleanup.
+- `git diff --check` passed after workflow/test/doc edits.
+- `env PYTHONPATH=src python -m unittest tests.workflow.test_workflow_output_failures tests.workflow.test_publish_modes` passed after Phase 5.
+- `env PYTHONPATH=src python -m unittest tests.workflow.test_publish_modes` passed after Phase 6.
+- `env PYTHONPATH=src python -m unittest tests.workflow.test_workflow_output_failures` passed after Phase 6.
+- Persistent raw fixture DAG checks:
+  - after Phase 3: blank nodes dropped to 45.
+  - after Phase 4: blank nodes dropped to 44.
+  - after Phase 5: blank nodes stayed at 44.
+- User reported the smoke test worked after these changes.
+- Resource-doc update was documentation-only; validation was `git diff --check` and grep checks for the new `-qs` / `-process.withLabel` guidance.
+
+## Current status
+- Phases 2B through 7 are implemented and validated.
+- The current DAG regression guard permits up to 44 blank nodes for fixture DAGs.
+- Public output paths remain unchanged.
+- Resource tuning guidance is now documented for large CHR-style runs.
+
+## Open issues
+- Remaining blank DAG nodes are largely from always-public `.ifEmpty([])` guards and intentional/remaining channel topology.
+- A lower DAG threshold may be possible only if the always-public failed-run output guard is replaced with a cleaner Nextflow-safe structure.
+- Large live runs should still be monitored with `trace.txt` before increasing concurrency or batch size.
+
+## Next step
+- Run the big CHR example with the documented conservative resource controls, then inspect `publish/tables/accession_status.tsv`, `publish/summaries/status_summary.json`, and `internal/nextflow/trace.txt`.
