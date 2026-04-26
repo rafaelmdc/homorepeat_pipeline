@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -16,6 +17,8 @@ from tests.test_support import CLI_ENV, REPO_ROOT
 
 
 FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures" / "packages"
+BLANK_DAG_NODE_PATTERN = re.compile(r'v[0-9]+\[" "\]|v[0-9]+\(\( \)\)')
+MAX_EXPECTED_BLANK_DAG_NODES = 44
 
 
 class WorkflowPublishModesTest(unittest.TestCase):
@@ -109,6 +112,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(context_call_ids, call_ids)
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())
+            self._assert_dag_noise_within_limit(run_root / "internal" / "nextflow" / "dag.html")
 
     @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")
     def test_successful_explicit_merged_run_preserves_flat_acquisition_and_reports(self) -> None:
@@ -173,6 +177,34 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 self.assertTrue((publish_root / "tables" / filename).is_file(), publish_root / "tables" / filename)
             self.assertTrue((publish_root / "summaries" / "status_summary.json").is_file())
             self.assertTrue((publish_root / "summaries" / "acquisition_validation.json").is_file())
+            self._assert_dag_noise_within_limit(run_root / "internal" / "nextflow" / "dag.html")
+
+    def test_placeholder_publication_scaffold_stays_removed(self) -> None:
+        executable_paths = [
+            REPO_ROOT / "main.nf",
+            REPO_ROOT / "lib" / "HomorepeatRuntimeArtifacts.groovy",
+        ]
+        forbidden_symbols = [
+            "WORKFLOW_OUTPUT_PLACEHOLDER",
+            "publishablePathChannel",
+            "publishTarget",
+            "workflow_output_placeholder",
+            "cleanupWorkflowOutputPlaceholders",
+            ".nf_placeholders",
+        ]
+        for path in executable_paths:
+            text = path.read_text(encoding="utf-8")
+            for symbol in forbidden_symbols:
+                self.assertNotIn(symbol, text, f"{symbol} should not be reintroduced in {path}")
+
+    def _assert_dag_noise_within_limit(self, dag_path: Path) -> None:
+        dag_html = dag_path.read_text(encoding="utf-8")
+        blank_nodes = BLANK_DAG_NODE_PATTERN.findall(dag_html)
+        self.assertLessEqual(
+            len(blank_nodes),
+            MAX_EXPECTED_BLANK_DAG_NODES,
+            f"{dag_path} contains {len(blank_nodes)} blank DAG nodes; sample: {blank_nodes[:20]}",
+        )
 
     def _run_pipeline(
         self,
