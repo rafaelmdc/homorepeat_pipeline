@@ -4,47 +4,10 @@ include { ACQUISITION_FROM_ACCESSIONS } from './workflows/acquisition_from_acces
 include { DETECTION_FROM_ACQUISITION } from './workflows/detection_from_acquisition'
 include { DATABASE_REPORTING } from './workflows/database_reporting'
 include { BUILD_ACCESSION_STATUS } from './modules/local/reporting/build_accession_status'
+include { EXPORT_REPEAT_CONTEXT } from './modules/local/reporting/export_repeat_context'
+include { EXPORT_PUBLISH_TABLES } from './modules/local/reporting/export_publish_tables'
 include { MERGE_CALL_TABLES } from './modules/local/reporting/merge_call_tables'
-
-def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
-  "${projectDir}/runtime/output_placeholders/workflow_output_placeholder.txt",
-  checkIfExists: true,
-)
-def WORKFLOW_OUTPUT_PLACEHOLDER_DIR = file(
-  "${projectDir}/runtime/output_placeholders/finalized_placeholder",
-  checkIfExists: true,
-)
-def WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID = '__workflow_output_placeholder__'
-def WORKFLOW_OUTPUT_PLACEHOLDER_METHOD = '__workflow_output_placeholder__'
-def WORKFLOW_OUTPUT_PLACEHOLDER_RESIDUE = '__workflow_output_placeholder__'
-
-def publishablePathChannel = { channel ->
-  channel.mix(Channel.value(WORKFLOW_OUTPUT_PLACEHOLDER_FILE))
-}
-
-def publishableFinalizedChannel = { channel ->
-  channel.mix(Channel.value(
-    tuple(
-      WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID,
-      WORKFLOW_OUTPUT_PLACEHOLDER_METHOD,
-      WORKFLOW_OUTPUT_PLACEHOLDER_RESIDUE,
-      WORKFLOW_OUTPUT_PLACEHOLDER_DIR,
-    )
-  ))
-}
-
-def publishTarget = { targetDir, artifact ->
-  artifact?.toString() == WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName().toString() ||
-    artifact?.toString()?.endsWith("/${WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName()}")
-    ? ".nf_placeholders/${targetDir}"
-    : targetDir
-}
-
-def finalizedPublishTarget = { batchId, method, repeatResidue, finalizedDir ->
-  batchId == WORKFLOW_OUTPUT_PLACEHOLDER_BATCH_ID
-    ? '.nf_placeholders/finalized'
-    : "calls/finalized/${method}/${repeatResidue}"
-}
+include { MERGE_CODON_USAGE_TABLES } from './modules/local/reporting/merge_codon_usage_tables'
 
 def normalizedAcquisitionPublishMode = {
   def mode = (params.acquisition_publish_mode ?: 'raw').toString().trim().toLowerCase()
@@ -82,6 +45,21 @@ workflow {
     detection.call_tsvs,
     detection.run_params_tsvs,
   )
+  canonicalCodonUsage = MERGE_CODON_USAGE_TABLES(
+    detection.codon_usage_tsvs,
+  )
+  repeatContext = EXPORT_REPEAT_CONTEXT(
+    acquisition.batch_inputs,
+    canonicalCalls.repeat_calls_tsv,
+  )
+  flatPublishTables = EXPORT_PUBLISH_TABLES(
+    acquisition.batch_table,
+    acquisition.batch_inputs,
+    canonicalCalls.repeat_calls_tsv,
+    statusBuild.accession_status_tsv,
+    statusBuild.accession_call_counts_tsv,
+    statusBuild.status_summary_json,
+  )
   def databaseSqliteCh = Channel.empty()
   def databaseSqliteValidationCh = Channel.empty()
   def reportsSummaryByTaxonCh = Channel.empty()
@@ -109,81 +87,100 @@ workflow {
   }
 
   publish:
-  acquisition_genomes = publishablePathChannel(acquisition.genomes_tsv)
-  acquisition_taxonomy = publishablePathChannel(acquisition.taxonomy_tsv)
-  acquisition_sequences = publishablePathChannel(acquisition.sequences_tsv)
-  acquisition_proteins = publishablePathChannel(acquisition.proteins_tsv)
-  acquisition_cds = publishablePathChannel(acquisition.cds_fasta)
-  acquisition_proteins_fasta = publishablePathChannel(acquisition.proteins_fasta)
-  acquisition_download_manifest = publishablePathChannel(acquisition.download_manifest_tsv)
-  acquisition_normalization_warnings = publishablePathChannel(acquisition.normalization_warnings_tsv)
-  acquisition_validation = publishablePathChannel(acquisition.acquisition_validation)
-  calls_repeat = publishablePathChannel(canonicalCalls.repeat_calls_tsv)
-  calls_params = publishablePathChannel(canonicalCalls.run_params_tsv)
-  calls_finalized = publishableFinalizedChannel(detection.finalized_dirs)
-  database_sqlite = publishablePathChannel(databaseSqliteCh)
-  database_sqlite_validation = publishablePathChannel(databaseSqliteValidationCh)
-  reports_summary_by_taxon = publishablePathChannel(reportsSummaryByTaxonCh)
-  reports_regression_input = publishablePathChannel(reportsRegressionInputCh)
-  reports_echarts_options = publishablePathChannel(reportsEchartsOptionsCh)
-  reports_echarts_html = publishablePathChannel(reportsEchartsHtmlCh)
-  reports_echarts_js = publishablePathChannel(reportsEchartsJsCh)
-  status_accession = publishablePathChannel(statusBuild.accession_status_tsv)
-  status_accession_call_counts = publishablePathChannel(statusBuild.accession_call_counts_tsv)
-  status_summary = publishablePathChannel(statusBuild.status_summary_json)
-
-  emit:
-  genomes_tsv = acquisition.genomes_tsv
-  taxonomy_tsv = acquisition.taxonomy_tsv
-  sequences_tsv = acquisition.sequences_tsv
-  proteins_tsv = acquisition.proteins_tsv
-  cds_fasta = acquisition.cds_fasta
-  proteins_fasta = acquisition.proteins_fasta
-  download_manifest_tsv = acquisition.download_manifest_tsv
-  normalization_warnings_tsv = acquisition.normalization_warnings_tsv
-  acquisition_validation = acquisition.acquisition_validation
-  finalized_dirs = detection.finalized_dirs
-  repeat_calls = canonicalCalls.repeat_calls_tsv
-  run_params = canonicalCalls.run_params_tsv
-  sqlite = databaseSqliteCh
-  sqlite_validation = databaseSqliteValidationCh
-  summary_by_taxon = reportsSummaryByTaxonCh
-  regression_input = reportsRegressionInputCh
-  echarts_options = reportsEchartsOptionsCh
-  echarts_report = reportsEchartsHtmlCh
-  echarts_js = reportsEchartsJsCh
-  accession_status = statusBuild.accession_status_tsv
-  accession_call_counts = statusBuild.accession_call_counts_tsv
-  status_summary = statusBuild.status_summary_json
+  calls_repeat = canonicalCalls.repeat_calls_tsv.ifEmpty([])
+  calls_params = canonicalCalls.run_params_tsv.ifEmpty([])
+  database_sqlite = databaseSqliteCh
+  database_sqlite_validation = databaseSqliteValidationCh
+  reports_summary_by_taxon = reportsSummaryByTaxonCh
+  reports_regression_input = reportsRegressionInputCh
+  reports_echarts_options = reportsEchartsOptionsCh
+  reports_echarts_html = reportsEchartsHtmlCh
+  reports_echarts_js = reportsEchartsJsCh
+  tables_genomes = flatPublishTables.genomes_tsv.ifEmpty([])
+  tables_taxonomy = flatPublishTables.taxonomy_tsv.ifEmpty([])
+  tables_matched_sequences = flatPublishTables.matched_sequences_tsv.ifEmpty([])
+  tables_matched_proteins = flatPublishTables.matched_proteins_tsv.ifEmpty([])
+  tables_repeat_call_codon_usage = canonicalCodonUsage.repeat_call_codon_usage_tsv.ifEmpty([])
+  tables_repeat_context = repeatContext.repeat_context_tsv.ifEmpty([])
+  tables_download_manifest = flatPublishTables.download_manifest_tsv.ifEmpty([])
+  tables_normalization_warnings = flatPublishTables.normalization_warnings_tsv.ifEmpty([])
+  tables_accession_status = flatPublishTables.accession_status_tsv.ifEmpty([])
+  tables_accession_call_counts = flatPublishTables.accession_call_counts_tsv.ifEmpty([])
+  summaries_status = flatPublishTables.status_summary_json.ifEmpty([])
+  summaries_acquisition_validation = flatPublishTables.acquisition_validation_json.ifEmpty([])
 }
 
 output {
-  acquisition_genomes { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_taxonomy { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_sequences { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_proteins { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_cds { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_proteins_fasta { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_download_manifest { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_normalization_warnings { path { artifact -> publishTarget('acquisition', artifact) } }
-  acquisition_validation { path { artifact -> publishTarget('acquisition', artifact) } }
-  calls_repeat { path { artifact -> publishTarget('calls', artifact) } }
-  calls_params { path { artifact -> publishTarget('calls', artifact) } }
-  calls_finalized {
-    path { batchId, method, repeatResidue, finalizedDir ->
-      finalizedPublishTarget(batchId, method, repeatResidue, finalizedDir)
-    }
+  calls_repeat {
+    path 'calls'
   }
-  database_sqlite { path { artifact -> publishTarget('database', artifact) } }
-  database_sqlite_validation { path { artifact -> publishTarget('database', artifact) } }
-  reports_summary_by_taxon { path { artifact -> publishTarget('reports', artifact) } }
-  reports_regression_input { path { artifact -> publishTarget('reports', artifact) } }
-  reports_echarts_options { path { artifact -> publishTarget('reports', artifact) } }
-  reports_echarts_html { path { artifact -> publishTarget('reports', artifact) } }
-  reports_echarts_js { path { artifact -> publishTarget('reports', artifact) } }
-  status_accession { path { artifact -> publishTarget('status', artifact) } }
-  status_accession_call_counts { path { artifact -> publishTarget('status', artifact) } }
-  status_summary { path { artifact -> publishTarget('status', artifact) } }
+  calls_params {
+    path 'calls'
+  }
+  database_sqlite {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'database'
+  }
+  database_sqlite_validation {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'database'
+  }
+  reports_summary_by_taxon {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'reports'
+  }
+  reports_regression_input {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'reports'
+  }
+  reports_echarts_options {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'reports'
+  }
+  reports_echarts_html {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'reports'
+  }
+  reports_echarts_js {
+    enabled normalizedAcquisitionPublishMode() == 'merged'
+    path 'reports'
+  }
+  tables_genomes {
+    path 'tables'
+  }
+  tables_taxonomy {
+    path 'tables'
+  }
+  tables_matched_sequences {
+    path 'tables'
+  }
+  tables_matched_proteins {
+    path 'tables'
+  }
+  tables_repeat_call_codon_usage {
+    path 'tables'
+  }
+  tables_repeat_context {
+    path 'tables'
+  }
+  tables_download_manifest {
+    path 'tables'
+  }
+  tables_normalization_warnings {
+    path 'tables'
+  }
+  tables_accession_status {
+    path 'tables'
+  }
+  tables_accession_call_counts {
+    path 'tables'
+  }
+  summaries_status {
+    path 'summaries'
+  }
+  summaries_acquisition_validation {
+    path 'summaries'
+  }
 }
 
 workflow.onComplete {

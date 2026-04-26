@@ -2,11 +2,14 @@
 
 ## Scientific Scope
 
-The current pipeline detects single-residue amino-acid homorepeats in proteins derived from annotated CDS records. The operative data path is:
+The pipeline detects single-residue amino-acid homorepeats in proteins derived
+from annotated CDS records. The operative data path is:
 
 assembly accession -> NCBI package -> normalized CDS -> translated proteins -> repeat calls -> optional codon slices -> summaries/SQLite
 
-The main Nextflow workflow is accession-driven. Although the Python package contains reusable helpers, the workflow does not currently expose taxon-name driven acquisition or local FASTA/GFF manifests as first-class runtime inputs.
+The main Nextflow workflow is accession-driven. Although the Python package
+contains reusable helpers, the workflow does not currently expose taxon-name
+driven acquisition or local FASTA/GFF manifests as first-class runtime inputs.
 
 ## Acquisition and Normalization
 
@@ -39,6 +42,10 @@ Normalization currently:
 - ignores alternate loci and patch units
 - materializes explicit lineage rows into `taxonomy.tsv` using `taxon-weaver`
 - treats a missing lineage as an error for that accession
+
+The output taxonomy table is a run-level lookup table. It is designed for
+transparent grouping and post-run joins, not for inferring taxonomy beyond what
+is present in the source package and taxonomy database.
 
 ### CDS to metadata linkage
 
@@ -155,32 +162,51 @@ If any of those checks fail:
 - a warning row is written
 - the codon failure does not invalidate the amino-acid call itself
 
-The finalizer also writes per-call codon-usage tables, but those tables are not currently merged into the top-level reporting outputs.
+The merged public codon table is `publish/tables/repeat_call_codon_usage.tsv`.
+Rows are keyed to repeat-call identifiers and only represent calls where the
+codon slice passed the exact translation check. Compact source context is
+published separately in `publish/tables/repeat_context.tsv`.
 
-## Reporting Calculations
+## Public Tables and Reporting
 
-The reporting layer is deliberately simple and residue-neutral.
+The v2 public contract separates compact analysis tables from broad execution
+artifacts. Default runs publish:
 
-`summary_by_taxon.tsv` groups finalized calls by:
+- `publish/calls/repeat_calls.tsv`
+- `publish/calls/run_params.tsv`
+- `publish/tables/genomes.tsv`
+- `publish/tables/taxonomy.tsv`
+- `publish/tables/matched_sequences.tsv`
+- `publish/tables/matched_proteins.tsv`
+- `publish/tables/repeat_call_codon_usage.tsv`
+- `publish/tables/repeat_context.tsv`
+- `publish/tables/download_manifest.tsv`
+- `publish/tables/normalization_warnings.tsv`
+- `publish/tables/accession_status.tsv`
+- `publish/tables/accession_call_counts.tsv`
+- `publish/summaries/status_summary.json`
+- `publish/summaries/acquisition_validation.json`
 
-- `method`
-- `repeat_residue`
-- `taxon_id`
+The reporting layer is deliberately simple and residue-neutral. In
+`--acquisition_publish_mode merged`, the workflow also builds SQLite and report
+artifacts from the same normalized tables and repeat calls. The HTML layer is a
+render artifact and does not recompute biological calls.
 
-It reports:
+## Accuracy Boundaries
 
-- counts of genomes, proteins, and calls
-- mean, median, and max repeat length
-- mean purity
-- mean start fraction within the source protein
+The workflow favors auditable failure over silent biological inference:
 
-`regression_input.tsv` records repeat-length observation counts by method, residue, and taxon label.
-
-`echarts_options.json` and `echarts_report.html` are render artifacts built from those tables. The HTML layer does not recompute biology.
+- accessions that cannot produce complete normalized records are represented in
+  status tables instead of being silently ignored
+- CDS rows with ambiguous sequence, partial records, frame problems, or internal
+  stops are excluded from translated proteins
+- codon slices are attached only when nucleotide translation exactly matches
+  the amino-acid call
+- broad intermediate FASTA and acquisition directories are internal by default;
+  public outputs are compact tables with stable schemas
 
 ## Current Limitations
 
 - The main workflow starts from assembly accessions only.
-- Reporting is intentionally lightweight; the codon metric fields in call and summary outputs are present but currently left blank.
 - Domain enrichment, annotation-heavy downstream biology, and bespoke residue-specific analytics are not part of the current workflow.
 - SQLite and reports are available only in `merged` acquisition mode.

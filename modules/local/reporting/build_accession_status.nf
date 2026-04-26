@@ -28,13 +28,13 @@ process BUILD_ACCESSION_STATUS_TASK {
         def translatedDir = translatedInputs[idx]
         """
         mkdir -p "status_batch_views/${batchId}"
-        cp '${normalizedDir}/download_stage_status.json' "status_batch_views/${batchId}/download_stage_status.json"
-        cp '${normalizedDir}/normalize_stage_status.json' "status_batch_views/${batchId}/normalize_stage_status.json"
-        cp '${normalizedDir}/download_manifest.tsv' "status_batch_views/${batchId}/download_manifest.tsv"
-        cp '${normalizedDir}/genomes.tsv' "status_batch_views/${batchId}/genomes.tsv"
-        cp '${normalizedDir}/sequences.tsv' "status_batch_views/${batchId}/sequences.tsv"
-        cp '${translatedDir}/translate_stage_status.json' "status_batch_views/${batchId}/translate_stage_status.json"
-        cp '${translatedDir}/proteins.tsv' "status_batch_views/${batchId}/proteins.tsv"
+        ln '${normalizedDir}/download_stage_status.json' "status_batch_views/${batchId}/download_stage_status.json" || cp '${normalizedDir}/download_stage_status.json' "status_batch_views/${batchId}/download_stage_status.json"
+        ln '${normalizedDir}/normalize_stage_status.json' "status_batch_views/${batchId}/normalize_stage_status.json" || cp '${normalizedDir}/normalize_stage_status.json' "status_batch_views/${batchId}/normalize_stage_status.json"
+        ln '${normalizedDir}/download_manifest.tsv' "status_batch_views/${batchId}/download_manifest.tsv" || cp '${normalizedDir}/download_manifest.tsv' "status_batch_views/${batchId}/download_manifest.tsv"
+        ln '${normalizedDir}/genomes.tsv' "status_batch_views/${batchId}/genomes.tsv" || cp '${normalizedDir}/genomes.tsv' "status_batch_views/${batchId}/genomes.tsv"
+        ln '${normalizedDir}/sequences.tsv' "status_batch_views/${batchId}/sequences.tsv" || cp '${normalizedDir}/sequences.tsv' "status_batch_views/${batchId}/sequences.tsv"
+        ln '${translatedDir}/translate_stage_status.json' "status_batch_views/${batchId}/translate_stage_status.json" || cp '${translatedDir}/translate_stage_status.json' "status_batch_views/${batchId}/translate_stage_status.json"
+        ln '${translatedDir}/proteins.tsv' "status_batch_views/${batchId}/proteins.tsv" || cp '${translatedDir}/proteins.tsv' "status_batch_views/${batchId}/proteins.tsv"
         """
     }.join('\n')
     def batchArgs = batchIdInputs.collect { "--batch-dir 'status_batch_views/${it}'" }.join(' ')

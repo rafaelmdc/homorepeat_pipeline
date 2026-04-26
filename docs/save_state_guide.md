@@ -37,9 +37,9 @@ Start there when the run exits nonzero.
 
 When the reducer completes, the workflow publishes:
 
-- `publish/status/accession_status.tsv`
-- `publish/status/accession_call_counts.tsv`
-- `publish/status/status_summary.json`
+- `publish/tables/accession_status.tsv`
+- `publish/tables/accession_call_counts.tsv`
+- `publish/summaries/status_summary.json`
 
 These files are supplemental diagnostics. Native Nextflow success/failure remains the run-level source of truth.
 
@@ -93,8 +93,8 @@ Current top-level `status` values:
 
 1. Check the native Nextflow exit status and `publish/metadata/nextflow/report.html`.
 2. Read `publish/metadata/run_manifest.json` to confirm run mode, enabled methods, and published artifacts.
-3. If present, inspect `publish/status/status_summary.json`.
-4. If you need accession-level diagnosis, inspect `publish/status/accession_status.tsv`.
+3. If present, inspect `publish/summaries/status_summary.json`.
+4. If you need accession-level diagnosis, inspect `publish/tables/accession_status.tsv`.
 5. Build a new accession list from `failed` or `skipped_upstream_failed` rows if you want a focused rerun.
 6. Use `-resume` when continuing the same run root and work directory.
 

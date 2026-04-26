@@ -11,11 +11,11 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 class HomorepeatRuntimeArtifacts {
+    private static final Integer CURRENT_PUBLISH_CONTRACT_VERSION = 2
     private static final Map<String, Map<String, String>> PUBLISHED_ARTIFACTS = [
         calls      : [
             repeat_calls_tsv: 'calls/repeat_calls.tsv',
             run_params_tsv  : 'calls/run_params.tsv',
-            finalized_root : 'calls/finalized',
         ],
         database   : [
             sqlite                : 'database/homorepeat.sqlite',
@@ -28,10 +28,22 @@ class HomorepeatRuntimeArtifacts {
             echarts_report_html : 'reports/echarts_report.html',
             echarts_js          : 'reports/echarts.min.js',
         ],
-        status     : [
-            accession_status_tsv     : 'status/accession_status.tsv',
-            accession_call_counts_tsv: 'status/accession_call_counts.tsv',
-            status_summary_json      : 'status/status_summary.json',
+        status     : [:],
+        tables     : [
+            genomes_tsv                : 'tables/genomes.tsv',
+            taxonomy_tsv               : 'tables/taxonomy.tsv',
+            matched_sequences_tsv      : 'tables/matched_sequences.tsv',
+            matched_proteins_tsv       : 'tables/matched_proteins.tsv',
+            repeat_call_codon_usage_tsv: 'tables/repeat_call_codon_usage.tsv',
+            repeat_context_tsv         : 'tables/repeat_context.tsv',
+            download_manifest_tsv      : 'tables/download_manifest.tsv',
+            normalization_warnings_tsv : 'tables/normalization_warnings.tsv',
+            accession_status_tsv       : 'tables/accession_status.tsv',
+            accession_call_counts_tsv  : 'tables/accession_call_counts.tsv',
+        ],
+        summaries  : [
+            status_summary_json      : 'summaries/status_summary.json',
+            acquisition_validation_json: 'summaries/acquisition_validation.json',
         ],
         metadata   : [
             launch_metadata_json : 'metadata/launch_metadata.json',
@@ -41,18 +53,6 @@ class HomorepeatRuntimeArtifacts {
             trace_txt            : 'metadata/nextflow/trace.txt',
         ],
     ]
-    private static final Map<String, String> MERGED_ACQUISITION_ARTIFACTS = [
-        genomes_tsv                : 'acquisition/genomes.tsv',
-        taxonomy_tsv               : 'acquisition/taxonomy.tsv',
-        sequences_tsv              : 'acquisition/sequences.tsv',
-        proteins_tsv               : 'acquisition/proteins.tsv',
-        cds_fasta                  : 'acquisition/cds.fna',
-        proteins_fasta             : 'acquisition/proteins.faa',
-        download_manifest_tsv      : 'acquisition/download_manifest.tsv',
-        normalization_warnings_tsv : 'acquisition/normalization_warnings.tsv',
-        acquisition_validation_json: 'acquisition/acquisition_validation.json',
-    ]
-
     static void finalizeRun(Map ctx) {
         Path repoRoot = asPath(ctx.repoRoot)
         Path launchDir = asPath(ctx.launchDir)
@@ -77,7 +77,6 @@ class HomorepeatRuntimeArtifacts {
         linkPublishedPath(internalDir.resolve('timeline.html'), publishedNextflowDir.resolve('timeline.html'))
         linkPublishedPath(internalDir.resolve('dag.html'), publishedNextflowDir.resolve('dag.html'))
         linkPublishedPath(internalDir.resolve('trace.txt'), publishedNextflowDir.resolve('trace.txt'))
-        cleanupWorkflowOutputPlaceholders(publishRoot)
 
         Path launchMetadataPath = metadataDir.resolve('launch_metadata.json')
         writeJson(
@@ -129,14 +128,6 @@ class HomorepeatRuntimeArtifacts {
         }
     }
 
-    private static void cleanupWorkflowOutputPlaceholders(Path publishRoot) {
-        Path placeholderDir = publishRoot.resolve('.nf_placeholders')
-        if (!Files.exists(placeholderDir, LinkOption.NOFOLLOW_LINKS)) {
-            return
-        }
-        placeholderDir.toFile().deleteDir()
-    }
-
     private static Map<String, Object> buildLaunchMetadata(Map ctx) {
         [
             run_id         : ctx.runId,
@@ -144,6 +135,7 @@ class HomorepeatRuntimeArtifacts {
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
+            publish_contract_version: CURRENT_PUBLISH_CONTRACT_VERSION,
             acquisition_publish_mode: ctx.acquisitionPublishMode,
             launch_dir     : ctx.launchDir?.toString() ?: '',
             project_dir    : ctx.repoRoot?.toString() ?: '',
@@ -178,6 +170,7 @@ class HomorepeatRuntimeArtifacts {
             started_at_utc : ctx.startedAtUtc,
             finished_at_utc: ctx.finishedAtUtc,
             profile        : ctx.profile,
+            publish_contract_version: CURRENT_PUBLISH_CONTRACT_VERSION,
             acquisition_publish_mode: normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
             git_revision   : gitRevision(repoRoot),
             inputs         : [
@@ -200,7 +193,6 @@ class HomorepeatRuntimeArtifacts {
             artifacts      : collectArtifacts(
                 runRoot,
                 publishRoot,
-                normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
             ),
         ]
     }
@@ -268,25 +260,10 @@ class HomorepeatRuntimeArtifacts {
 
     private static Map<String, Map<String, String>> collectArtifacts(
         Path runRoot,
-        Path publishRoot,
-        String acquisitionPublishMode
+        Path publishRoot
     ) {
         Map<String, Map<String, String>> payload = [:]
-        Map<String, String> acquisitionPayload = [:]
-        if (acquisitionPublishMode == 'raw') {
-            Path batchesRoot = publishRoot.resolve('acquisition').resolve('batches').normalize()
-            if (Files.exists(batchesRoot) || Files.exists(batchesRoot, LinkOption.NOFOLLOW_LINKS)) {
-                acquisitionPayload['batches_root'] = relativeOrAbsolute(batchesRoot, runRoot)
-            }
-        } else {
-            MERGED_ACQUISITION_ARTIFACTS.each { String key, String relativePath ->
-                Path candidate = publishRoot.resolve(relativePath).normalize()
-                if (Files.exists(candidate) || Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) {
-                    acquisitionPayload[key] = relativeOrAbsolute(candidate, runRoot)
-                }
-            }
-        }
-        payload['acquisition'] = acquisitionPayload
+        payload['acquisition'] = [:]
 
         PUBLISHED_ARTIFACTS.each { String section, Map<String, String> files ->
             Map<String, String> sectionPayload = [:]

@@ -248,6 +248,8 @@ class RuntimeArtifactsTest(unittest.TestCase):
             (publish_root / "metadata" / "nextflow").mkdir(parents=True, exist_ok=True)
             (publish_root / "reports").mkdir(parents=True, exist_ok=True)
             (publish_root / "status").mkdir(parents=True, exist_ok=True)
+            (publish_root / "tables").mkdir(parents=True, exist_ok=True)
+            (publish_root / "summaries").mkdir(parents=True, exist_ok=True)
 
             for path in [
                 publish_root / "acquisition" / "genomes.tsv",
@@ -258,6 +260,11 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 publish_root / "status" / "accession_status.tsv",
                 publish_root / "status" / "accession_call_counts.tsv",
                 publish_root / "metadata" / "nextflow" / "trace.txt",
+                publish_root / "tables" / "genomes.tsv",
+                publish_root / "tables" / "download_manifest.tsv",
+                publish_root / "tables" / "accession_status.tsv",
+                publish_root / "summaries" / "status_summary.json",
+                publish_root / "summaries" / "acquisition_validation.json",
             ]:
                 if path.name == "run_params.tsv":
                     path.write_text(
@@ -327,18 +334,25 @@ class RuntimeArtifactsTest(unittest.TestCase):
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run_id"], "run_001")
             self.assertEqual(payload["status"], "success")
+            self.assertEqual(payload["publish_contract_version"], 2)
             self.assertEqual(payload["acquisition_publish_mode"], "merged")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["Q"])
             self.assertEqual(payload["params"]["detection"]["pure"]["Q"]["min_repeat_count"], "6")
-            self.assertEqual(payload["artifacts"]["acquisition"]["genomes_tsv"], "publish/acquisition/genomes.tsv")
+            self.assertEqual(payload["artifacts"]["acquisition"], {})
             self.assertEqual(payload["artifacts"]["calls"]["repeat_calls_tsv"], "publish/calls/repeat_calls.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
-            self.assertEqual(payload["artifacts"]["calls"]["finalized_root"], "publish/calls/finalized")
+            self.assertNotIn("finalized_root", payload["artifacts"]["calls"])
             self.assertEqual(payload["artifacts"]["database"]["sqlite"], "publish/database/homorepeat.sqlite")
-            self.assertEqual(payload["artifacts"]["status"]["accession_status_tsv"], "publish/status/accession_status.tsv")
-            self.assertEqual(payload["artifacts"]["status"]["accession_call_counts_tsv"], "publish/status/accession_call_counts.tsv")
-            self.assertEqual(payload["artifacts"]["status"]["status_summary_json"], "publish/status/status_summary.json")
+            self.assertEqual(payload["artifacts"]["status"], {})
+            self.assertEqual(payload["artifacts"]["tables"]["genomes_tsv"], "publish/tables/genomes.tsv")
+            self.assertEqual(payload["artifacts"]["tables"]["download_manifest_tsv"], "publish/tables/download_manifest.tsv")
+            self.assertEqual(payload["artifacts"]["tables"]["accession_status_tsv"], "publish/tables/accession_status.tsv")
+            self.assertEqual(payload["artifacts"]["summaries"]["status_summary_json"], "publish/summaries/status_summary.json")
+            self.assertEqual(
+                payload["artifacts"]["summaries"]["acquisition_validation_json"],
+                "publish/summaries/acquisition_validation.json",
+            )
             self.assertEqual(payload["artifacts"]["metadata"]["launch_metadata_json"], "publish/metadata/launch_metadata.json")
             self.assertEqual(payload["artifacts"]["metadata"]["trace_txt"], "publish/metadata/nextflow/trace.txt")
 
@@ -398,6 +412,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish_contract_version"], 2)
             self.assertEqual(payload["acquisition_publish_mode"], "raw")
             self.assertEqual(payload["enabled_methods"], ["pure"])
             self.assertEqual(payload["repeat_residues"], ["N", "Q"])
@@ -479,9 +494,9 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish_contract_version"], 2)
             self.assertEqual(payload["acquisition_publish_mode"], "raw")
-            self.assertEqual(payload["artifacts"]["acquisition"]["batches_root"], "publish/acquisition/batches")
-            self.assertNotIn("genomes_tsv", payload["artifacts"]["acquisition"])
+            self.assertEqual(payload["artifacts"]["acquisition"], {})
             self.assertEqual(payload["artifacts"]["calls"]["repeat_calls_tsv"], "publish/calls/repeat_calls.tsv")
             self.assertEqual(payload["artifacts"]["calls"]["run_params_tsv"], "publish/calls/run_params.tsv")
             self.assertEqual(payload["artifacts"]["database"], {})
@@ -565,6 +580,7 @@ class RuntimeArtifactsTest(unittest.TestCase):
                 )
 
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["publish_contract_version"], 2)
             self.assertEqual(payload["params"]["params_file_values"]["batch_size"], 10)
             self.assertEqual(payload["params"]["effective_values"]["batch_size"], 2)
 

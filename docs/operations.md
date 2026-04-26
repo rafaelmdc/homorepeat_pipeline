@@ -71,7 +71,7 @@ nextflow \
 | `--run_id` | timestamped value | Names the run root under `runs/` unless `--run_root` is overridden |
 | `--run_root` | `runs/<run_id>` | Root for published outputs and internal Nextflow state |
 | `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Put this on fast scratch for larger runs |
-| `--acquisition_publish_mode` | `raw` | `raw` keeps batch-scoped acquisition outputs; `merged` also builds SQLite and reports |
+| `--acquisition_publish_mode` | `raw` | `raw` publishes the v2 table contract only; `merged` also builds SQLite and reports |
 | `--repeat_residues` | `Q` | Comma-separated one-letter amino-acid codes |
 | `--run_pure` | `true` | Enables contiguous-run detection |
 | `--run_threshold` | `true` | Enables sliding-window density detection |
@@ -95,36 +95,48 @@ Checked-in parameter examples:
 - `examples/params/smoke_default.json`
 - `examples/params/multi_residue_qn.json`
 
+For CPU, memory, and concurrency controls such as `-qs` and
+`-process.withLabel:<label>.maxForks`, see [Scale Guide](./scale_guide.md).
+
 ## Published Output Layout
 
 Every run publishes under `runs/<run_id>/publish/`.
 
-Mode-independent outputs:
+Default v2 outputs:
 
 - `publish/calls/`
-- `publish/calls/finalized/`
-- `publish/status/`
+- `publish/tables/`
+- `publish/summaries/`
 - `publish/metadata/`
 
-Mode-specific outputs:
-
-- `raw`
-  - `publish/acquisition/batches/<batch_id>/`
-- `merged`
-  - `publish/acquisition/`
-  - `publish/database/`
-  - `publish/reports/`
-
-Important operational files:
+Important files:
 
 - `publish/calls/repeat_calls.tsv`
 - `publish/calls/run_params.tsv`
-- `publish/status/accession_status.tsv`
-- `publish/status/accession_call_counts.tsv`
-- `publish/status/status_summary.json`
+- `publish/tables/genomes.tsv`
+- `publish/tables/taxonomy.tsv`
+- `publish/tables/matched_sequences.tsv`
+- `publish/tables/matched_proteins.tsv`
+- `publish/tables/repeat_call_codon_usage.tsv`
+- `publish/tables/repeat_context.tsv`
+- `publish/tables/download_manifest.tsv`
+- `publish/tables/normalization_warnings.tsv`
+- `publish/tables/accession_status.tsv`
+- `publish/tables/accession_call_counts.tsv`
+- `publish/summaries/status_summary.json`
+- `publish/summaries/acquisition_validation.json`
 - `publish/metadata/run_manifest.json`
 - `publish/metadata/launch_metadata.json`
 - `publish/metadata/nextflow/report.html`
+
+`--acquisition_publish_mode merged` additionally publishes:
+
+- `publish/database/homorepeat.sqlite`
+- `publish/reports/`
+
+The default v2 contract does not publish `publish/acquisition/`,
+`publish/status/`, `publish/calls/finalized/`, `cds.fna`, or `proteins.faa`.
+Those remain internal execution artifacts.
 
 `run_manifest.json` is the authoritative place to determine:
 
@@ -141,14 +153,15 @@ Primary failure surface:
 
 Supplemental recovery and diagnosis:
 
-- `publish/status/` when the status builder completes
+- `publish/tables/accession_status.tsv` and `publish/tables/accession_call_counts.tsv`
+- `publish/summaries/status_summary.json`
 - `publish/metadata/run_manifest.json` and `publish/metadata/launch_metadata.json`
 
 Recommended operator workflow after a failed or partial run:
 
 1. Check the Nextflow report and trace under `publish/metadata/nextflow/`.
-2. If present, inspect `publish/status/status_summary.json`.
-3. Use `publish/status/accession_status.tsv` to find accession-level failures or no-call completions.
+2. If present, inspect `publish/summaries/status_summary.json`.
+3. Use `publish/tables/accession_status.tsv` to find accession-level failures or no-call completions.
 4. Use `-resume` when continuing the same run root.
 
 ## Focused Smoke Scripts

@@ -1,123 +1,135 @@
 # HomoRepeat
 
-HomoRepeat is a Nextflow pipeline for homorepeat acquisition, detection, codon-aware finalization, SQLite assembly, and downstream reporting.
+HomoRepeat is a Nextflow pipeline for accession-driven homorepeat analysis. It downloads annotated assemblies, normalizes CDS records, translates proteins, detects single-residue amino-acid homorepeats, validates codon slices where possible, and publishes a compact v2 tabular contract for downstream import.
 
-Version `0.1` is the first release-focused rebuild of the project. It is scoped to:
-- acquisition from assembly accession lists
-- taxonomy-aware normalization
-- three homorepeat detection strategies: `pure`, `threshold`, and optional `seed_extend`
-- configurable repeat residues
-- canonical flat-file outputs plus a SQLite database
-- reproducible reporting artifacts under one run root
+The workflow orchestration is Nextflow. The scientific and contract logic is Python under [`src/homorepeat/`](./src/homorepeat/).
 
-The workflow orchestration lives in Nextflow. The scientific logic lives in package-backed Python CLIs under `src/homorepeat/`.
+## What This Repo Provides
 
-## Version 0.1 Scope
+- Accession-list workflow entrypoint through `nextflow run .`
+- Docker and local execution profiles
+- NCBI Datasets acquisition with `taxon-weaver` lineage materialization
+- Three detection methods: `pure`, `threshold`, and optional `seed_extend`
+- Canonical v2 publish contract under `runs/<run_id>/publish/tables/`
+- Optional SQLite and report artifacts in `--acquisition_publish_mode merged`
+- Unit, CLI, and workflow regression tests
 
-This release is intended to be a usable, reproducible MVP rather than a broad platform release.
-
-Included in `0.1`:
-- accession-driven runs through `nextflow run .`
-- `docker` and `local` profiles
-- NCBI-backed acquisition using the runtime containers
-- mode-aware published outputs under `runs/<run_id>/publish/`
-- run metadata and published Nextflow diagnostics
-
-Not included in `0.1`:
-- web applications or interactive front ends
-- domain enrichment or annotation-heavy downstream biology
-- broad compatibility across arbitrary Nextflow releases
+Not included: web UI, local FASTA/GFF manifest workflow entrypoint, domain enrichment, or broad arbitrary Nextflow-version support.
 
 ## Requirements
 
 - Nextflow `25.10.4`
 - Docker for the `docker` profile
-- the runtime images built from this repo
-- a taxonomy database at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`, unless overridden with `--taxonomy_db`
+- Runtime images built from this repo
+- Taxonomy SQLite database at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`, unless `--taxonomy_db` is supplied
 
-The repo pins the supported Nextflow version in [nextflow.config](./nextflow.config).
-
-## Quick Start
-
-Build the runtime images expected by the `docker` profile:
+Build runtime images:
 
 ```bash
 bash scripts/build_dev_containers.sh
 ```
 
-Create an accession file with one assembly accession per line:
+## Quick Start
+
+Run a small checked-in example:
+
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  --run_id smoke_human \
+  --accessions_file examples/accessions/smoke_human.txt
+```
+
+Run the chromosome-scale example list:
+
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow run . \
+  -profile docker \
+  --run_id chr_v2 \
+  --accessions_file examples/accessions/chr_accessions.txt \
+  -resume
+```
+
+The canonical operator interface is `nextflow run .`; there is no repo-specific wrapper.
+
+## Pipeline Stages
+
+1. `PLAN_ACCESSION_BATCHES` reads accession input and writes deterministic batches.
+2. `DOWNLOAD_NCBI_BATCH` downloads NCBI annotation packages.
+3. `NORMALIZE_CDS_BATCH` creates canonical genome, taxonomy, sequence, and CDS artifacts internally.
+4. `TRANSLATE_CDS_BATCH` translates retained CDS records and keeps one protein isoform per gene group.
+5. Detection runs `pure`, `threshold`, and optionally `seed_extend` for each `batch_id x repeat_residue`.
+6. `FINALIZE_CALL_CODONS` validates codon slices and writes codon-usage fragments.
+7. Reporting reducers publish canonical calls, v2 flat tables, summaries, and repeat context.
+8. In `merged` mode, SQLite and HTML/JSON report artifacts are also built.
+
+## Default Published Outputs
+
+Default publication uses publish contract v2. The public tree is compact and import-oriented:
 
 ```text
-GCF_000001405.40
-GCF_000001635.27
-GCF_000005845.2
+runs/<run_id>/publish/
+  calls/
+    repeat_calls.tsv
+    run_params.tsv
+  tables/
+    genomes.tsv
+    taxonomy.tsv
+    matched_sequences.tsv
+    matched_proteins.tsv
+    repeat_call_codon_usage.tsv
+    repeat_context.tsv
+    download_manifest.tsv
+    normalization_warnings.tsv
+    accession_status.tsv
+    accession_call_counts.tsv
+  summaries/
+    status_summary.json
+    acquisition_validation.json
+  metadata/
+    launch_metadata.json
+    run_manifest.json
+    nextflow/
 ```
 
-Comments and blank lines are allowed. Duplicate accession lines are ignored.
+The default v2 contract does not publish `acquisition/`, `status/`, `calls/finalized/`, `cds.fna`, or `proteins.faa`. Those broad artifacts are internal execution products. Compact repeat context and matched sequence/protein tables replace public FASTA publication.
 
-Run the pipeline:
+In `--acquisition_publish_mode merged`, the workflow additionally publishes:
+
+- `publish/database/homorepeat.sqlite`
+- `publish/database/sqlite_validation.json`
+- `publish/reports/*`
+
+The v2 contract remains the public import surface in both modes.
+
+## Common Parameters
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `--accessions_file` | required | One assembly accession per line |
+| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | `taxon-weaver` SQLite database |
+| `--run_id` | timestamped | Names `runs/<run_id>` |
+| `--run_root` | `runs/<run_id>` | Run root |
+| `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Nextflow work directory |
+| `--repeat_residues` | `Q` | Comma-separated residue codes |
+| `--run_pure` | `true` | Contiguous-run detection |
+| `--run_threshold` | `true` | Sliding-window density detection |
+| `--run_seed_extend` | `false` | Seed-and-extend detection |
+| `--batch_size` | `10` | Planner batch size |
+| `--acquisition_publish_mode` | `raw` | `merged` also builds SQLite/reports |
+
+For CPU, memory, and concurrency controls such as `-qs` and
+`-process.withLabel:<label>.maxForks`, see [Scale Guide](./docs/scale_guide.md).
+
+Example with method overrides:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
 nextflow run . \
   -profile docker \
-  --run_id my_run \
-  --accessions_file examples/accessions/my_accessions.txt
-```
-
-The canonical operator interface is `nextflow run .`. There is no repo-specific wrapper script.
-
-## Core Concepts
-
-The pipeline is organized around four stages:
-
-1. Acquisition
-2. Detection
-3. Database assembly
-4. Reporting
-
-Scientific behavior is implemented in Python. Nextflow is responsible for:
-- orchestration
-- task execution
-- profiles
-- caching and resume
-- resource settings
-- publication of run outputs
-
-## Detection Methods
-
-Version `0.1` exposes three method toggles:
-- `run_pure`
-- `run_threshold`
-- `run_seed_extend`
-
-Current defaults:
-- `run_pure = true`
-- `run_threshold = true`
-- `run_seed_extend = false`
-
-That means the default run already executes `pure` and `threshold`.
-
-To run all three methods:
-
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow run . \
-  -profile docker \
-  --run_id my_run \
-  --accessions_file examples/accessions/my_accessions.txt \
-  --run_pure true \
-  --run_threshold true \
-  --run_seed_extend true
-```
-
-To target multiple residues:
-
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow run . \
-  -profile docker \
-  --run_id my_run \
+  --run_id qn_all_methods \
   --accessions_file examples/accessions/my_accessions.txt \
   --repeat_residues Q,N \
   --run_pure true \
@@ -125,242 +137,76 @@ nextflow run . \
   --run_seed_extend true
 ```
 
-`repeat_residues` is a comma-separated list of one-letter amino-acid residue codes.
+Params files are supported with `-params-file`; see [`examples/params/`](./examples/params/).
 
-## Configuration
+## Code Structure
 
-The supported configuration paths are:
-- direct Nextflow parameter overrides
-- a JSON params file passed through `-params-file`
+| Path | Role |
+| --- | --- |
+| [`main.nf`](./main.nf) | Top-level workflow, output publication, completion hook |
+| [`workflows/`](./workflows) | Stage-level Nextflow subworkflows |
+| [`modules/local/`](./modules/local) | Individual Nextflow process wrappers |
+| [`src/homorepeat/cli/`](./src/homorepeat/cli) | Python CLIs called by Nextflow |
+| [`src/homorepeat/acquisition/`](./src/homorepeat/acquisition) | NCBI package, GFF, translation, validation helpers |
+| [`src/homorepeat/detection/`](./src/homorepeat/detection) | Repeat detection, codon slicing, repeat context |
+| [`src/homorepeat/contracts/`](./src/homorepeat/contracts) | Shared table schemas and validators |
+| [`src/homorepeat/runtime/`](./src/homorepeat/runtime) | Run manifest, status ledgers, publish reducers |
+| [`src/homorepeat/db/`](./src/homorepeat/db) | SQLite import and validation |
+| [`src/homorepeat/reporting/`](./src/homorepeat/reporting) | Summary and HTML report generation |
+| [`tests/`](./tests) | Unit, CLI, and workflow regression tests |
 
-Direct override example:
+## Scientific Accuracy Boundaries
 
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow run . \
-  -profile docker \
-  --run_id my_run \
-  --accessions_file examples/accessions/my_accessions.txt \
-  --batch_size 10 \
-  --threshold_window_size 10 \
-  --threshold_min_target_count 7 \
-  --run_seed_extend true
-```
+HomoRepeat reports amino-acid repeat tracts from translated annotated CDS records. It does not infer gene models, repair assemblies, or perform domain-level biological interpretation.
 
-Params-file example:
+Accuracy controls implemented in code:
 
-```json
-{
-  "repeat_residues": "Q,N",
-  "run_pure": true,
-  "pure_min_repeat_count": 6,
-  "run_threshold": true,
-  "threshold_window_size": 8,
-  "threshold_min_target_count": 6,
-  "run_seed_extend": true,
-  "seed_extend_seed_window_size": 8,
-  "seed_extend_seed_min_target_count": 6,
-  "seed_extend_extend_window_size": 12,
-  "seed_extend_extend_min_target_count": 8,
-  "seed_extend_min_total_length": 10,
-  "batch_size": 10
-}
-```
+- source-backed stable identifiers for genomes, sequences, proteins, and calls
+- conservative translation with supported NCBI translation tables
+- deterministic isoform retention
+- shared repeat-call schema across methods
+- codon slices only accepted when nucleotide translation exactly matches the call peptide
+- compact flanking context exported for downstream review without publishing full FASTA bodies
 
-Run with that file:
-
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow run . \
-  -profile docker \
-  -params-file path/to/params.json \
-  --run_id my_run \
-  --accessions_file examples/accessions/my_accessions.txt
-```
-
-Checked-in examples:
-- `examples/params/smoke_default.json`
-- `examples/params/multi_residue_qn.json`
-
-### Supported Settings
-
-Detection and biology:
-- `repeat_residues`
-- `run_pure`
-- `pure_min_repeat_count`
-- `run_threshold`
-- `threshold_window_size`
-- `threshold_min_target_count`
-- `run_seed_extend`
-- `seed_extend_seed_window_size`
-- `seed_extend_seed_min_target_count`
-- `seed_extend_extend_window_size`
-- `seed_extend_extend_min_target_count`
-- `seed_extend_min_total_length`
-
-Acquisition and batching:
-- `batch_size`
-- `acquisition_publish_mode`
-- `ncbi_api_key`
-- `ncbi_cache_dir`
-- `ncbi_dehydrated`
-- `ncbi_rehydrate`
-- `ncbi_rehydrate_workers`
-
-Runtime and paths:
-- `accessions_file`
-- `taxonomy_db`
-- `run_id`
-- `run_root`
-- `output_dir`
-- `python_bin`
-- `datasets_bin`
-- `taxon_weaver_bin`
-- `acquisition_container`
-- `detection_container`
-
-Method parameter meanings:
-- `pure_min_repeat_count`: minimum contiguous tract length for `pure`
-- `threshold_window_size`: sliding-window size for `threshold`
-- `threshold_min_target_count`: minimum target count inside each threshold window
-- `seed_extend_seed_window_size`: seed window size for `seed_extend`
-- `seed_extend_seed_min_target_count`: minimum target count required for a seed window
-- `seed_extend_extend_window_size`: extension window size for `seed_extend`
-- `seed_extend_extend_min_target_count`: minimum target count required while extending
-- `seed_extend_min_total_length`: minimum final tract length after seed-and-extend merging
-
-## Run Layout
-
-By default:
-- `run_root` is `runs/<run_id>`
-- `output_dir` is `runs/<run_id>/publish`
-- `workDir` is `runs/<run_id>/internal/nextflow/work`
-- `acquisition_publish_mode` is `raw`
-
-Published outputs live under `runs/<run_id>/publish/`:
-- `publish/acquisition/`
-- `publish/calls/`
-- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
-- `publish/status/`
-- `publish/metadata/`
-
-Acquisition publish modes:
-- `raw` publishes batch-scoped acquisition artifacts under `publish/acquisition/batches/<batch_id>/`
-- `merged` publishes the legacy flat acquisition bundle under `publish/acquisition/`
-- `publish/calls/` remains canonical in both modes
-- `publish/database/` and `publish/reports/` are produced only in `merged` mode
-
-Important published artifacts:
-- `publish/metadata/run_manifest.json` records `acquisition_publish_mode`
-- `publish/calls/repeat_calls.tsv`
-- `publish/calls/run_params.tsv`
-- `publish/metadata/run_manifest.json`
-- `publish/metadata/launch_metadata.json`
-- `publish/database/homorepeat.sqlite` in `merged` mode only
-
-`publish/metadata/nextflow/` exposes stable relative symlinks back to the live files under `runs/<run_id>/internal/nextflow/`.
-
-## Failure Behavior
-
-Version `0.1` uses native Nextflow task failure semantics.
-
-That means:
-- a real failed task should appear as failed in the Nextflow report
-- the run should exit nonzero on failure
-- `publish/metadata/nextflow/report.html` is the authoritative run-level failure surface
-- `publish/status/` is supplemental and may be absent or partial on failed runs
-
-Publication is mode-aware: canonical merged outputs and metadata are published from the workflow, while raw acquisition batches are published directly from the acquisition tasks.
-
-## Smoke Commands
-
-Success smoke:
-
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow \
-  -log runs/smoke_human/internal/nextflow/nextflow.log \
-  run . \
-  -profile docker \
-  -params-file examples/params/smoke_default.json \
-  --run_id smoke_human \
-  --accessions_file examples/accessions/smoke_human.txt
-```
-
-Intentional failure probe:
-
-```bash
-cat > /tmp/homorepeat_failure_probe.txt <<'EOF'
-GCF_000001405.40
-GCF_BOGUS_FAILURE_TEST.1
-EOF
-
-NXF_HOME=runtime/cache/nextflow \
-nextflow \
-  -log runs/failure_probe/internal/nextflow/nextflow.log \
-  run . \
-  -profile docker \
-  --run_id failure_probe \
-  --batch_size 1 \
-  --run_pure true \
-  --run_threshold true \
-  --run_seed_extend false \
-  --accessions_file /tmp/homorepeat_failure_probe.txt
-```
-
-Expected failure-probe behavior:
-- `nextflow run` exits nonzero
-- `runs/failure_probe/internal/nextflow/report.html` shows the failed task
-- `runs/failure_probe/publish/metadata/run_manifest.json` reports `failed`
-
-## Repository Layout
-
-Main workflow paths:
-- `main.nf`
-- `nextflow.config`
-- `conf/`
-- `workflows/`
-- `modules/`
-
-Scientific implementation:
-- `src/homorepeat/`
-
-Supporting material:
-- `examples/`
-- `containers/`
-- `scripts/`
-- `tests/`
-- `docs/`
-- `runtime/`
-- `runs/`
+See [Methods and Scientific Notes](./docs/methods.md) for algorithm details and limitations.
 
 ## Development
-
-The `docker` profile is the primary operator path.
-
-The `local` profile is mainly for:
-- tests
-- offline development
-- debugging without container execution
 
 Useful checks:
 
 ```bash
 nextflow config .
-PYTHONPATH=src python3 -m unittest
+env PYTHONPATH=src python -m unittest
 ```
+
+Focused publish-contract regression:
+
+```bash
+env PYTHONPATH=src python -m unittest \
+  tests.unit.test_publish_contract_v2 \
+  tests.unit.test_repeat_context \
+  tests.cli.test_export_publish_tables \
+  tests.cli.test_export_repeat_context \
+  tests.cli.test_merge_codon_usage_tables \
+  tests.cli.test_runtime_artifacts \
+  tests.workflow.test_publish_modes \
+  tests.workflow.test_workflow_output_failures
+```
+
+See [Development Guide](./docs/development.md) for repo conventions and test strategy.
 
 ## Documentation
 
-For more detail, see:
-- [docs/operations.md](./docs/operations.md)
-- [docs/methods.md](./docs/methods.md)
-- [docs/architecture.md](./docs/architecture.md)
-- [docs/contracts.md](./docs/contracts.md)
-- [docs/containers.md](./docs/containers.md)
-- [docs/scale_guide.md](./docs/scale_guide.md)
-- [docs/benchmark_guide.md](./docs/benchmark_guide.md)
-- [docs/save_state_guide.md](./docs/save_state_guide.md)
+- [Documentation Index](./docs/README.md)
+- [Operations](./docs/operations.md)
+- [Architecture](./docs/architecture.md)
+- [Methods and Scientific Notes](./docs/methods.md)
+- [Data Contracts](./docs/contracts.md)
+- [Development Guide](./docs/development.md)
+- [Containers](./docs/containers.md)
+- [Scale Guide](./docs/scale_guide.md)
+- [Benchmark Guide](./docs/benchmark_guide.md)
+- [Resume and Recovery](./docs/save_state_guide.md)
 
 ## License
 

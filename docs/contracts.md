@@ -2,63 +2,54 @@
 
 ## Scope
 
-This document describes the current machine-facing inputs and published outputs of the main Nextflow workflow. It is intentionally tied to what the code emits today, not to the frozen planning material under `docs/implementation/`.
+This document describes the current machine-facing inputs and default published outputs of the main Nextflow workflow. The default publish contract is version `2`.
 
 General rules:
 
-- tabular artifacts are TSV with headers
-- text artifacts are UTF-8
-- column names are part of the contract
+- tabular artifacts are UTF-8 TSV with headers
+- JSON artifacts are UTF-8 JSON
 - empty values are encoded as empty strings unless noted otherwise
-- all three detection methods share the same repeat-call schema
+- column order is part of the public contract
+- all repeat-detection methods share the same `repeat_calls.tsv` schema
 
 ## Workflow Inputs
 
 ### `--accessions_file`
 
-Plain-text file, one assembly accession per line.
+Plain-text file with one assembly accession per line.
 
 Behavior:
 
 - blank lines are ignored
-- lines starting with `#` are ignored
+- lines beginning with `#` are ignored
 - duplicate accession lines are removed while preserving order
-- the planner may resolve non-`GCF_` accessions to a different downloadable accession
+- the planner may resolve non-RefSeq accessions to a downloadable annotated accession
 
 ### `--taxonomy_db`
 
-Path to an existing `taxon-weaver` SQLite database. This is a runtime dependency, not a row-based biological input.
+Path to an existing `taxon-weaver` SQLite database. This is required for taxonomy lineage materialization.
 
 ### `-params-file`
 
-Optional JSON file for parameter overrides. The resolved parameter payload is recorded in `publish/metadata/run_manifest.json`.
+Optional JSON parameter file. Parsed values and effective values are recorded in `publish/metadata/run_manifest.json`.
 
 ## Canonical Identifiers
 
-The workflow uses source-backed text IDs rather than opaque short hashes.
+| Identifier | Shape | Notes |
+| --- | --- | --- |
+| `genome_id` | assembly accession | Example: `GCF_000001405.40` |
+| `taxon_id` | NCBI taxid as text | Materialized via `taxon-weaver` |
+| `sequence_id` | `assembly_accession::primary_sequence_key` | Stable normalized CDS key |
+| `protein_id` | `sequence_id::protein` | Local translation product identifier |
+| `call_id` | `method::protein_id::repeat_residue::start-end` | Stable repeat-call key |
 
-- `genome_id`
-  - shape: `assembly_accession`
-  - example: `GCF_000001405.40`
-- `taxon_id`
-  - shape: NCBI taxid as text
-- `sequence_id`
-  - shape: `assembly_accession::primary_sequence_key`
-  - notes: `primary_sequence_key` usually comes from transcript/CDS identity; it expands when source-backed disambiguation is required
-- `protein_id`
-  - shape: `sequence_id::protein`
-- `call_id`
-  - shape: `method::protein_id::repeat_residue::start-end`
+These IDs are the join keys across calls, tables, context, SQLite, and report artifacts.
 
-These IDs are the stable join keys across TSVs, FASTA headers, and SQLite tables.
-
-## Planning Artifacts
+## Internal Planning Artifacts
 
 Planning artifacts are written under `runs/<run_id>/internal/planning/`.
 
 ### `accession_batches.tsv`
-
-Row unit: one selected accession assigned to one operational batch.
 
 Columns:
 
@@ -66,8 +57,6 @@ Columns:
 - `assembly_accession`
 
 ### `accession_resolution.tsv`
-
-Row unit: one requested accession.
 
 Columns:
 
@@ -81,164 +70,50 @@ Columns:
 
 ### `selected_accessions.txt`
 
-Plain-text list of the resolved accessions that will actually be batched and downloaded.
+Resolved accessions that will be downloaded.
 
-## Published Acquisition Artifacts
+## Default Published Layout
 
-### Publish locations
+Default public outputs live under `runs/<run_id>/publish/`:
 
-- `raw` mode publishes batch-scoped acquisition artifacts under `publish/acquisition/batches/<batch_id>/`
-- `merged` mode publishes flat acquisition artifacts under `publish/acquisition/`
+```text
+publish/
+  calls/
+    repeat_calls.tsv
+    run_params.tsv
+  tables/
+    genomes.tsv
+    taxonomy.tsv
+    matched_sequences.tsv
+    matched_proteins.tsv
+    repeat_call_codon_usage.tsv
+    repeat_context.tsv
+    download_manifest.tsv
+    normalization_warnings.tsv
+    accession_status.tsv
+    accession_call_counts.tsv
+  summaries/
+    status_summary.json
+    acquisition_validation.json
+  metadata/
+    launch_metadata.json
+    run_manifest.json
+    nextflow/
+```
 
-The file schemas are the same in both modes. Only the directory layout changes.
+The default v2 contract does not publish:
 
-### `genomes.tsv`
+- `publish/acquisition/`
+- `publish/status/`
+- `publish/calls/finalized/`
+- `cds.fna`
+- `proteins.faa`
 
-Row unit: one downloaded assembly/genome.
+Those broad artifacts remain internal execution products.
 
-Columns:
+## Calls
 
-- `genome_id`
-- `source`
-- `accession`
-- `genome_name`
-- `assembly_type`
-- `taxon_id`
-- `assembly_level`
-- `species_name`
-- `notes`
-
-### `taxonomy.tsv`
-
-Row unit: one taxonomic node from the lineage materialized for the selected assemblies.
-
-Columns:
-
-- `taxon_id`
-- `taxon_name`
-- `parent_taxon_id`
-- `rank`
-- `source`
-
-### `sequences.tsv`
-
-Row unit: one normalized CDS retained as a translation source.
-
-Columns:
-
-- `sequence_id`
-- `genome_id`
-- `sequence_name`
-- `sequence_length`
-- `gene_symbol`
-- `transcript_id`
-- `isoform_id`
-- `assembly_accession`
-- `taxon_id`
-- `source_record_id`
-- `protein_external_id`
-- `translation_table`
-- `gene_group`
-- `linkage_status`
-- `partial_status`
-
-### `proteins.tsv`
-
-Row unit: one retained translated protein.
-
-Columns:
-
-- `protein_id`
-- `sequence_id`
-- `genome_id`
-- `protein_name`
-- `protein_length`
-- `gene_symbol`
-- `translation_method`
-- `translation_status`
-- `assembly_accession`
-- `taxon_id`
-- `gene_group`
-- `protein_external_id`
-
-### `cds.fna`
-
-FASTA file keyed by `sequence_id`.
-
-### `proteins.faa`
-
-FASTA file keyed by `protein_id`.
-
-### `download_manifest.tsv`
-
-Row unit: one requested accession in one batch.
-
-Columns:
-
-- `batch_id`
-- `assembly_accession`
-- `download_status`
-- `package_mode`
-- `download_path`
-- `rehydrated_path`
-- `checksum`
-- `file_size_bytes`
-- `download_started_at`
-- `download_finished_at`
-- `notes`
-
-`download_path` and `rehydrated_path` are provenance fields. They are intentionally not repeated in the canonical biological tables.
-
-### `normalization_warnings.tsv`
-
-Row unit: one warning raised during normalization, translation, or accession-level acquisition validation.
-
-Columns:
-
-- `warning_code`
-- `warning_scope`
-- `warning_message`
-- `batch_id`
-- `genome_id`
-- `sequence_id`
-- `protein_id`
-- `assembly_accession`
-- `source_file`
-- `source_record_id`
-
-### `acquisition_validation.json`
-
-Machine-readable validation summary for either one batch (`raw` mode) or the merged acquisition bundle (`merged` mode).
-
-Top-level fields:
-
-- `status`
-- `scope`
-- `batch_id` when batch-scoped
-- `counts`
-- `checks`
-- `failed_accessions`
-- `warning_summary`
-- `notes`
-
-## Detection and Finalization Artifacts
-
-### Batch-local finalized directories
-
-Per-method finalized outputs are published under:
-
-- `publish/calls/finalized/<method>/<repeat_residue>/<batch_id>/`
-
-Each batch directory contains:
-
-- `final_<method>_<repeat_residue>_<batch_id>_calls.tsv`
-- `final_<method>_<repeat_residue>_<batch_id>_run_params.tsv`
-- `final_<method>_<repeat_residue>_<batch_id>_codon_warnings.tsv`
-- `final_<method>_<repeat_residue>_<batch_id>_codon_usage.tsv`
-
-### `repeat_calls.tsv`
-
-Canonical merged call table published at `publish/calls/repeat_calls.tsv`.
+### `calls/repeat_calls.tsv`
 
 Row unit: one detected homorepeat tract.
 
@@ -266,17 +141,15 @@ Columns:
 - `merge_rule`
 - `score`
 
-Notes:
+Rules:
 
 - coordinates are 1-based and inclusive in amino-acid space
 - `repeat_count + non_repeat_count = length`
-- `codon_sequence` is empty when the codon slice cannot be validated
-- `codon_metric_name`, `codon_metric_value`, `template_name`, and `score` are currently emitted as empty strings
-- `method` is one of `pure`, `threshold`, or `seed_extend`
+- `aa_sequence` length equals `length`
+- `method` is `pure`, `threshold`, or `seed_extend`
+- `codon_sequence` is empty when codon validation fails
 
-### `run_params.tsv`
-
-Canonical merged method-parameter table published at `publish/calls/run_params.tsv`.
+### `calls/run_params.tsv`
 
 Row unit: one parameter for one `method x repeat_residue`.
 
@@ -289,11 +162,162 @@ Columns:
 
 Rows are unique on `method + repeat_residue + param_name`.
 
-## Status and Metadata Artifacts
+## V2 Tables
 
-### `accession_status.tsv`
+### `tables/genomes.tsv`
 
-Published at `publish/status/accession_status.tsv`.
+Row unit: one downloaded assembly/genome.
+
+Columns:
+
+- `batch_id`
+- `genome_id`
+- `source`
+- `accession`
+- `genome_name`
+- `assembly_type`
+- `taxon_id`
+- `assembly_level`
+- `species_name`
+- `notes`
+
+### `tables/taxonomy.tsv`
+
+Row unit: one taxonomic node from materialized lineages.
+
+Columns:
+
+- `taxon_id`
+- `taxon_name`
+- `parent_taxon_id`
+- `rank`
+- `source`
+
+### `tables/matched_sequences.tsv`
+
+Row unit: one normalized CDS sequence referenced by at least one repeat call.
+
+Columns:
+
+- `batch_id`
+- `sequence_id`
+- `genome_id`
+- `sequence_name`
+- `sequence_length`
+- `gene_symbol`
+- `transcript_id`
+- `isoform_id`
+- `assembly_accession`
+- `taxon_id`
+- `source_record_id`
+- `protein_external_id`
+- `translation_table`
+- `gene_group`
+- `linkage_status`
+- `partial_status`
+
+### `tables/matched_proteins.tsv`
+
+Row unit: one translated protein referenced by at least one repeat call.
+
+Columns:
+
+- `batch_id`
+- `protein_id`
+- `sequence_id`
+- `genome_id`
+- `protein_name`
+- `protein_length`
+- `gene_symbol`
+- `translation_method`
+- `translation_status`
+- `assembly_accession`
+- `taxon_id`
+- `gene_group`
+- `protein_external_id`
+
+### `tables/repeat_call_codon_usage.tsv`
+
+Row unit: one `(call_id, amino_acid, codon)` observation summary.
+
+Columns:
+
+- `call_id`
+- `method`
+- `repeat_residue`
+- `sequence_id`
+- `protein_id`
+- `amino_acid`
+- `codon`
+- `codon_count`
+- `codon_fraction`
+
+Rules:
+
+- `codon` is DNA alphabet and length 3
+- `codon_count >= 1`
+- `0 <= codon_fraction <= 1`
+- rows are emitted only for calls with validated `codon_sequence`
+
+### `tables/repeat_context.tsv`
+
+Row unit: one repeat call.
+
+Columns:
+
+- `call_id`
+- `protein_id`
+- `sequence_id`
+- `aa_left_flank`
+- `aa_right_flank`
+- `nt_left_flank`
+- `nt_right_flank`
+- `aa_context_window_size`
+- `nt_context_window_size`
+
+Defaults:
+
+- amino-acid flank window: `20`
+- nucleotide flank window: `60`
+
+Flanks are clipped at sequence boundaries. This table replaces public full-FASTA publication for repeat detail context.
+
+### `tables/download_manifest.tsv`
+
+Row unit: one requested accession in one batch.
+
+Columns:
+
+- `batch_id`
+- `assembly_accession`
+- `download_status`
+- `package_mode`
+- `download_path`
+- `rehydrated_path`
+- `checksum`
+- `file_size_bytes`
+- `download_started_at`
+- `download_finished_at`
+- `notes`
+
+### `tables/normalization_warnings.tsv`
+
+Row unit: one acquisition, normalization, translation, or validation warning.
+
+Columns:
+
+- `warning_code`
+- `warning_scope`
+- `warning_message`
+- `batch_id`
+- `genome_id`
+- `sequence_id`
+- `protein_id`
+- `assembly_accession`
+- `source_file`
+- `source_record_id`
+
+### `tables/accession_status.tsv`
 
 Row unit: one requested accession.
 
@@ -321,9 +345,7 @@ Current `terminal_status` values:
 - `failed`
 - `skipped_upstream_failed`
 
-### `accession_call_counts.tsv`
-
-Published at `publish/status/accession_call_counts.tsv`.
+### `tables/accession_call_counts.tsv`
 
 Row unit: one accession x method x repeat residue.
 
@@ -337,9 +359,9 @@ Columns:
 - `finalize_status`
 - `n_repeat_calls`
 
-### `status_summary.json`
+## Summaries
 
-Published at `publish/status/status_summary.json`.
+### `summaries/status_summary.json`
 
 Top-level fields:
 
@@ -347,51 +369,68 @@ Top-level fields:
 - `counts`
 - `terminal_status_counts`
 
-`status` is currently `success` or `partial`.
+### `summaries/acquisition_validation.json`
 
-### `launch_metadata.json`
+Top-level fields:
 
-Published at `publish/metadata/launch_metadata.json`.
+- `status`
+- `scope`
+- `batch_id`
+- `counts`
+- `checks`
+- `failed_accessions`
+- `warning_summary`
+- `notes`
 
-Contains launch-time paths and execution context, including:
+## Metadata
+
+### `metadata/launch_metadata.json`
+
+Contains:
 
 - run identity and timestamps
 - profile
+- publish contract version
 - acquisition publish mode
 - input paths
 - run/work/publish paths
 - Nextflow run name and resume flag
 
-### `run_manifest.json`
+### `metadata/run_manifest.json`
 
-Published at `publish/metadata/run_manifest.json`.
-
-Contains the current machine-readable run summary, including:
+Contains:
 
 - run identity and timestamps
+- `publish_contract_version`
 - acquisition publish mode
 - git revision
-- input paths relative to the repo when possible
-- `params.params_file_values`
-- `params.effective_values`
+- input paths
+- effective params and params-file values
 - detected methods and repeat residues
-- published artifact paths
+- discovered published artifact paths
 
-### `publish/metadata/nextflow/*`
+`run_manifest.json` is the authoritative machine-readable index of a run.
 
-Stable published links to the Nextflow diagnostics when available:
+### `metadata/nextflow/*`
+
+Stable links/copies for Nextflow diagnostics when available:
 
 - `report.html`
 - `timeline.html`
 - `dag.html`
 - `trace.txt`
 
-## SQLite Artifact
+## Optional Merged-Mode Artifacts
 
-When `--acquisition_publish_mode merged`, the workflow also publishes:
+When `--acquisition_publish_mode merged`, the workflow additionally publishes:
 
-- `publish/database/homorepeat.sqlite`
-- `publish/database/sqlite_validation.json`
+- `database/homorepeat.sqlite`
+- `database/sqlite_validation.json`
+- `reports/summary_by_taxon.tsv`
+- `reports/regression_input.tsv`
+- `reports/echarts_options.json`
+- `reports/echarts_report.html`
+- `reports/echarts.min.js`
 
 The SQLite schema contains:
 
@@ -402,10 +441,4 @@ The SQLite schema contains:
 - `run_params`
 - `repeat_calls`
 
-`sqlite_validation.json` records:
-
-- `status`
-- `scope`
-- `counts`
-- `expected_counts`
-- `checks`
+SQLite and reports are derived artifacts. The public flat files remain the primary contract.
