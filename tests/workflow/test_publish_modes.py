@@ -87,6 +87,10 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 for row in read_tsv(publish_root / "tables" / "matched_sequences.tsv")
                 if row.get("sequence_id", "")
             }
+            matched_sequence_bodies = [
+                row["nucleotide_sequence"]
+                for row in read_tsv(publish_root / "tables" / "matched_sequences.tsv")
+            ]
             call_protein_ids = {
                 row["protein_id"]
                 for row in read_tsv(publish_root / "calls" / "repeat_calls.tsv")
@@ -102,6 +106,10 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 for row in read_tsv(publish_root / "tables" / "matched_proteins.tsv")
                 if row.get("protein_id", "")
             }
+            matched_protein_bodies = [
+                row["amino_acid_sequence"]
+                for row in read_tsv(publish_root / "tables" / "matched_proteins.tsv")
+            ]
             context_call_ids = {
                 row["call_id"]
                 for row in read_tsv(publish_root / "tables" / "repeat_context.tsv")
@@ -109,6 +117,8 @@ class WorkflowPublishModesTest(unittest.TestCase):
             }
             self.assertEqual(matched_sequence_ids, call_sequence_ids)
             self.assertEqual(matched_protein_ids, call_protein_ids)
+            self.assertTrue(all(matched_sequence_bodies))
+            self.assertTrue(all(matched_protein_bodies))
             self.assertEqual(context_call_ids, call_ids)
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())

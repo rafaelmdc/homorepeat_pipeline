@@ -187,6 +187,10 @@ artifacts. Default runs publish:
 - `publish/summaries/status_summary.json`
 - `publish/summaries/acquisition_validation.json`
 
+The matched sequence and protein tables carry the retained nucleotide and
+amino-acid sequence bodies directly, while broad public FASTA files remain
+outside the default v2 contract.
+
 The reporting layer is deliberately simple and residue-neutral. In
 `--acquisition_publish_mode merged`, the workflow also builds SQLite and report
 artifacts from the same normalized tables and repeat calls. The HTML layer is a

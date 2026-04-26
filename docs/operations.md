@@ -129,6 +129,10 @@ Important files:
 - `publish/metadata/launch_metadata.json`
 - `publish/metadata/nextflow/report.html`
 
+`matched_sequences.tsv` and `matched_proteins.tsv` include the retained sequence
+bodies; broad `cds.fna` and `proteins.faa` files are not part of the default
+public contract.
+
 `--acquisition_publish_mode merged` additionally publishes:
 
 - `publish/database/homorepeat.sqlite`

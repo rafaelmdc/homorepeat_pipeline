@@ -26,6 +26,7 @@ MATCHED_SEQUENCES_FIELDNAMES = [
     "genome_id",
     "sequence_name",
     "sequence_length",
+    "nucleotide_sequence",
     "gene_symbol",
     "transcript_id",
     "isoform_id",
@@ -45,6 +46,7 @@ MATCHED_PROTEINS_FIELDNAMES = [
     "genome_id",
     "protein_name",
     "protein_length",
+    "amino_acid_sequence",
     "gene_symbol",
     "translation_method",
     "translation_status",
@@ -162,9 +164,17 @@ def validate_matched_sequence_row(row: Mapping[str, object]) -> None:
     _validate_required_fields(
         row,
         fieldnames=MATCHED_SEQUENCES_FIELDNAMES,
-        required_fields=("batch_id", "sequence_id", "genome_id", "sequence_name", "sequence_length"),
+        required_fields=(
+            "batch_id",
+            "sequence_id",
+            "genome_id",
+            "sequence_name",
+            "sequence_length",
+            "nucleotide_sequence",
+        ),
         label="matched_sequences.tsv",
     )
+    _validate_string_field(row, fieldname="nucleotide_sequence", label="matched_sequences.tsv")
     _parse_int(row, fieldname="sequence_length", label="matched_sequences.tsv", minimum=1)
     _parse_int(row, fieldname="translation_table", label="matched_sequences.tsv", minimum=1, allow_empty=True)
 
@@ -173,9 +183,17 @@ def validate_matched_protein_row(row: Mapping[str, object]) -> None:
     _validate_required_fields(
         row,
         fieldnames=MATCHED_PROTEINS_FIELDNAMES,
-        required_fields=("batch_id", "protein_id", "sequence_id", "genome_id", "protein_length"),
+        required_fields=(
+            "batch_id",
+            "protein_id",
+            "sequence_id",
+            "genome_id",
+            "protein_length",
+            "amino_acid_sequence",
+        ),
         label="matched_proteins.tsv",
     )
+    _validate_string_field(row, fieldname="amino_acid_sequence", label="matched_proteins.tsv")
     _parse_int(row, fieldname="protein_length", label="matched_proteins.tsv", minimum=1)
 
 
@@ -315,6 +333,12 @@ def _validate_required_fields(
     empty_fields = [fieldname for fieldname in required_fields if str(row.get(fieldname, "")).strip() == ""]
     if empty_fields:
         raise ContractError(f"{label} row contains empty required fields: {', '.join(empty_fields)}")
+
+
+def _validate_string_field(row: Mapping[str, object], *, fieldname: str, label: str) -> None:
+    value = row.get(fieldname, "")
+    if not isinstance(value, str):
+        raise ContractError(f"{label} row contains a non-string {fieldname}: {value!r}")
 
 
 def _parse_int(

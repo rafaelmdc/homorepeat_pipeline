@@ -94,7 +94,7 @@ runs/<run_id>/publish/
     nextflow/
 ```
 
-The default v2 contract does not publish `acquisition/`, `status/`, `calls/finalized/`, `cds.fna`, or `proteins.faa`. Those broad artifacts are internal execution products. Compact repeat context and matched sequence/protein tables replace public FASTA publication.
+The default v2 contract does not publish `acquisition/`, `status/`, `calls/finalized/`, `cds.fna`, or `proteins.faa`. Those broad artifacts are internal execution products. Compact repeat context and matched sequence/protein tables replace public FASTA publication; the matched tables include the retained nucleotide and amino-acid sequence bodies.
 
 In `--acquisition_publish_mode merged`, the workflow additionally publishes:
 

@@ -196,6 +196,8 @@ Columns:
 ### `tables/matched_sequences.tsv`
 
 Row unit: one normalized CDS sequence referenced by at least one repeat call.
+The table includes the full retained nucleotide sequence body so importers do
+not need public `cds.fna`.
 
 Columns:
 
@@ -204,6 +206,7 @@ Columns:
 - `genome_id`
 - `sequence_name`
 - `sequence_length`
+- `nucleotide_sequence`
 - `gene_symbol`
 - `transcript_id`
 - `isoform_id`
@@ -219,6 +222,8 @@ Columns:
 ### `tables/matched_proteins.tsv`
 
 Row unit: one translated protein referenced by at least one repeat call.
+The table includes the full retained amino-acid sequence body so importers do
+not need public `proteins.faa`.
 
 Columns:
 
@@ -228,6 +233,7 @@ Columns:
 - `genome_id`
 - `protein_name`
 - `protein_length`
+- `amino_acid_sequence`
 - `gene_symbol`
 - `translation_method`
 - `translation_status`
