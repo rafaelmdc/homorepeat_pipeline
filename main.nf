@@ -9,22 +9,6 @@ include { EXPORT_PUBLISH_TABLES } from './modules/local/reporting/export_publish
 include { MERGE_CALL_TABLES } from './modules/local/reporting/merge_call_tables'
 include { MERGE_CODON_USAGE_TABLES } from './modules/local/reporting/merge_codon_usage_tables'
 
-def WORKFLOW_OUTPUT_PLACEHOLDER_FILE = file(
-  "${projectDir}/runtime/output_placeholders/workflow_output_placeholder.txt",
-  checkIfExists: true,
-)
-
-def publishablePathChannel = { channel ->
-  channel.mix(Channel.value(WORKFLOW_OUTPUT_PLACEHOLDER_FILE))
-}
-
-def publishTarget = { targetDir, artifact ->
-  artifact?.toString() == WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName().toString() ||
-    artifact?.toString()?.endsWith("/${WORKFLOW_OUTPUT_PLACEHOLDER_FILE.getFileName()}")
-    ? ".nf_placeholders/${targetDir}"
-    : targetDir
-}
-
 def normalizedAcquisitionPublishMode = {
   def mode = (params.acquisition_publish_mode ?: 'raw').toString().trim().toLowerCase()
   if( !['raw', 'merged'].contains(mode) ) {
@@ -103,27 +87,27 @@ workflow {
   }
 
   publish:
-  calls_repeat = publishablePathChannel(canonicalCalls.repeat_calls_tsv)
-  calls_params = publishablePathChannel(canonicalCalls.run_params_tsv)
-  database_sqlite = publishablePathChannel(databaseSqliteCh)
-  database_sqlite_validation = publishablePathChannel(databaseSqliteValidationCh)
-  reports_summary_by_taxon = publishablePathChannel(reportsSummaryByTaxonCh)
-  reports_regression_input = publishablePathChannel(reportsRegressionInputCh)
-  reports_echarts_options = publishablePathChannel(reportsEchartsOptionsCh)
-  reports_echarts_html = publishablePathChannel(reportsEchartsHtmlCh)
-  reports_echarts_js = publishablePathChannel(reportsEchartsJsCh)
-  tables_genomes = publishablePathChannel(flatPublishTables.genomes_tsv)
-  tables_taxonomy = publishablePathChannel(flatPublishTables.taxonomy_tsv)
-  tables_matched_sequences = publishablePathChannel(flatPublishTables.matched_sequences_tsv)
-  tables_matched_proteins = publishablePathChannel(flatPublishTables.matched_proteins_tsv)
-  tables_repeat_call_codon_usage = publishablePathChannel(canonicalCodonUsage.repeat_call_codon_usage_tsv)
-  tables_repeat_context = publishablePathChannel(repeatContext.repeat_context_tsv)
-  tables_download_manifest = publishablePathChannel(flatPublishTables.download_manifest_tsv)
-  tables_normalization_warnings = publishablePathChannel(flatPublishTables.normalization_warnings_tsv)
-  tables_accession_status = publishablePathChannel(flatPublishTables.accession_status_tsv)
-  tables_accession_call_counts = publishablePathChannel(flatPublishTables.accession_call_counts_tsv)
-  summaries_status = publishablePathChannel(flatPublishTables.status_summary_json)
-  summaries_acquisition_validation = publishablePathChannel(flatPublishTables.acquisition_validation_json)
+  calls_repeat = canonicalCalls.repeat_calls_tsv.ifEmpty([])
+  calls_params = canonicalCalls.run_params_tsv.ifEmpty([])
+  database_sqlite = databaseSqliteCh.ifEmpty([])
+  database_sqlite_validation = databaseSqliteValidationCh.ifEmpty([])
+  reports_summary_by_taxon = reportsSummaryByTaxonCh.ifEmpty([])
+  reports_regression_input = reportsRegressionInputCh.ifEmpty([])
+  reports_echarts_options = reportsEchartsOptionsCh.ifEmpty([])
+  reports_echarts_html = reportsEchartsHtmlCh.ifEmpty([])
+  reports_echarts_js = reportsEchartsJsCh.ifEmpty([])
+  tables_genomes = flatPublishTables.genomes_tsv.ifEmpty([])
+  tables_taxonomy = flatPublishTables.taxonomy_tsv.ifEmpty([])
+  tables_matched_sequences = flatPublishTables.matched_sequences_tsv.ifEmpty([])
+  tables_matched_proteins = flatPublishTables.matched_proteins_tsv.ifEmpty([])
+  tables_repeat_call_codon_usage = canonicalCodonUsage.repeat_call_codon_usage_tsv.ifEmpty([])
+  tables_repeat_context = repeatContext.repeat_context_tsv.ifEmpty([])
+  tables_download_manifest = flatPublishTables.download_manifest_tsv.ifEmpty([])
+  tables_normalization_warnings = flatPublishTables.normalization_warnings_tsv.ifEmpty([])
+  tables_accession_status = flatPublishTables.accession_status_tsv.ifEmpty([])
+  tables_accession_call_counts = flatPublishTables.accession_call_counts_tsv.ifEmpty([])
+  summaries_status = flatPublishTables.status_summary_json.ifEmpty([])
+  summaries_acquisition_validation = flatPublishTables.acquisition_validation_json.ifEmpty([])
 
   emit:
   genomes_tsv = acquisition.genomes_tsv
@@ -163,27 +147,69 @@ workflow {
 }
 
 output {
-  calls_repeat { path { artifact -> publishTarget('calls', artifact) } }
-  calls_params { path { artifact -> publishTarget('calls', artifact) } }
-  database_sqlite { path { artifact -> publishTarget('database', artifact) } }
-  database_sqlite_validation { path { artifact -> publishTarget('database', artifact) } }
-  reports_summary_by_taxon { path { artifact -> publishTarget('reports', artifact) } }
-  reports_regression_input { path { artifact -> publishTarget('reports', artifact) } }
-  reports_echarts_options { path { artifact -> publishTarget('reports', artifact) } }
-  reports_echarts_html { path { artifact -> publishTarget('reports', artifact) } }
-  reports_echarts_js { path { artifact -> publishTarget('reports', artifact) } }
-  tables_genomes { path { artifact -> publishTarget('tables', artifact) } }
-  tables_taxonomy { path { artifact -> publishTarget('tables', artifact) } }
-  tables_matched_sequences { path { artifact -> publishTarget('tables', artifact) } }
-  tables_matched_proteins { path { artifact -> publishTarget('tables', artifact) } }
-  tables_repeat_call_codon_usage { path { artifact -> publishTarget('tables', artifact) } }
-  tables_repeat_context { path { artifact -> publishTarget('tables', artifact) } }
-  tables_download_manifest { path { artifact -> publishTarget('tables', artifact) } }
-  tables_normalization_warnings { path { artifact -> publishTarget('tables', artifact) } }
-  tables_accession_status { path { artifact -> publishTarget('tables', artifact) } }
-  tables_accession_call_counts { path { artifact -> publishTarget('tables', artifact) } }
-  summaries_status { path { artifact -> publishTarget('summaries', artifact) } }
-  summaries_acquisition_validation { path { artifact -> publishTarget('summaries', artifact) } }
+  calls_repeat {
+    path 'calls'
+  }
+  calls_params {
+    path 'calls'
+  }
+  database_sqlite {
+    path 'database'
+  }
+  database_sqlite_validation {
+    path 'database'
+  }
+  reports_summary_by_taxon {
+    path 'reports'
+  }
+  reports_regression_input {
+    path 'reports'
+  }
+  reports_echarts_options {
+    path 'reports'
+  }
+  reports_echarts_html {
+    path 'reports'
+  }
+  reports_echarts_js {
+    path 'reports'
+  }
+  tables_genomes {
+    path 'tables'
+  }
+  tables_taxonomy {
+    path 'tables'
+  }
+  tables_matched_sequences {
+    path 'tables'
+  }
+  tables_matched_proteins {
+    path 'tables'
+  }
+  tables_repeat_call_codon_usage {
+    path 'tables'
+  }
+  tables_repeat_context {
+    path 'tables'
+  }
+  tables_download_manifest {
+    path 'tables'
+  }
+  tables_normalization_warnings {
+    path 'tables'
+  }
+  tables_accession_status {
+    path 'tables'
+  }
+  tables_accession_call_counts {
+    path 'tables'
+  }
+  summaries_status {
+    path 'summaries'
+  }
+  summaries_acquisition_validation {
+    path 'summaries'
+  }
 }
 
 workflow.onComplete {

@@ -77,7 +77,6 @@ class HomorepeatRuntimeArtifacts {
         linkPublishedPath(internalDir.resolve('timeline.html'), publishedNextflowDir.resolve('timeline.html'))
         linkPublishedPath(internalDir.resolve('dag.html'), publishedNextflowDir.resolve('dag.html'))
         linkPublishedPath(internalDir.resolve('trace.txt'), publishedNextflowDir.resolve('trace.txt'))
-        cleanupWorkflowOutputPlaceholders(publishRoot)
 
         Path launchMetadataPath = metadataDir.resolve('launch_metadata.json')
         writeJson(
@@ -127,14 +126,6 @@ class HomorepeatRuntimeArtifacts {
         if (ctx.success) {
             updateLatestSymlink(repoRoot, ctx.runId?.toString() ?: '')
         }
-    }
-
-    private static void cleanupWorkflowOutputPlaceholders(Path publishRoot) {
-        Path placeholderDir = publishRoot.resolve('.nf_placeholders')
-        if (!Files.exists(placeholderDir, LinkOption.NOFOLLOW_LINKS)) {
-            return
-        }
-        placeholderDir.toFile().deleteDir()
     }
 
     private static Map<String, Object> buildLaunchMetadata(Map ctx) {
