@@ -30,9 +30,8 @@ workflow ACQUISITION_FROM_ACCESSIONS {
     downloaded = DOWNLOAD_NCBI_BATCH(batchManifestCh)
     normalized = NORMALIZE_CDS_BATCH(downloaded.raw_batch, Channel.value(taxonomyDb))
     translated = TRANSLATE_CDS_BATCH(normalized.normalized_batch)
-    batchRowsForEmit = normalized.normalized_batch.join(translated.translated_batch)
-    batchRowsForReduction = normalized.normalized_batch.join(translated.translated_batch)
-    batchInputs = batchRowsForReduction.toList().map { rows ->
+    batchRows = normalized.normalized_batch.join(translated.translated_batch)
+    batchInputs = batchRows.toList().map { rows ->
         tuple(
             rows.collect { row -> row[0] },
             rows.collect { row -> row[1] },
@@ -65,7 +64,7 @@ workflow ACQUISITION_FROM_ACCESSIONS {
     emit:
     batch_table = planning.batch_table
     accession_resolution = planning.accession_resolution
-    batch_rows = batchRowsForEmit
+    batch_rows = batchRows
     batch_inputs = batchInputs
     genomes_tsv = mergedGenomesTsvCh
     taxonomy_tsv = mergedTaxonomyTsvCh
