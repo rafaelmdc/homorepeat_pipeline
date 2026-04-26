@@ -95,6 +95,9 @@ Checked-in parameter examples:
 - `examples/params/smoke_default.json`
 - `examples/params/multi_residue_qn.json`
 
+For CPU, memory, and concurrency controls such as `-qs` and
+`-process.withLabel:<label>.maxForks`, see [Scale Guide](./scale_guide.md).
+
 ## Published Output Layout
 
 Every run publishes under `runs/<run_id>/publish/`.

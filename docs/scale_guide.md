@@ -49,6 +49,47 @@ Other relevant defaults:
 
 The Python CLIs are effectively single-core tasks. Scaling comes from bounded task parallelism, not from multithreaded workers inside each task.
 
+## Resource Control Knobs
+
+The workflow uses Nextflow's local executor in both `docker` and `local`
+profiles. Resource controls are therefore a combination of per-task requests and
+task concurrency limits:
+
+| Knob | Scope | Use when |
+| --- | --- | --- |
+| `-qs <N>` | Overall local task queue/concurrency cap | You want a simple upper bound on simultaneous local tasks |
+| `-process.withLabel:<label>.maxForks <N>` | Concurrency cap for one process label | One stage is too aggressive, such as detection or normalization |
+| `-process.withLabel:<label>.memory '<N> GB'` | Memory requested per task for one process label | A stage needs more memory per running task |
+| `-process.withLabel:<label>.cpus <N>` | CPU slots requested per task for one process label | You need the scheduler/container metadata to reserve more cores |
+| `--batch_size <N>` | Number of accessions per planned batch | You want to change biological/workflow batching, not directly cap CPU or memory |
+
+Most pipeline tasks currently run single-core Python code, so raising `cpus`
+usually does not make a task faster. To control host load, prefer `-qs` and
+label-specific `maxForks`.
+
+Examples:
+
+```bash
+# Limit total local task concurrency.
+nextflow run . \
+  -profile docker \
+  -qs 4
+```
+
+```bash
+# Run fewer detection tasks at once.
+nextflow run . \
+  -profile docker \
+  -process.withLabel:detection.maxForks 2
+```
+
+```bash
+# Give normalization tasks more memory.
+nextflow run . \
+  -profile docker \
+  -process.withLabel:acquisition_normalize.memory '10 GB'
+```
+
 ## Practical Tuning Order
 
 1. Put `--work_dir` on fast local scratch before changing workflow parallelism.
@@ -77,6 +118,26 @@ nextflow run . \
   --accessions_file path/to/accessions.txt \
   --work_dir /scratch/homorepeat/run_900_genomes/work \
   -resume
+```
+
+Conservative CHR example with all three detection methods enabled:
+
+```bash
+RUN_ID="chr_v2_$(date -u +%Y%m%d_%H%M%SZ)"
+
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log "runs/${RUN_ID}/internal/nextflow/nextflow.log" \
+  run . \
+  -profile docker \
+  -qs 4 \
+  -process.withLabel:acquisition_normalize.memory '8 GB' \
+  -process.withLabel:detection.maxForks 3 \
+  --run_id "${RUN_ID}" \
+  --accessions_file examples/accessions/chr_accessions.txt \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend true
 ```
 
 ## Recovery at Scale

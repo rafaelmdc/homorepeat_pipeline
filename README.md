@@ -120,6 +120,9 @@ The v2 contract remains the public import surface in both modes.
 | `--batch_size` | `10` | Planner batch size |
 | `--acquisition_publish_mode` | `raw` | `merged` also builds SQLite/reports |
 
+For CPU, memory, and concurrency controls such as `-qs` and
+`-process.withLabel:<label>.maxForks`, see [Scale Guide](./docs/scale_guide.md).
+
 Example with method overrides:
 
 ```bash
