@@ -8,10 +8,11 @@ plain tables for downstream analysis.
 
 ## Quick Start
 
-You need Docker, Nextflow `25.10.4`, and internet access to Docker Hub and
-NCBI. Run commands from the repository root.
+You need Docker, Java 17+, and a recent stable Nextflow release.
+The pipeline is tested with Nextflow 25.10.4. Use that version or a newer stable release if possible.
+Run commands from the repository root.
 
-First validate the checked-in smoke input without downloading NCBI data:
+First validate the checked-in smoke input without downloading NCBI annotation packages:
 
 ```bash
 nextflow run . \
@@ -51,15 +52,13 @@ That file points to the main result tables for that run.
 
 ## Run Your Own Accessions
 
-Create one text file with one NCBI assembly accession per line:
+Create a plain text file containing one NCBI assembly accession per line.
 
-```bash
-mkdir -p inputs
+Example: `inputs/my_accessions.txt`
 
-printf '%s\n' \
-  GCF_000001405.40 \
-  GCF_000001635.27 \
-  > inputs/my_accessions.txt
+```text
+GCF_000001405.40
+GCF_000001635.27
 ```
 
 Validate it:
