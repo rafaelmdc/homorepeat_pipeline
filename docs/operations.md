@@ -1,19 +1,27 @@
 # Operations
 
-## Requirements
+This guide is the practical runbook for using HomoRepeat. It assumes you want
+to run the pipeline and inspect the biological output tables, not change the
+code.
+
+## Before You Run
+
+You need:
 
 - Nextflow `25.10.4`
-- an existing taxonomy database at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`, unless you override `--taxonomy_db`
-- Docker and the repo runtime images for the `docker` profile
-- a local Python environment with the repo package dependencies for the `local` profile
+- Docker
+- internet access to NCBI
+- one accession-list text file
+- the HomoRepeat Docker images
+- an existing taxonomy database
 
-The canonical operator entrypoint is:
+The main entrypoint is:
 
 ```bash
 nextflow run .
 ```
 
-There is no repo-specific wrapper around the main workflow.
+There is no project-specific wrapper script.
 
 ## Build Runtime Images
 
@@ -28,9 +36,90 @@ That produces:
 - `homorepeat-acquisition:dev`
 - `homorepeat-detection:dev`
 
-## Quick Start
+Quick checks:
 
-Run the checked-in smoke example in the default `raw` publish mode:
+```bash
+docker run --rm homorepeat-acquisition:dev taxon-weaver --help
+docker run --rm homorepeat-acquisition:dev datasets version
+docker run --rm homorepeat-detection:dev python --version
+```
+
+## Taxonomy Database
+
+The taxonomy database is required for lineage information in `taxonomy.tsv`.
+
+**The pipeline does not auto-create this database during `nextflow run .`.** It
+expects an existing SQLite file at the value of `--taxonomy_db`. If you do not
+set `--taxonomy_db`, the default path is:
+
+```text
+runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+```
+
+Build it once with the acquisition container:
+
+```bash
+mkdir -p runtime/cache/taxonomy
+
+docker run --rm \
+  -u "$(id -u):$(id -g)" \
+  -v "$PWD":/work \
+  -w /work \
+  homorepeat-acquisition:dev \
+  taxon-weaver build-db \
+    --download \
+    --dump runtime/cache/taxonomy/taxdump.tar.gz \
+    --db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
+    --report-json runtime/cache/taxonomy/ncbi_taxonomy_build.json
+```
+
+Confirm it:
+
+```bash
+ls -lh runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+```
+
+Read build metadata:
+
+```bash
+docker run --rm \
+  -v "$PWD":/work \
+  -w /work \
+  homorepeat-acquisition:dev \
+  taxon-weaver build-info \
+    --db runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+```
+
+If you already have a `taxon-weaver` SQLite database elsewhere, use it directly:
+
+```bash
+--taxonomy_db /path/to/ncbi_taxonomy.sqlite
+```
+
+## Prepare Accessions
+
+Use NCBI assembly accessions, one per line:
+
+```bash
+mkdir -p inputs
+
+printf '%s\n' \
+  GCF_000001405.40 \
+  GCF_000001635.27 \
+  > inputs/my_accessions.txt
+```
+
+Rules:
+
+- blank lines are ignored
+- lines beginning with `#` are ignored
+- duplicate lines are removed while preserving order
+- non-RefSeq accessions may be resolved to a paired downloadable RefSeq
+  accession when appropriate
+
+## Quick Smoke Run
+
+This is the smallest checked-in run:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -40,29 +129,164 @@ nextflow \
   -profile docker \
   -params-file examples/params/smoke_default.json \
   --run_id smoke_human \
-  --accessions_file examples/accessions/smoke_human.txt
+  --accessions_file examples/accessions/smoke_human.txt \
+  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
 
-Run the same workflow in `merged` mode so SQLite and reports are produced:
+Expected result folder:
+
+```text
+runs/smoke_human/publish/
+```
+
+## Typical Run
+
+Run `Q` and `N` repeats with the default `pure` and `threshold` methods:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
 nextflow \
-  -log runs/smoke_human_merged/internal/nextflow/nextflow.log \
+  -log runs/my_qn_run/internal/nextflow/nextflow.log \
   run . \
   -profile docker \
-  -params-file examples/params/smoke_default.json \
-  --run_id smoke_human_merged \
-  --accessions_file examples/accessions/smoke_human.txt \
+  --run_id my_qn_run \
+  --accessions_file inputs/my_accessions.txt \
+  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
+  --repeat_residues Q,N \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend false
+```
+
+Run all three methods:
+
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/my_all_methods/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id my_all_methods \
+  --accessions_file inputs/my_accessions.txt \
+  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
+  --repeat_residues Q,N \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend true
+```
+
+Run with SQLite and HTML reports:
+
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/my_qn_merged/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id my_qn_merged \
+  --accessions_file inputs/my_accessions.txt \
+  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
+  --repeat_residues Q,N \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend false \
   --acquisition_publish_mode merged
 ```
 
-## Profiles
+Use an NCBI API key when available:
 
-| Profile | Execution model | Typical use |
-| --- | --- | --- |
-| `docker` | Local executor with pinned acquisition and detection containers | Standard operator path |
-| `local` | Local executor on the host | Tests, debugging, or environments where you want to use host-installed tools |
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/my_qn_api/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id my_qn_api \
+  --accessions_file inputs/my_accessions.txt \
+  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
+  --repeat_residues Q,N \
+  --ncbi_api_key "$NCBI_API_KEY"
+```
+
+## Resume An Interrupted Run
+
+Use the same command, same `--run_id`, same `--run_root` if you set one, and add
+`-resume`:
+
+```bash
+NXF_HOME=runtime/cache/nextflow \
+nextflow \
+  -log runs/my_qn_run/internal/nextflow/nextflow.log \
+  run . \
+  -profile docker \
+  --run_id my_qn_run \
+  --accessions_file inputs/my_accessions.txt \
+  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
+  --repeat_residues Q,N \
+  --run_pure true \
+  --run_threshold true \
+  --run_seed_extend false \
+  -resume
+```
+
+## Published Output Layout
+
+Every run publishes under:
+
+```text
+runs/<run_id>/publish/
+```
+
+Default v2 outputs:
+
+```text
+publish/
+  calls/
+    repeat_calls.tsv
+    run_params.tsv
+  tables/
+    genomes.tsv
+    taxonomy.tsv
+    matched_sequences.tsv
+    matched_proteins.tsv
+    repeat_call_codon_usage.tsv
+    repeat_context.tsv
+    download_manifest.tsv
+    normalization_warnings.tsv
+    accession_status.tsv
+    accession_call_counts.tsv
+  summaries/
+    status_summary.json
+    acquisition_validation.json
+  metadata/
+    launch_metadata.json
+    run_manifest.json
+    nextflow/
+```
+
+First files to open:
+
+| File | Use |
+| --- | --- |
+| `calls/repeat_calls.tsv` | Main repeat-call table |
+| `tables/repeat_context.tsv` | Flanking context around calls |
+| `tables/matched_proteins.tsv` | Protein sequences for called repeats |
+| `tables/matched_sequences.tsv` | CDS nucleotide sequences for called repeats |
+| `tables/repeat_call_codon_usage.tsv` | Codon usage for validated calls |
+| `tables/accession_status.tsv` | Per-accession success, failure, or no-call status |
+| `tables/accession_call_counts.tsv` | Number of calls per accession |
+| `summaries/status_summary.json` | Quick run-level status |
+| `metadata/nextflow/report.html` | Runtime report for debugging |
+
+`matched_sequences.tsv` and `matched_proteins.tsv` include the retained
+sequence bodies. Broad public `cds.fna` and `proteins.faa` files are not part of
+the default output contract.
+
+`--acquisition_publish_mode merged` additionally publishes:
+
+- `publish/database/homorepeat.sqlite`
+- `publish/database/sqlite_validation.json`
+- `publish/reports/*`
 
 ## Common Parameters
 
@@ -71,6 +295,7 @@ nextflow \
 | `--run_id` | timestamped value | Names the run root under `runs/` unless `--run_root` is overridden |
 | `--run_root` | `runs/<run_id>` | Root for published outputs and internal Nextflow state |
 | `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Put this on fast scratch for larger runs |
+| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Must already exist |
 | `--acquisition_publish_mode` | `raw` | `raw` publishes the v2 table contract only; `merged` also builds SQLite and reports |
 | `--repeat_residues` | `Q` | Comma-separated one-letter amino-acid codes |
 | `--run_pure` | `true` | Enables contiguous-run detection |
@@ -98,75 +323,58 @@ Checked-in parameter examples:
 For CPU, memory, and concurrency controls such as `-qs` and
 `-process.withLabel:<label>.maxForks`, see [Scale Guide](./scale_guide.md).
 
-## Published Output Layout
+## Troubleshooting
 
-Every run publishes under `runs/<run_id>/publish/`.
+### Taxonomy database missing
 
-Default v2 outputs:
+Symptom:
 
-- `publish/calls/`
-- `publish/tables/`
-- `publish/summaries/`
-- `publish/metadata/`
+```text
+Path value cannot be null
+```
 
-Important files:
+or an error that `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` does not exist.
 
-- `publish/calls/repeat_calls.tsv`
-- `publish/calls/run_params.tsv`
-- `publish/tables/genomes.tsv`
-- `publish/tables/taxonomy.tsv`
-- `publish/tables/matched_sequences.tsv`
-- `publish/tables/matched_proteins.tsv`
-- `publish/tables/repeat_call_codon_usage.tsv`
-- `publish/tables/repeat_context.tsv`
-- `publish/tables/download_manifest.tsv`
-- `publish/tables/normalization_warnings.tsv`
-- `publish/tables/accession_status.tsv`
-- `publish/tables/accession_call_counts.tsv`
-- `publish/summaries/status_summary.json`
-- `publish/summaries/acquisition_validation.json`
-- `publish/metadata/run_manifest.json`
-- `publish/metadata/launch_metadata.json`
+Fix: build the taxonomy database or pass a valid `--taxonomy_db` path.
+
+### Docker image missing
+
+Symptom: Nextflow says it cannot find `homorepeat-acquisition:dev` or
+`homorepeat-detection:dev`.
+
+Fix:
+
+```bash
+bash scripts/build_dev_containers.sh
+```
+
+### NCBI download problems
+
+Check:
+
+- internet access
+- whether NCBI is rate-limiting your connection
+- whether using `--ncbi_api_key "$NCBI_API_KEY"` helps
 - `publish/metadata/nextflow/report.html`
+- `publish/tables/accession_status.tsv`, if it was produced
 
-`matched_sequences.tsv` and `matched_proteins.tsv` include the retained sequence
-bodies; broad `cds.fna` and `proteins.faa` files are not part of the default
-public contract.
+### Run succeeded but there are no calls
 
-`--acquisition_publish_mode merged` additionally publishes:
+This can be a valid biological result. Check:
 
-- `publish/database/homorepeat.sqlite`
-- `publish/reports/`
+- `tables/accession_status.tsv`
+- `tables/accession_call_counts.tsv`
+- `calls/run_params.tsv`
+- whether you searched the intended residues with `--repeat_residues`
 
-The default v2 contract does not publish `publish/acquisition/`,
-`publish/status/`, `publish/calls/finalized/`, `cds.fna`, or `proteins.faa`.
-Those remain internal execution artifacts.
+### Failed or partial run
 
-`run_manifest.json` is the authoritative place to determine:
+Recommended order:
 
-- whether the run used `raw` or `merged` acquisition publishing
-- which methods and residues were enabled
-- which top-level artifacts were produced
-
-## Failure Handling and Troubleshooting
-
-Primary failure surface:
-
-- native Nextflow exit status
-- `publish/metadata/nextflow/report.html`
-
-Supplemental recovery and diagnosis:
-
-- `publish/tables/accession_status.tsv` and `publish/tables/accession_call_counts.tsv`
-- `publish/summaries/status_summary.json`
-- `publish/metadata/run_manifest.json` and `publish/metadata/launch_metadata.json`
-
-Recommended operator workflow after a failed or partial run:
-
-1. Check the Nextflow report and trace under `publish/metadata/nextflow/`.
-2. If present, inspect `publish/summaries/status_summary.json`.
-3. Use `publish/tables/accession_status.tsv` to find accession-level failures or no-call completions.
-4. Use `-resume` when continuing the same run root.
+1. Open `publish/metadata/nextflow/report.html` if it exists.
+2. Check `publish/summaries/status_summary.json` if it exists.
+3. Check `publish/tables/accession_status.tsv` if it exists.
+4. Resume with `-resume` after fixing the cause.
 
 ## Focused Smoke Scripts
 
@@ -175,4 +383,5 @@ When you do not need a full pipeline run:
 - `scripts/smoke_live_acquisition.sh`
 - `scripts/smoke_live_detection.sh`
 
-These are narrow live checks. They are useful for toolchain debugging, but they do not define the full published contract of `nextflow run .`.
+These are narrow live checks for toolchain debugging. They do not define the
+full published contract of `nextflow run .`.

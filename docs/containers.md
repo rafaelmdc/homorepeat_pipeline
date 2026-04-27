@@ -52,6 +52,11 @@ What is intentionally not baked into either image:
 
 Those are runtime artifacts and should remain outside the image.
 
+The acquisition image contains `taxon-weaver`, so it can build the taxonomy
+database, but `nextflow run .` will not build it automatically. See
+[Operations](./operations.md#taxonomy-database) for the copy-paste build
+command.
+
 ## How Nextflow Uses the Images
 
 The `docker` profile keeps `process.executor = 'local'` and binds containers by label in `conf/docker.config`.

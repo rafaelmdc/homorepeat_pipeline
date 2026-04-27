@@ -11,6 +11,10 @@ The main Nextflow workflow is accession-driven. Although the Python package
 contains reusable helpers, the workflow does not currently expose taxon-name
 driven acquisition or local FASTA/GFF manifests as first-class runtime inputs.
 
+For a plain-language explanation of terms such as accession, CDS, taxonomy
+database, codon validation, Nextflow, and SQLite, see
+[Background and Glossary](./background.md).
+
 ## Acquisition and Normalization
 
 ### Accession planning
