@@ -45,6 +45,16 @@ when `--taxonomy_db` was not explicitly supplied.
 Defaults to `runtime/cache/taxonomy`. Controls where the auto-built taxonomy
 database, source taxdump, and build report are cached.
 
+### `--dry_run_inputs`
+
+Defaults to `false`. When set to `true`, the workflow validates input paths,
+accession-file content, repeat-residue values, detection-mode settings,
+acquisition publish mode, and taxonomy DB policy, then stops before acquisition
+or detection tasks.
+
+Dry runs publish only orientation and metadata artifacts. They do not publish
+`calls/`, `tables/`, or `summaries/` analysis outputs.
+
 ### `-params-file`
 
 Optional JSON parameter file. Parsed values and effective values are recorded in `publish/metadata/run_manifest.json`.

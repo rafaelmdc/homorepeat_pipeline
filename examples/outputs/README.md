@@ -23,3 +23,15 @@ Representative files here:
 Open `repeat_calls.tsv` for biological calls, then check
 `accession_status.tsv` to distinguish failed accessions from successful
 accessions with no matching repeats.
+
+## Reading The Snippets
+
+The example `accession_status.tsv` includes one accession with calls and one
+successful no-call accession:
+
+- `completed` means the accession completed and produced at least one call.
+- `completed_no_calls` means the accession completed but no matching repeat was
+  found for the selected methods and residues.
+
+That distinction is important: zero calls can be a valid result, not a pipeline
+failure.

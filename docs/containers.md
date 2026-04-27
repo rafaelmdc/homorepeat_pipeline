@@ -21,6 +21,15 @@ NCBI and taxonomy tooling, while detection/reporting does not.
 
 ## Normal User Path
 
+Validate inputs without pulling large NCBI data:
+
+```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file examples/accessions/smoke_human.txt \
+  --dry_run_inputs true
+```
+
 Run with:
 
 ```bash

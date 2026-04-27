@@ -39,3 +39,24 @@ nextflow run . \
 Choose accessions from NCBI Assembly or Datasets. Prefer current annotated
 assemblies, because the pipeline needs downloadable annotation packages with CDS
 records.
+
+## Choosing Accessions
+
+For a first analysis, prefer:
+
+- `GCF_` RefSeq assembly accessions
+- current assemblies rather than suppressed or obsolete records
+- assemblies with annotation available from NCBI Datasets
+- a short list first, then a larger list after the smoke run succeeds
+
+Avoid mixing exploratory changes into a large run. Create a small input file,
+run the dry check, then expand the list.
+
+## Template
+
+```text
+# One NCBI assembly accession per line.
+# Blank lines and comments are ignored.
+GCF_000001405.40
+GCF_000001635.27
+```

@@ -23,6 +23,16 @@ nextflow run .
 
 There is no project-specific wrapper script.
 
+## Which Command Should I Use?
+
+| Situation | Command style |
+| --- | --- |
+| First check that inputs are valid | Add `--dry_run_inputs true` |
+| First real smoke run | `nextflow run . -profile docker --accessions_file examples/accessions/smoke_human.txt` |
+| A run you want to keep and resume | Set `NXF_HOME`, `-log`, and `--run_id` |
+| You changed code or Dockerfiles | Build dev images and use `-profile docker_dev` |
+| You need SQLite and report files | Add `--acquisition_publish_mode merged` |
+
 ## Runtime Images
 
 The normal user profile is:
@@ -136,6 +146,17 @@ nextflow run . \
   --dry_run_inputs true
 ```
 
+Expected dry-run output includes:
+
+```text
+HomoRepeat input dry run passed.
+Usable accessions: 1
+Repeat residues: Q
+```
+
+If the default taxonomy database is absent, the dry run says `will_auto_build`.
+That means the real run will build the default cache.
+
 This is the smallest checked-in run:
 
 ```bash
@@ -145,6 +166,12 @@ nextflow run . \
 ```
 
 That writes results under a timestamped folder in `runs/`.
+
+After it finishes, open:
+
+```text
+runs/<run_id>/publish/START_HERE.md
+```
 
 For a named, resumable smoke run:
 
@@ -168,6 +195,18 @@ runs/smoke_human/publish/
 ## Typical Run
 
 Run `Q` and `N` repeats with the default `pure` and `threshold` methods:
+
+Preflight first:
+
+```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file inputs/my_accessions.txt \
+  --repeat_residues Q,N \
+  --dry_run_inputs true
+```
+
+Then run:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
@@ -301,6 +340,14 @@ First files to open:
 | `summaries/status_summary.json` | Quick run-level status |
 | `metadata/nextflow/report.html` | Runtime report for debugging |
 
+Recommended inspection order:
+
+1. Open `START_HERE.md`.
+2. Open `calls/repeat_calls.tsv` for the calls.
+3. Open `tables/accession_status.tsv` to check whether any accession failed.
+4. Open `tables/accession_call_counts.tsv` to identify successful no-call accessions.
+5. Use `metadata/nextflow/report.html` only when diagnosing runtime behavior.
+
 `matched_sequences.tsv` and `matched_proteins.tsv` include the retained
 sequence bodies. Broad public `cds.fna` and `proteins.faa` files are not part of
 the default output contract.
@@ -371,6 +418,9 @@ For input-only validation, run the same command with:
 ```bash
 --dry_run_inputs true
 ```
+
+Dry runs still create a small `publish/` folder with metadata and
+`START_HERE.md`, but they do not download NCBI data or create call tables.
 
 ### Explicit taxonomy database missing
 

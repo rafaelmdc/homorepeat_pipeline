@@ -9,8 +9,10 @@ forward-looking material and should not override these current-state docs.
 
 ## Start Here
 
-- [Project README](../README.md): fastest path from setup to first run.
+If you only read one page, use [Quickstart](./quickstart.md).
+
 - [Quickstart](./quickstart.md): shortest first-run path with preflight validation.
+- [Project README](../README.md): overview plus common commands and output pointers.
 - [Operations](./operations.md): copy-paste setup, taxonomy behavior, runs, outputs, and troubleshooting.
 - [Background and Glossary](./background.md): plain-language explanations of biological and informatics terms.
 - [Methods and Scientific Notes](./methods.md): biological assumptions, detection methods, codon validation, and limitations.
