@@ -219,3 +219,4 @@ download_attempts.txt
 # test
 runs/*
 !my-folder/README.md
+.idea/
