@@ -189,6 +189,68 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertTrue((publish_root / "summaries" / "acquisition_validation.json").is_file())
             self._assert_dag_noise_within_limit(run_root / "internal" / "nextflow" / "dag.html")
 
+    @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")
+    def test_missing_default_taxonomy_db_is_built_automatically(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            run_root = tmp / "run_auto_taxonomy"
+            taxonomy_cache_dir = tmp / "taxonomy_cache"
+
+            self._run_pipeline(
+                run_root=run_root,
+                accessions=["GCF_000001405.40"],
+                supply_taxonomy_db=False,
+                taxonomy_cache_dir=taxonomy_cache_dir,
+            )
+
+            self.assertTrue((taxonomy_cache_dir / "ncbi_taxonomy.sqlite").is_file())
+            self.assertTrue((taxonomy_cache_dir / "taxdump.tar.gz").is_file())
+            self.assertTrue((taxonomy_cache_dir / "ncbi_taxonomy_build.json").is_file())
+            self.assertTrue((run_root / "publish" / "calls" / "repeat_calls.tsv").is_file())
+
+    @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")
+    def test_missing_explicit_taxonomy_db_fails_without_auto_build(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            run_root = tmp / "run_missing_explicit_taxonomy"
+            accessions_file = tmp / "accessions.txt"
+            missing_taxonomy_db = tmp / "missing_taxonomy.sqlite"
+            nextflow_log = run_root / "internal" / "nextflow" / "nextflow.log"
+
+            accessions_file.write_text("GCF_000001405.40\n", encoding="utf-8")
+            env = {
+                **CLI_ENV,
+                "NXF_HOME": os.environ.get("NXF_HOME", str(REPO_ROOT / "runtime" / "cache" / "nextflow")),
+            }
+            result = subprocess.run(
+                [
+                    "nextflow",
+                    "-log",
+                    str(nextflow_log),
+                    "run",
+                    ".",
+                    "-profile",
+                    "local",
+                    "--run_id",
+                    run_root.name,
+                    "--run_root",
+                    str(run_root),
+                    "--accessions_file",
+                    str(accessions_file),
+                    "--taxonomy_db",
+                    str(missing_taxonomy_db),
+                ],
+                cwd=REPO_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("taxonomy database not found", result.stdout + result.stderr)
+            self.assertFalse(missing_taxonomy_db.exists())
+
     def test_placeholder_publication_scaffold_stays_removed(self) -> None:
         executable_paths = [
             REPO_ROOT / "main.nf",
@@ -222,6 +284,8 @@ class WorkflowPublishModesTest(unittest.TestCase):
         run_root: Path,
         accessions: list[str],
         acquisition_publish_mode: str | None = None,
+        supply_taxonomy_db: bool = True,
+        taxonomy_cache_dir: Path | None = None,
     ) -> None:
         accessions_file = run_root.parent / "accessions.txt"
         taxonomy_db = run_root.parent / "taxonomy.sqlite"
@@ -255,8 +319,6 @@ class WorkflowPublishModesTest(unittest.TestCase):
             str(run_root),
             "--accessions_file",
             str(accessions_file),
-            "--taxonomy_db",
-            str(taxonomy_db),
             "--python_bin",
             sys.executable,
             "--datasets_bin",
@@ -272,6 +334,10 @@ class WorkflowPublishModesTest(unittest.TestCase):
             "--run_seed_extend",
             "false",
         ]
+        if supply_taxonomy_db:
+            cmd.extend(["--taxonomy_db", str(taxonomy_db)])
+        if taxonomy_cache_dir:
+            cmd.extend(["--taxonomy_cache_dir", str(taxonomy_cache_dir)])
         if acquisition_publish_mode:
             cmd.extend(["--acquisition_publish_mode", acquisition_publish_mode])
 
@@ -335,9 +401,19 @@ class WorkflowPublishModesTest(unittest.TestCase):
             """\
             #!/usr/bin/env python3
             import json
+            import pathlib
             import sys
 
             args = sys.argv[1:]
+            if args[:1] == ["build-db"]:
+                dump = args[args.index("--dump") + 1]
+                db = args[args.index("--db") + 1]
+                report = args[args.index("--report-json") + 1]
+                pathlib.Path(dump).write_text("fake taxdump\\n", encoding="utf-8")
+                pathlib.Path(db).write_text("fake sqlite\\n", encoding="utf-8")
+                pathlib.Path(report).write_text(json.dumps({"taxonomy_build_version": "2026-04-05"}), encoding="utf-8")
+                raise SystemExit(0)
+
             if args[:1] == ["build-info"]:
                 print(json.dumps({"taxonomy_build_version": "2026-04-05"}))
                 raise SystemExit(0)

@@ -95,8 +95,8 @@ NCBI taxonomy dump. The default path is:
 runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
 
-The pipeline needs this file before it starts. It does not auto-create the file
-during `nextflow run .`.
+The default run creates this file automatically if it is missing. If you pass
+an explicit `--taxonomy_db`, that file must already exist.
 
 ### taxon-weaver
 
@@ -104,7 +104,7 @@ during `nextflow run .`.
 database. The acquisition Docker image includes a pinned version of
 `taxon-weaver`.
 
-The main setup command is:
+The manual setup command, for controlled environments, is:
 
 ```bash
 mkdir -p runtime/cache/taxonomy

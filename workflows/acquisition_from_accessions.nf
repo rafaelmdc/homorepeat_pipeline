@@ -1,6 +1,7 @@
 nextflow.enable.dsl = 2
 
 include { PLAN_ACCESSION_BATCHES } from '../modules/local/planning/plan_accession_batches'
+include { BUILD_TAXONOMY_DB } from '../modules/local/acquisition/build_taxonomy_db'
 include { DOWNLOAD_NCBI_BATCH } from '../modules/local/acquisition/download_ncbi_batch'
 include { NORMALIZE_CDS_BATCH } from '../modules/local/acquisition/normalize_cds_batch'
 include { TRANSLATE_CDS_BATCH } from '../modules/local/acquisition/translate_cds_batch'
@@ -19,7 +20,18 @@ workflow ACQUISITION_FROM_ACCESSIONS {
     }
 
     def accessionsFile = file(params.accessions_file, checkIfExists: true)
-    def taxonomyDb = file(params.taxonomy_db, checkIfExists: true)
+    def requestedTaxonomyDb = file(params.taxonomy_db)
+    def taxonomyDbSupplied = params.taxonomy_db_supplied.toString().toBoolean()
+    def taxonomyAutoBuild = params.taxonomy_auto_build.toString().toBoolean()
+    def taxonomyDbCh
+    if( requestedTaxonomyDb.exists() ) {
+        taxonomyDbCh = Channel.value(requestedTaxonomyDb)
+    } else if( taxonomyDbSupplied || !taxonomyAutoBuild ) {
+        error "taxonomy database not found: ${params.taxonomy_db}. Use an existing file with --taxonomy_db, or omit --taxonomy_db so the default cache can be built automatically."
+    } else {
+        taxonomy = BUILD_TAXONOMY_DB()
+        taxonomyDbCh = taxonomy.taxonomy_db.first()
+    }
 
     planning = PLAN_ACCESSION_BATCHES(Channel.value(accessionsFile))
     batchManifestCh = planning.batch_manifests_dir.flatMap { manifestsDir ->
@@ -28,7 +40,7 @@ workflow ACQUISITION_FROM_ACCESSIONS {
         manifestFiles.collect { file(it) }
     }
     downloaded = DOWNLOAD_NCBI_BATCH(batchManifestCh)
-    normalized = NORMALIZE_CDS_BATCH(downloaded.raw_batch, Channel.value(taxonomyDb))
+    normalized = NORMALIZE_CDS_BATCH(downloaded.raw_batch, taxonomyDbCh)
     translated = TRANSLATE_CDS_BATCH(normalized.normalized_batch)
     batchRows = normalized.normalized_batch.join(translated.translated_batch)
     batchInputs = batchRows.toList().map { rows ->

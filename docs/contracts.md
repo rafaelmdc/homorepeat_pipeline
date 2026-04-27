@@ -27,12 +27,23 @@ Behavior:
 
 ### `--taxonomy_db`
 
-Path to an existing `taxon-weaver` SQLite database. This is required for
-taxonomy lineage materialization.
+Path to the `taxon-weaver` SQLite database used for taxonomy lineage
+materialization.
 
-The main workflow does not create this database automatically. Build it before
-running the pipeline, or pass a database you already built. The default expected
-path is `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`.
+When `--taxonomy_db` is omitted, the workflow uses
+`runtime/cache/taxonomy/ncbi_taxonomy.sqlite` and builds it automatically if it
+is missing. When `--taxonomy_db` is supplied explicitly, the file must already
+exist.
+
+### `--taxonomy_auto_build`
+
+Defaults to `true`. Allows the workflow to build the default taxonomy database
+when `--taxonomy_db` was not explicitly supplied.
+
+### `--taxonomy_cache_dir`
+
+Defaults to `runtime/cache/taxonomy`. Controls where the auto-built taxonomy
+database, source taxdump, and build report are cached.
 
 ### `-params-file`
 

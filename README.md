@@ -16,20 +16,20 @@ pipeline. Developer and implementation details are later in this README and in
 - Nextflow `25.10.4`.
 - Internet access to download NCBI assembly packages.
 - One text file with one NCBI assembly accession per line.
-- A local NCBI taxonomy SQLite database.
+- A local NCBI taxonomy SQLite database. The pipeline creates the default one
+  automatically if it is missing.
 
 Important taxonomy database answer:
 
-**The main Nextflow pipeline does not create the taxonomy database
-automatically.** Build it once before running, or pass an existing database with
-`--taxonomy_db`. The default expected path is:
+**The main Nextflow pipeline now auto-builds the default taxonomy database when
+it is missing.** The default cache path is:
 
 ```text
 runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
 
-The database is reused across runs. Rebuild it only when you want a newer NCBI
-taxonomy snapshot.
+The database is reused across runs. If you pass an explicit `--taxonomy_db`,
+that file must already exist; explicit paths are treated as user-managed inputs.
 
 ## One-Time Setup
 
@@ -46,14 +46,21 @@ This creates two local Docker images used by the pipeline:
 - `homorepeat-acquisition:dev`
 - `homorepeat-detection:dev`
 
-### 2. Build the taxonomy database
+### 2. Let the pipeline build taxonomy on first run
 
-This can take several minutes because it downloads and indexes the NCBI
-taxonomy dump.
+No manual taxonomy command is needed for the standard path. On the first run,
+the pipeline builds:
+
+```text
+runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+runtime/cache/taxonomy/taxdump.tar.gz
+runtime/cache/taxonomy/ncbi_taxonomy_build.json
+```
+
+Manual build remains available for controlled or offline-style environments:
 
 ```bash
 mkdir -p runtime/cache/taxonomy
-
 docker run --rm \
   -u "$(id -u):$(id -g)" \
   -v "$PWD":/work \
@@ -88,6 +95,16 @@ docker run --rm \
 Run the checked-in human smoke example:
 
 ```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file examples/accessions/smoke_human.txt
+```
+
+Results will be under a timestamped folder in `runs/`.
+
+For a named, resumable run:
+
+```bash
 NXF_HOME=runtime/cache/nextflow \
 nextflow \
   -log runs/smoke_human/internal/nextflow/nextflow.log \
@@ -95,11 +112,10 @@ nextflow \
   -profile docker \
   -params-file examples/params/smoke_default.json \
   --run_id smoke_human \
-  --accessions_file examples/accessions/smoke_human.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+  --accessions_file examples/accessions/smoke_human.txt
 ```
 
-Results will be under:
+Named-run results will be under:
 
 ```text
 runs/smoke_human/publish/
@@ -116,7 +132,6 @@ nextflow \
   -params-file examples/params/smoke_default.json \
   --run_id smoke_human \
   --accessions_file examples/accessions/smoke_human.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   -resume
 ```
 
@@ -145,7 +160,6 @@ nextflow \
   -profile docker \
   --run_id my_qn_run \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -163,7 +177,6 @@ nextflow \
   -profile docker \
   --run_id my_qn_merged \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -212,7 +225,9 @@ were found".
 | Parameter | Default | Use |
 | --- | --- | --- |
 | `--accessions_file` | required | Text file with one assembly accession per line |
-| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Existing taxonomy SQLite database; not auto-created by `nextflow run .` |
+| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Taxonomy SQLite database to use; default path is auto-built if missing |
+| `--taxonomy_auto_build` | `true` | Build the default taxonomy DB when missing and `--taxonomy_db` was not explicitly supplied |
+| `--taxonomy_cache_dir` | `runtime/cache/taxonomy` | Cache directory for the auto-built taxonomy DB |
 | `--run_id` | timestamped | Names `runs/<run_id>` |
 | `--repeat_residues` | `Q` | Comma-separated one-letter amino-acid codes, for example `Q,N` |
 | `--run_pure` | `true` | Detect uninterrupted repeat runs |

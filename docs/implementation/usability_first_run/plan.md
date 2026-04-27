@@ -8,6 +8,15 @@ does not prescribe one large refactor. The goal is to remove first-run friction
 in small, reviewable slices while keeping the scientific outputs and v2 publish
 contract stable.
 
+Implementation status:
+
+- Phase 0 baseline is recorded in [baseline.md](./baseline.md).
+- Phase 1 taxonomy auto-build design is recorded in
+  [taxonomy_auto_build_design.md](./taxonomy_auto_build_design.md).
+- Phase 2 taxonomy auto-build has been started in this branch.
+- Docker Hub image publishing remains planned but is not implemented here
+  because the Docker Hub namespace and tag policy still need a project decision.
+
 ## Problem Statement
 
 The current workflow is usable by someone who already understands Nextflow,
@@ -173,7 +182,7 @@ Tasks:
 
 Deliverables:
 
-- Notes appended to this document or a sibling `baseline.md`.
+- Notes recorded in [baseline.md](./baseline.md).
 - A short list of exact failures to improve.
 
 Validation:
@@ -186,6 +195,8 @@ env PYTHONPATH=src python -m unittest tests.workflow.test_pipeline_config
 ### Phase 1: Taxonomy Auto-Build Design
 
 Goal: decide the exact behavior and edge cases before editing workflow code.
+
+Design record: [taxonomy_auto_build_design.md](./taxonomy_auto_build_design.md).
 
 Proposed behavior:
 

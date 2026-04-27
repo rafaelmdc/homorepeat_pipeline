@@ -13,7 +13,7 @@ You need:
 - internet access to NCBI
 - one accession-list text file
 - the HomoRepeat Docker images
-- an existing taxonomy database
+- a taxonomy database, which the default run can build automatically if missing
 
 The main entrypoint is:
 
@@ -48,15 +48,19 @@ docker run --rm homorepeat-detection:dev python --version
 
 The taxonomy database is required for lineage information in `taxonomy.tsv`.
 
-**The pipeline does not auto-create this database during `nextflow run .`.** It
-expects an existing SQLite file at the value of `--taxonomy_db`. If you do not
-set `--taxonomy_db`, the default path is:
+If you do not set `--taxonomy_db`, the pipeline uses this default path:
 
 ```text
 runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
 
-Build it once with the acquisition container:
+If that default file is missing, the pipeline builds it automatically with
+`taxon-weaver build-db` and reuses it on later runs.
+
+If you pass `--taxonomy_db /path/to/db.sqlite`, that file must already exist.
+Explicit taxonomy DB paths are treated as user-managed inputs.
+
+Manual build remains available for controlled environments:
 
 ```bash
 mkdir -p runtime/cache/taxonomy
@@ -122,6 +126,16 @@ Rules:
 This is the smallest checked-in run:
 
 ```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file examples/accessions/smoke_human.txt
+```
+
+That writes results under a timestamped folder in `runs/`.
+
+For a named, resumable smoke run:
+
+```bash
 NXF_HOME=runtime/cache/nextflow \
 nextflow \
   -log runs/smoke_human/internal/nextflow/nextflow.log \
@@ -129,11 +143,10 @@ nextflow \
   -profile docker \
   -params-file examples/params/smoke_default.json \
   --run_id smoke_human \
-  --accessions_file examples/accessions/smoke_human.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+  --accessions_file examples/accessions/smoke_human.txt
 ```
 
-Expected result folder:
+Named-run result folder:
 
 ```text
 runs/smoke_human/publish/
@@ -151,7 +164,6 @@ nextflow \
   -profile docker \
   --run_id my_qn_run \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -168,7 +180,6 @@ nextflow \
   -profile docker \
   --run_id my_all_methods \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -185,7 +196,6 @@ nextflow \
   -profile docker \
   --run_id my_qn_merged \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -203,7 +213,6 @@ nextflow \
   -profile docker \
   --run_id my_qn_api \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --ncbi_api_key "$NCBI_API_KEY"
 ```
@@ -221,7 +230,6 @@ nextflow \
   -profile docker \
   --run_id my_qn_run \
   --accessions_file inputs/my_accessions.txt \
-  --taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite \
   --repeat_residues Q,N \
   --run_pure true \
   --run_threshold true \
@@ -295,7 +303,9 @@ the default output contract.
 | `--run_id` | timestamped value | Names the run root under `runs/` unless `--run_root` is overridden |
 | `--run_root` | `runs/<run_id>` | Root for published outputs and internal Nextflow state |
 | `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Put this on fast scratch for larger runs |
-| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Must already exist |
+| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Taxonomy SQLite database to use; default path is auto-built if missing |
+| `--taxonomy_auto_build` | `true` | Build the default taxonomy DB when missing and `--taxonomy_db` was not explicitly supplied |
+| `--taxonomy_cache_dir` | `runtime/cache/taxonomy` | Cache directory for the auto-built taxonomy DB |
 | `--acquisition_publish_mode` | `raw` | `raw` publishes the v2 table contract only; `merged` also builds SQLite and reports |
 | `--repeat_residues` | `Q` | Comma-separated one-letter amino-acid codes |
 | `--run_pure` | `true` | Enables contiguous-run detection |
@@ -325,17 +335,18 @@ For CPU, memory, and concurrency controls such as `-qs` and
 
 ## Troubleshooting
 
-### Taxonomy database missing
+### Explicit taxonomy database missing
 
 Symptom:
 
 ```text
-Path value cannot be null
+taxonomy database not found
 ```
 
-or an error that `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` does not exist.
+or an error that the path passed with `--taxonomy_db` does not exist.
 
-Fix: build the taxonomy database or pass a valid `--taxonomy_db` path.
+Fix: pass an existing `--taxonomy_db` path, or omit `--taxonomy_db` and let the
+pipeline build the default cache automatically.
 
 ### Docker image missing
 

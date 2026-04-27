@@ -24,23 +24,23 @@ forward-looking material and should not override these current-state docs.
 - [Resume and Recovery](./save_state_guide.md): Nextflow `-resume`, metadata, and accession-level diagnostics.
 - [Development Guide](./development.md): contributor workflow, testing strategy, and code organization.
 
-## Taxonomy Database Requirement
+## Taxonomy Database Behavior
 
-The main pipeline does not create the taxonomy database automatically. Before
-running `nextflow run .`, build one at the default path:
+When `--taxonomy_db` is omitted, the main pipeline uses the default path:
 
 ```text
 runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
 
-or pass an existing database with:
+If that file is missing, the workflow builds it automatically and reuses it on
+later runs. To use a database you already built, pass:
 
 ```bash
 --taxonomy_db /path/to/ncbi_taxonomy.sqlite
 ```
 
-See [Operations](./operations.md#taxonomy-database) for the copy-paste build
-command.
+Explicit `--taxonomy_db` paths must already exist. See
+[Operations](./operations.md#taxonomy-database) for details.
 
 ## Current Public Contract
 

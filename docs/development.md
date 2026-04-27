@@ -19,8 +19,9 @@ For workflow runs with the `docker` profile, build the runtime images:
 bash scripts/build_dev_containers.sh
 ```
 
-The workflow expects a taxonomy SQLite database at
-`runtime/cache/taxonomy/ncbi_taxonomy.sqlite` unless `--taxonomy_db` is set.
+Default workflow runs auto-build
+`runtime/cache/taxonomy/ncbi_taxonomy.sqlite` if it is missing. Explicit
+`--taxonomy_db` paths are treated as existing user-managed inputs.
 
 ## Repository Map
 
