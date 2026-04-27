@@ -15,6 +15,7 @@ pipeline. Developer and implementation details are later in this README and in
 - Linux or macOS shell with Docker available.
 - Nextflow `25.10.4`.
 - Internet access to download NCBI assembly packages.
+- Internet access to pull the published HomoRepeat Docker images on first use.
 - One text file with one NCBI assembly accession per line.
 - A local NCBI taxonomy SQLite database, which the pipeline creates
   automatically on the first default run if it is missing.
@@ -35,16 +36,21 @@ that file must already exist; explicit paths are treated as user-managed inputs.
 
 Run these commands from the repository root.
 
-### 1. Build the runtime images
+### 1. Check Docker and Nextflow
 
 ```bash
-bash scripts/build_dev_containers.sh
+docker --version
+nextflow -version
 ```
 
-This creates two local Docker images used by the pipeline:
+The normal `-profile docker` run uses published images and Docker pulls them
+automatically when they are missing:
 
-- `homorepeat-acquisition:dev`
-- `homorepeat-detection:dev`
+- `rafaelmdc/homorepeat-acquisition:0.1.0`
+- `rafaelmdc/homorepeat-detection:0.1.0`
+
+You only need to build local `:dev` images if you are changing the code. See
+the developer notes later in this README.
 
 ### 2. Run without manual taxonomy setup
 
@@ -65,7 +71,7 @@ docker run --rm \
   -u "$(id -u):$(id -g)" \
   -v "$PWD":/work \
   -w /work \
-  homorepeat-acquisition:dev \
+  rafaelmdc/homorepeat-acquisition:0.1.0 \
   taxon-weaver build-db \
     --download \
     --dump runtime/cache/taxonomy/taxdump.tar.gz \
@@ -85,12 +91,22 @@ Optional provenance check:
 docker run --rm \
   -v "$PWD":/work \
   -w /work \
-  homorepeat-acquisition:dev \
+  rafaelmdc/homorepeat-acquisition:0.1.0 \
   taxon-weaver build-info \
     --db runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
 
 ## Quick Start
+
+Validate the checked-in human smoke example without downloading data or running
+detection tasks:
+
+```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file examples/accessions/smoke_human.txt \
+  --dry_run_inputs true
+```
 
 Run the checked-in human smoke example:
 
@@ -226,6 +242,7 @@ were found".
 | Parameter | Default | Use |
 | --- | --- | --- |
 | `--accessions_file` | required | Text file with one assembly accession per line |
+| `--dry_run_inputs` | `false` | Validate inputs and settings, then stop before downloading data or running detection |
 | `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Taxonomy SQLite database to use; default path is auto-built if missing |
 | `--taxonomy_auto_build` | `true` | Build the default taxonomy DB when missing and `--taxonomy_db` was not explicitly supplied |
 | `--taxonomy_cache_dir` | `runtime/cache/taxonomy` | Cache directory for the auto-built taxonomy DB |
@@ -304,6 +321,14 @@ More background is in [`docs/background.md`](./docs/background.md).
 
 ## Development Checks
 
+When changing code that runs inside Docker, rebuild local images and use the
+development profile:
+
+```bash
+bash scripts/build_dev_containers.sh
+nextflow run . -profile docker_dev --accessions_file examples/accessions/smoke_human.txt
+```
+
 ```bash
 nextflow config .
 env PYTHONPATH=src python -m unittest
@@ -329,11 +354,14 @@ test strategy.
 ## Documentation
 
 - [Documentation Index](./docs/README.md)
+- [Quickstart](./docs/quickstart.md)
 - [Operations](./docs/operations.md)
 - [Background and Glossary](./docs/background.md)
 - [Methods and Scientific Notes](./docs/methods.md)
 - [Data Contracts](./docs/contracts.md)
 - [Containers](./docs/containers.md)
+- [Accession Examples](./examples/accessions/README.md)
+- [Output Examples](./examples/outputs/README.md)
 - [Scale Guide](./docs/scale_guide.md)
 - [Benchmark Guide](./docs/benchmark_guide.md)
 - [Resume and Recovery](./docs/save_state_guide.md)

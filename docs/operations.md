@@ -12,7 +12,7 @@ You need:
 - Docker
 - internet access to NCBI
 - one accession-list text file
-- the HomoRepeat Docker images
+- internet access to pull the published HomoRepeat Docker images on first use
 - a taxonomy database, which the default run can build automatically if missing
 
 The main entrypoint is:
@@ -23,26 +23,30 @@ nextflow run .
 
 There is no project-specific wrapper script.
 
-## Build Runtime Images
+## Runtime Images
 
-Build the images expected by the `docker` profile:
+The normal user profile is:
 
 ```bash
-bash scripts/build_dev_containers.sh
+-profile docker
 ```
 
-That produces:
+It uses published Docker Hub images. Docker pulls them automatically if they are
+not already on your machine:
 
-- `homorepeat-acquisition:dev`
-- `homorepeat-detection:dev`
+- `rafaelmdc/homorepeat-acquisition:0.1.0`
+- `rafaelmdc/homorepeat-detection:0.1.0`
 
 Quick checks:
 
 ```bash
-docker run --rm homorepeat-acquisition:dev taxon-weaver --help
-docker run --rm homorepeat-acquisition:dev datasets version
-docker run --rm homorepeat-detection:dev python --version
+docker run --rm rafaelmdc/homorepeat-acquisition:0.1.0 taxon-weaver --help
+docker run --rm rafaelmdc/homorepeat-acquisition:0.1.0 datasets version
+docker run --rm rafaelmdc/homorepeat-detection:0.1.0 python --version
 ```
+
+Developers who are changing code can build local `:dev` images and run with
+`-profile docker_dev`. See [Containers](./containers.md) for that workflow.
 
 ## Taxonomy Database
 
@@ -69,7 +73,7 @@ docker run --rm \
   -u "$(id -u):$(id -g)" \
   -v "$PWD":/work \
   -w /work \
-  homorepeat-acquisition:dev \
+  rafaelmdc/homorepeat-acquisition:0.1.0 \
   taxon-weaver build-db \
     --download \
     --dump runtime/cache/taxonomy/taxdump.tar.gz \
@@ -89,7 +93,7 @@ Read build metadata:
 docker run --rm \
   -v "$PWD":/work \
   -w /work \
-  homorepeat-acquisition:dev \
+  rafaelmdc/homorepeat-acquisition:0.1.0 \
   taxon-weaver build-info \
     --db runtime/cache/taxonomy/ncbi_taxonomy.sqlite
 ```
@@ -122,6 +126,15 @@ Rules:
   accession when appropriate
 
 ## Quick Smoke Run
+
+Validate the checked-in human smoke example without downloading data:
+
+```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file examples/accessions/smoke_human.txt \
+  --dry_run_inputs true
+```
 
 This is the smallest checked-in run:
 
@@ -305,9 +318,12 @@ the default output contract.
 | `--run_id` | timestamped value | Names the run root under `runs/` unless `--run_root` is overridden |
 | `--run_root` | `runs/<run_id>` | Root for published outputs and internal Nextflow state |
 | `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Put this on fast scratch for larger runs |
+| `--dry_run_inputs` | `false` | Validate inputs and settings, then stop before downloading data or running detection |
 | `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | Taxonomy SQLite database to use; default path is auto-built if missing |
 | `--taxonomy_auto_build` | `true` | Build the default taxonomy DB when missing and `--taxonomy_db` was not explicitly supplied |
 | `--taxonomy_cache_dir` | `runtime/cache/taxonomy` | Cache directory for the auto-built taxonomy DB |
+| `--dockerhub_namespace` | `rafaelmdc` | Docker Hub namespace used by the default `docker` profile |
+| `--container_tag` | `0.1.0` | Published image tag used by the default `docker` profile |
 | `--acquisition_publish_mode` | `raw` | `raw` publishes the v2 table contract only; `merged` also builds SQLite and reports |
 | `--repeat_residues` | `Q` | Comma-separated one-letter amino-acid codes |
 | `--run_pure` | `true` | Enables contiguous-run detection |
@@ -336,6 +352,25 @@ For CPU, memory, and concurrency controls such as `-qs` and
 `-process.withLabel:<label>.maxForks`, see [Scale Guide](./scale_guide.md).
 
 ## Troubleshooting
+
+### Error Matrix
+
+| Error text | Likely cause | Next action |
+| --- | --- | --- |
+| `params.accessions_file is required` | No accession list was supplied | Add `--accessions_file path/to/accessions.txt` |
+| `accessions file not found` | The supplied path is wrong or not visible from the launch directory | Check the path and rerun `--dry_run_inputs true` |
+| `accessions file has no usable accession lines` | The file is empty after ignoring blanks and `#` comments | Add one NCBI assembly accession per line |
+| `params.repeat_residues contains invalid residue code` | A repeat residue is not a standard one-letter amino-acid code | Use values such as `--repeat_residues Q,N` |
+| `taxonomy database not found` | An explicit `--taxonomy_db` path is missing, or auto-build is disabled | Use an existing DB path, or omit `--taxonomy_db` for default auto-build |
+| `Cannot pull image` or `pull access denied` | Docker cannot reach or pull the published runtime image | Check Docker Hub access and Docker daemon status |
+| `No assembly summary records were returned` | NCBI could not resolve the requested accession | Confirm the accession in NCBI Assembly or Datasets |
+| `Batch ... produced no normalized CDS sequences` | The downloaded package lacks usable annotated CDS records | Check `tables/accession_status.tsv` and try a current annotated assembly |
+
+For input-only validation, run the same command with:
+
+```bash
+--dry_run_inputs true
+```
 
 ### Explicit taxonomy database missing
 
@@ -382,15 +417,20 @@ Fix: use comma-separated standard one-letter amino-acid codes, such as:
 --repeat_residues Q,N
 ```
 
-### Docker image missing
+### Docker image pull or local image missing
 
-Symptom: Nextflow says it cannot find `homorepeat-acquisition:dev` or
-`homorepeat-detection:dev`.
+Symptom: Docker or Nextflow says it cannot pull
+`rafaelmdc/homorepeat-acquisition:0.1.0` or
+`rafaelmdc/homorepeat-detection:0.1.0`.
 
-Fix:
+Fix: check that Docker is running and that the machine can access Docker Hub.
+
+If you are intentionally using local development images, build them and use the
+development profile:
 
 ```bash
 bash scripts/build_dev_containers.sh
+nextflow run . -profile docker_dev --accessions_file examples/accessions/smoke_human.txt
 ```
 
 ### NCBI download problems

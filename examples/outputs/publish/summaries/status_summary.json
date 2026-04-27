@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "counts": {
+    "n_requested_accessions": 2,
+    "n_completed": 1,
+    "n_completed_no_calls": 1,
+    "n_failed": 0,
+    "n_skipped_upstream_failed": 0
+  }
+}

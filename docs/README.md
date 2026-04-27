@@ -10,10 +10,12 @@ forward-looking material and should not override these current-state docs.
 ## Start Here
 
 - [Project README](../README.md): fastest path from setup to first run.
+- [Quickstart](./quickstart.md): shortest first-run path with preflight validation.
 - [Operations](./operations.md): copy-paste setup, taxonomy behavior, runs, outputs, and troubleshooting.
 - [Background and Glossary](./background.md): plain-language explanations of biological and informatics terms.
 - [Methods and Scientific Notes](./methods.md): biological assumptions, detection methods, codon validation, and limitations.
 - [Data Contracts](./contracts.md): published files, identifiers, schemas, and manifest behavior.
+- [Containers](./containers.md): published Docker images, local development images, and release publishing.
 
 ## Supporting Guides
 
@@ -23,6 +25,8 @@ forward-looking material and should not override these current-state docs.
 - [Benchmark Guide](./benchmark_guide.md): benchmark inputs and trace summarization.
 - [Resume and Recovery](./save_state_guide.md): Nextflow `-resume`, metadata, and accession-level diagnostics.
 - [Development Guide](./development.md): contributor workflow, testing strategy, and code organization.
+- [Accession Examples](../examples/accessions/README.md): choosing and validating assembly accession files.
+- [Output Examples](../examples/outputs/README.md): tiny representative snippets of the publish layout.
 
 ## Taxonomy Database Behavior
 

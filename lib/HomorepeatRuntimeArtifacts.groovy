@@ -98,6 +98,7 @@ class HomorepeatRuntimeArtifacts {
                 nextflowLog: nextflowLog,
                 runName: ctx.runName?.toString() ?: '',
                 success: !!ctx.success,
+                dryRunInputs: !!ctx.dryRunInputs,
                 resumeUsed: hasFlag(ctx.commandLine?.toString(), '-resume'),
                 acquisitionPublishMode: acquisitionPublishMode,
             ),
@@ -117,12 +118,13 @@ class HomorepeatRuntimeArtifacts {
             finishedAtUtc: formatUtc(ctx.finishedAt),
             status: ctx.status?.toString() ?: '',
             acquisitionPublishMode: acquisitionPublishMode,
+            dryRunInputs: !!ctx.dryRunInputs,
             effectiveParams: ctx.effectiveParams instanceof Map ? ctx.effectiveParams as Map<String, Object> : null,
         )
         writeJson(metadataDir.resolve('run_manifest.json'), runManifest)
         writeStartHere(publishRoot.resolve('START_HERE.md'), runManifest)
 
-        if (ctx.success) {
+        if (ctx.success && !ctx.dryRunInputs) {
             updateLatestSymlink(repoRoot, ctx.runId?.toString() ?: '')
         }
     }
@@ -153,6 +155,7 @@ class HomorepeatRuntimeArtifacts {
             nextflow       : [
                 run_name   : ctx.runName,
                 success    : ctx.success,
+                dry_run_inputs: ctx.dryRunInputs,
                 resume_used: ctx.resumeUsed,
             ],
         ]
@@ -171,6 +174,7 @@ class HomorepeatRuntimeArtifacts {
             profile        : ctx.profile,
             publish_contract_version: CURRENT_PUBLISH_CONTRACT_VERSION,
             acquisition_publish_mode: normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
+            dry_run_inputs: !!ctx.dryRunInputs,
             git_revision   : gitRevision(repoRoot),
             inputs         : [
                 accessions_file: relativeOrAbsolute(ctx.accessionsFile as Path, repoRoot),

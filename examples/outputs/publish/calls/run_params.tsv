@@ -1,0 +1,4 @@
+method	repeat_residue	param_name	param_value
+pure	Q	min_repeat_count	6
+threshold	Q	window_size	8
+threshold	Q	min_target_count	6

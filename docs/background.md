@@ -113,7 +113,7 @@ docker run --rm \
   -u "$(id -u):$(id -g)" \
   -v "$PWD":/work \
   -w /work \
-  homorepeat-acquisition:dev \
+  rafaelmdc/homorepeat-acquisition:0.1.0 \
   taxon-weaver build-db \
     --download \
     --dump runtime/cache/taxonomy/taxdump.tar.gz \
@@ -142,17 +142,21 @@ A Nextflow profile selects runtime settings. The usual profile is:
 -profile docker
 ```
 
-That tells Nextflow to run tasks in the project Docker images.
+That tells Nextflow to run tasks in the published project Docker images.
 
 ### Docker image
 
-A Docker image is a packaged software environment. HomoRepeat uses two:
+A Docker image is a packaged software environment. The normal `docker` profile
+uses two published images:
 
-- `homorepeat-acquisition:dev` for NCBI downloads, taxonomy lookup, and
-  translation-related setup
-- `homorepeat-detection:dev` for repeat detection, SQLite, and reporting
+- `rafaelmdc/homorepeat-acquisition:0.1.0` for NCBI downloads, taxonomy lookup,
+  and translation-related setup
+- `rafaelmdc/homorepeat-detection:0.1.0` for repeat detection, SQLite, and
+  reporting
 
 This keeps runs reproducible and avoids relying on many host-installed tools.
+Developers can build local `:dev` images and run them with `-profile
+docker_dev`.
 
 ### `NXF_HOME`
 

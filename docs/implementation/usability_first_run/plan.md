@@ -13,13 +13,15 @@ Implementation status:
 - Phase 0 baseline is recorded in [baseline.md](./baseline.md).
 - Phase 1 taxonomy auto-build design is recorded in
   [taxonomy_auto_build_design.md](./taxonomy_auto_build_design.md).
-- Phase 2 taxonomy auto-build has been started in this branch.
+- Phase 2 taxonomy auto-build has been completed in this branch.
 - Phase 3 README and operations simplification has been completed in this
   branch.
-- Phase 4 generated `START_HERE.md` has been started in this branch.
-- Phase 5 accession/residue preflight has been started in this branch.
-- Docker Hub image publishing remains planned but is not implemented here
-  because the Docker Hub namespace and tag policy still need a project decision.
+- Phase 4 generated `START_HERE.md` has been completed in this branch.
+- Phase 5 accession/residue preflight has been completed in this branch.
+- Phase 6 Docker Hub default images and `docker_dev` local-image profile have
+  been completed in this branch.
+- Phase 7 quickstart, accession/output examples, troubleshooting matrix, and
+  `--dry_run_inputs` preflight-only mode have been completed in this branch.
 
 ## Problem Statement
 
@@ -460,6 +462,10 @@ Expected outcome:
 
 Goal: remove the local image-build step from the normal first-run path.
 
+Status: implemented in config and docs. The default `docker` profile now points
+at Docker Hub images under the `rafaelmdc` namespace with tag `0.1.0`; local
+`:dev` images are isolated behind `-profile docker_dev`.
+
 Recommended direction:
 
 - Publish versioned images to Docker Hub.
@@ -469,11 +475,11 @@ Recommended direction:
 - Add a separate development profile or parameter override for local `:dev`
   images.
 
-Example target image names:
+Implemented image names:
 
 ```text
-<dockerhub-user-or-org>/homorepeat-acquisition:0.1.0
-<dockerhub-user-or-org>/homorepeat-detection:0.1.0
+rafaelmdc/homorepeat-acquisition:0.1.0
+rafaelmdc/homorepeat-detection:0.1.0
 ```
 
 Configuration options:
@@ -484,33 +490,47 @@ Configuration options:
 | Add new `dockerhub` profile and keep `docker` local | users must learn another profile | least disruptive | safer transition, less ideal UX |
 | Keep local-only images | users must build images | current behavior | not good enough for first-run usability |
 
-Open questions:
+Release policy:
 
-- Who owns releases and rebuild cadence?
-- What Docker Hub namespace should be used?
-- Should `latest` exist, or should docs use only pinned version tags?
-- Should image tags track pipeline git tags, for example `0.1.0`, or dated
-  builds?
+- Publish images to Docker Hub before advertising the release externally.
+- Use pinned version tags in docs and examples.
+- Build and push helpers live at:
+  - `scripts/build_dockerhub_containers.sh`
+  - `scripts/push_dockerhub_containers.sh`
+- `DOCKERHUB_NAMESPACE` and `CONTAINER_TAG` can override the default release
+  namespace and tag when building or pushing.
+- Local image building remains documented only for contributors via
+  `scripts/build_dev_containers.sh` and `-profile docker_dev`.
 
-Suggested decision:
+Validation:
 
-- Publish images to Docker Hub.
-- After images are available, make the main documented `-profile docker` path
-  pull those images automatically.
-- Keep local image building under a dev-specific section and/or profile.
+```bash
+nextflow config -profile docker .
+nextflow config -profile docker_dev .
+env PYTHONPATH=src python -m unittest tests.workflow.test_pipeline_config
+```
 
 ### Phase 7: Larger Usability Backlog
 
-Potential improvements after the main friction is removed:
+Status: implemented in this branch.
 
 - Add `examples/accessions/README.md` explaining how to choose accessions.
 - Add `examples/outputs/` with tiny representative output snippets.
-- Add an R/Python import example for `repeat_calls.tsv` and status tables.
 - Add a troubleshooting matrix keyed by error text.
 - Add a `docs/quickstart.md` that is shorter than `docs/operations.md`.
 - Add a `--dry_run_inputs` or preflight-only mode if Nextflow supports it
   cleanly.
-- Add a benchmark-free "small vs large run" decision table.
+
+Implemented behavior:
+
+- `--dry_run_inputs true` validates the accession file, repeat-residue values,
+  detection-mode settings, acquisition publish mode, and taxonomy DB policy,
+  then stops before download, taxonomy build, normalization, translation, or
+  detection tasks.
+- Dry runs publish only orientation and metadata artifacts, with manifest status
+  `dry_run_success`, and do not update the `runs/latest` symlink.
+- The default Docker images are now published in Docker Hub, so the normal
+  dry-run and first-run examples use `-profile docker`.
 
 ## Documentation Changes Checklist
 

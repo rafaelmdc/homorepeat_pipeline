@@ -1,0 +1,3 @@
+assembly_accession	batch_id	download_status	normalize_status	translate_status	detect_status	finalize_status	terminal_status	failure_stage	failure_reason	n_genomes	n_proteins	n_repeat_calls	notes
+GCF_000001405.40	batch_0001	downloaded	completed	completed	completed	completed	completed			1	20	1	
+GCF_000001635.27	batch_0001	downloaded	completed	completed	completed	completed	completed_no_calls			1	18	0	
