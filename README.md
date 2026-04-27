@@ -67,7 +67,7 @@ Validate it:
 nextflow run . \
   -profile docker \
   --accessions_file inputs/my_accessions.txt \
-  --repeat_residues Q,N \
+  --repeat_residues Q,A \
   --dry_run_inputs true
 ```
 
@@ -77,7 +77,7 @@ Run it:
 nextflow run . \
   -profile docker \
   --accessions_file inputs/my_accessions.txt \
-  --repeat_residues Q,N
+  --repeat_residues Q,A
 ```
 
 For a named run that is easier to resume and inspect:
@@ -90,7 +90,7 @@ nextflow \
   -profile docker \
   --run_id my_qn_run \
   --accessions_file inputs/my_accessions.txt \
-  --repeat_residues Q,N
+  --repeat_residues Q,A
 ```
 
 Resume an interrupted named run by re-running the same command with `-resume`.
