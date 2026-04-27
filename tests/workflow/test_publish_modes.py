@@ -122,6 +122,12 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertEqual(context_call_ids, call_ids)
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())
+            start_here = (publish_root / "START_HERE.md").read_text(encoding="utf-8")
+            self.assertIn("# HomoRepeat Run: run_raw", start_here)
+            self.assertIn("calls/repeat_calls.tsv", start_here)
+            self.assertIn("tables/accession_status.tsv", start_here)
+            self.assertIn("metadata/nextflow/report.html", start_here)
+            self.assertIn("A successful accession can produce zero repeat calls", start_here)
             self._assert_dag_noise_within_limit(run_root / "internal" / "nextflow" / "dag.html")
 
     @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")
@@ -187,6 +193,9 @@ class WorkflowPublishModesTest(unittest.TestCase):
                 self.assertTrue((publish_root / "tables" / filename).is_file(), publish_root / "tables" / filename)
             self.assertTrue((publish_root / "summaries" / "status_summary.json").is_file())
             self.assertTrue((publish_root / "summaries" / "acquisition_validation.json").is_file())
+            start_here = (publish_root / "START_HERE.md").read_text(encoding="utf-8")
+            self.assertIn("database/homorepeat.sqlite", start_here)
+            self.assertIn("reports/echarts_report.html", start_here)
             self._assert_dag_noise_within_limit(run_root / "internal" / "nextflow" / "dag.html")
 
     @unittest.skipUnless(shutil.which("nextflow"), "nextflow is not installed")

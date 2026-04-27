@@ -94,6 +94,7 @@ Default public outputs live under `runs/<run_id>/publish/`:
 
 ```text
 publish/
+  START_HERE.md
   calls/
     repeat_calls.tsv
     run_params.tsv

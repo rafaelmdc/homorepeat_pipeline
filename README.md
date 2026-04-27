@@ -16,8 +16,8 @@ pipeline. Developer and implementation details are later in this README and in
 - Nextflow `25.10.4`.
 - Internet access to download NCBI assembly packages.
 - One text file with one NCBI assembly accession per line.
-- A local NCBI taxonomy SQLite database. The pipeline creates the default one
-  automatically if it is missing.
+- A local NCBI taxonomy SQLite database, which the pipeline creates
+  automatically on the first default run if it is missing.
 
 Important taxonomy database answer:
 
@@ -46,7 +46,7 @@ This creates two local Docker images used by the pipeline:
 - `homorepeat-acquisition:dev`
 - `homorepeat-detection:dev`
 
-### 2. Let the pipeline build taxonomy on first run
+### 2. Run without manual taxonomy setup
 
 No manual taxonomy command is needed for the standard path. On the first run,
 the pipeline builds:
@@ -198,6 +198,7 @@ Most useful files:
 
 | File | What it means |
 | --- | --- |
+| `START_HERE.md` | Run-specific guide with the key settings and first files to inspect |
 | `calls/repeat_calls.tsv` | One row per detected amino-acid repeat tract |
 | `calls/run_params.tsv` | The method parameters used for each residue |
 | `tables/matched_proteins.tsv` | Protein sequences that had at least one repeat call |

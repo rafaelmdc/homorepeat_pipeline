@@ -249,6 +249,7 @@ Default v2 outputs:
 
 ```text
 publish/
+  START_HERE.md
   calls/
     repeat_calls.tsv
     run_params.tsv
@@ -276,6 +277,7 @@ First files to open:
 
 | File | Use |
 | --- | --- |
+| `START_HERE.md` | Run-specific guide with the key settings and first files to inspect |
 | `calls/repeat_calls.tsv` | Main repeat-call table |
 | `tables/repeat_context.tsv` | Flanking context around calls |
 | `tables/matched_proteins.tsv` | Protein sequences for called repeats |

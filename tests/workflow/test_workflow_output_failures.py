@@ -71,6 +71,7 @@ class WorkflowOutputFailureRegressionTest(unittest.TestCase):
             self.assertTrue((run_root / "internal" / "nextflow" / "report.html").is_file())
             self.assertTrue((publish_root / "metadata" / "run_manifest.json").is_file())
             self.assertTrue((publish_root / "metadata" / "launch_metadata.json").is_file())
+            self.assertTrue((publish_root / "START_HERE.md").is_file())
             self.assertFalse((publish_root / ".nf_placeholders").exists())
 
             nextflow_log = log_file.read_text(encoding="utf-8")
@@ -87,3 +88,6 @@ class WorkflowOutputFailureRegressionTest(unittest.TestCase):
             self.assertEqual(launch["acquisition_publish_mode"], "raw")
             self.assertEqual(manifest["params"]["effective_values"]["batch_size"], 1)
             self.assertFalse((publish_root / "calls").exists())
+            start_here = (publish_root / "START_HERE.md").read_text(encoding="utf-8")
+            self.assertIn("Status: `failed`", start_here)
+            self.assertIn("metadata/nextflow/report.html", start_here)

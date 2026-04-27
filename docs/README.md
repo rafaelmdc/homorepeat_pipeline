@@ -10,7 +10,7 @@ forward-looking material and should not override these current-state docs.
 ## Start Here
 
 - [Project README](../README.md): fastest path from setup to first run.
-- [Operations](./operations.md): copy-paste setup, taxonomy database creation, runs, outputs, and troubleshooting.
+- [Operations](./operations.md): copy-paste setup, taxonomy behavior, runs, outputs, and troubleshooting.
 - [Background and Glossary](./background.md): plain-language explanations of biological and informatics terms.
 - [Methods and Scientific Notes](./methods.md): biological assumptions, detection methods, codon validation, and limitations.
 - [Data Contracts](./contracts.md): published files, identifiers, schemas, and manifest behavior.
@@ -48,6 +48,7 @@ HomoRepeat now publishes contract version `2`.
 
 Default public outputs are compact and table-oriented:
 
+- `publish/START_HERE.md`
 - `publish/calls/repeat_calls.tsv`
 - `publish/calls/run_params.tsv`
 - `publish/tables/*.tsv`

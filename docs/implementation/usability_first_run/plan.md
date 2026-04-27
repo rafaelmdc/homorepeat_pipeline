@@ -14,6 +14,9 @@ Implementation status:
 - Phase 1 taxonomy auto-build design is recorded in
   [taxonomy_auto_build_design.md](./taxonomy_auto_build_design.md).
 - Phase 2 taxonomy auto-build has been started in this branch.
+- Phase 3 README and operations simplification has been completed in this
+  branch.
+- Phase 4 generated `START_HERE.md` has been started in this branch.
 - Docker Hub image publishing remains planned but is not implemented here
   because the Docker Hub namespace and tag policy still need a project decision.
 
@@ -353,13 +356,16 @@ Docs changes:
 Validation:
 
 ```bash
-rg -n "does not create|does not auto-create|not auto-created|must already exist" README.md docs
+rg -n "does not create|does not auto-create|not auto-created" README.md docs/*.md
+rg -n -- "--taxonomy_db runtime/cache/taxonomy/ncbi_taxonomy.sqlite" README.md docs/*.md
 ```
 
 Expected outcome:
 
 - New users see one short command first.
 - Advanced users still see reproducible run commands and manual cache control.
+- Active user-facing docs no longer tell users to pass `--taxonomy_db` for the
+  default path.
 
 ### Phase 4: Add a Generated Start-Here Artifact
 
@@ -399,6 +405,7 @@ Validation:
 ```bash
 env PYTHONPATH=src python -m unittest tests.cli.test_runtime_artifacts
 env PYTHONPATH=src python -m unittest tests.workflow.test_publish_modes
+env PYTHONPATH=src python -m unittest tests.workflow.test_workflow_output_failures
 ```
 
 ### Phase 5: Preflight and Actionable Errors
