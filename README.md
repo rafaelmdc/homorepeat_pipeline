@@ -1,212 +1,200 @@
 # HomoRepeat
 
-HomoRepeat is a Nextflow pipeline for accession-driven homorepeat analysis. It downloads annotated assemblies, normalizes CDS records, translates proteins, detects single-residue amino-acid homorepeats, validates codon slices where possible, and publishes a compact v2 tabular contract for downstream import.
-
-The workflow orchestration is Nextflow. The scientific and contract logic is Python under [`src/homorepeat/`](./src/homorepeat/).
-
-## What This Repo Provides
-
-- Accession-list workflow entrypoint through `nextflow run .`
-- Docker and local execution profiles
-- NCBI Datasets acquisition with `taxon-weaver` lineage materialization
-- Three detection methods: `pure`, `threshold`, and optional `seed_extend`
-- Canonical v2 publish contract under `runs/<run_id>/publish/tables/`
-- Optional SQLite and report artifacts in `--acquisition_publish_mode merged`
-- Unit, CLI, and workflow regression tests
-
-Not included: web UI, local FASTA/GFF manifest workflow entrypoint, domain enrichment, or broad arbitrary Nextflow-version support.
-
-## Requirements
-
-- Nextflow `25.10.4`
-- Docker for the `docker` profile
-- Runtime images built from this repo
-- Taxonomy SQLite database at `runtime/cache/taxonomy/ncbi_taxonomy.sqlite`, unless `--taxonomy_db` is supplied
-
-Build runtime images:
-
-```bash
-bash scripts/build_dev_containers.sh
-```
+HomoRepeat finds single-amino-acid repeat tracts in proteins from annotated
+NCBI assemblies. You give it NCBI assembly accessions such as
+`GCF_000001405.40`; it downloads the annotation packages, translates CDS
+records, calls amino-acid repeats, checks codons where possible, and writes
+plain tables for downstream analysis.
 
 ## Quick Start
 
-Run a small checked-in example:
+You need Docker, Java 17+, and a recent stable Nextflow release.
+The pipeline is tested with Nextflow 25.10.4. Use that version or a newer stable release if possible.
+Run commands from the repository root.
+
+First validate the checked-in smoke input without downloading NCBI annotation packages:
 
 ```bash
-NXF_HOME=runtime/cache/nextflow \
 nextflow run . \
   -profile docker \
-  --run_id smoke_human \
+  --accessions_file examples/accessions/smoke_human.txt \
+  --dry_run_inputs true
+```
+
+Success looks like:
+
+```text
+HomoRepeat input dry run passed.
+Usable accessions: 1
+Repeat residues: Q
+```
+
+Then run the smoke example:
+
+```bash
+nextflow run . \
+  -profile docker \
   --accessions_file examples/accessions/smoke_human.txt
 ```
 
-Run the chromosome-scale example list:
+The first real run may take longer because Docker pulls the published images
+and the workflow builds the default taxonomy cache if it is missing. You do not
+need to build local Docker images or create the taxonomy database manually for
+the normal path.
+
+When the run finishes, open:
+
+```text
+runs/<run_id>/publish/START_HERE.md
+```
+
+That file points to the main result tables for that run.
+
+## Run Your Own Accessions
+
+Create a plain text file containing one NCBI assembly accession per line.
+
+Example: `inputs/my_accessions.txt`
+
+```text
+GCF_000001405.40
+GCF_000001635.27
+```
+
+Validate it:
+
+```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file inputs/my_accessions.txt \
+  --repeat_residues Q,N \
+  --dry_run_inputs true
+```
+
+Run it:
+
+```bash
+nextflow run . \
+  -profile docker \
+  --accessions_file inputs/my_accessions.txt \
+  --repeat_residues Q,N
+```
+
+For a named run that is easier to resume and inspect:
 
 ```bash
 NXF_HOME=runtime/cache/nextflow \
-nextflow run . \
+nextflow \
+  -log runs/my_qn_run/internal/nextflow/nextflow.log \
+  run . \
   -profile docker \
-  --run_id chr_v2 \
-  --accessions_file examples/accessions/chr_accessions.txt \
-  -resume
+  --run_id my_qn_run \
+  --accessions_file inputs/my_accessions.txt \
+  --repeat_residues Q,N
 ```
 
-The canonical operator interface is `nextflow run .`; there is no repo-specific wrapper.
+Resume an interrupted named run by re-running the same command with `-resume`.
 
-## Pipeline Stages
+## What To Open First
 
-1. `PLAN_ACCESSION_BATCHES` reads accession input and writes deterministic batches.
-2. `DOWNLOAD_NCBI_BATCH` downloads NCBI annotation packages.
-3. `NORMALIZE_CDS_BATCH` creates canonical genome, taxonomy, sequence, and CDS artifacts internally.
-4. `TRANSLATE_CDS_BATCH` translates retained CDS records and keeps one protein isoform per gene group.
-5. Detection runs `pure`, `threshold`, and optionally `seed_extend` for each `batch_id x repeat_residue`.
-6. `FINALIZE_CALL_CODONS` validates codon slices and writes codon-usage fragments.
-7. Reporting reducers publish canonical calls, v2 flat tables, summaries, and repeat context.
-8. In `merged` mode, SQLite and HTML/JSON report artifacts are also built.
-
-## Default Published Outputs
-
-Default publication uses publish contract v2. The public tree is compact and import-oriented:
+Default outputs are written under:
 
 ```text
 runs/<run_id>/publish/
-  calls/
-    repeat_calls.tsv
-    run_params.tsv
-  tables/
-    genomes.tsv
-    taxonomy.tsv
-    matched_sequences.tsv
-    matched_proteins.tsv
-    repeat_call_codon_usage.tsv
-    repeat_context.tsv
-    download_manifest.tsv
-    normalization_warnings.tsv
-    accession_status.tsv
-    accession_call_counts.tsv
-  summaries/
-    status_summary.json
-    acquisition_validation.json
-  metadata/
-    launch_metadata.json
-    run_manifest.json
-    nextflow/
 ```
 
-The default v2 contract does not publish `acquisition/`, `status/`, `calls/finalized/`, `cds.fna`, or `proteins.faa`. Those broad artifacts are internal execution products. Compact repeat context and matched sequence/protein tables replace public FASTA publication.
+Start here:
 
-In `--acquisition_publish_mode merged`, the workflow additionally publishes:
-
-- `publish/database/homorepeat.sqlite`
-- `publish/database/sqlite_validation.json`
-- `publish/reports/*`
-
-The v2 contract remains the public import surface in both modes.
-
-## Common Parameters
-
-| Parameter | Default | Purpose |
-| --- | --- | --- |
-| `--accessions_file` | required | One assembly accession per line |
-| `--taxonomy_db` | `runtime/cache/taxonomy/ncbi_taxonomy.sqlite` | `taxon-weaver` SQLite database |
-| `--run_id` | timestamped | Names `runs/<run_id>` |
-| `--run_root` | `runs/<run_id>` | Run root |
-| `--work_dir` | `runs/<run_id>/internal/nextflow/work` | Nextflow work directory |
-| `--repeat_residues` | `Q` | Comma-separated residue codes |
-| `--run_pure` | `true` | Contiguous-run detection |
-| `--run_threshold` | `true` | Sliding-window density detection |
-| `--run_seed_extend` | `false` | Seed-and-extend detection |
-| `--batch_size` | `10` | Planner batch size |
-| `--acquisition_publish_mode` | `raw` | `merged` also builds SQLite/reports |
-
-For CPU, memory, and concurrency controls such as `-qs` and
-`-process.withLabel:<label>.maxForks`, see [Scale Guide](./docs/scale_guide.md).
-
-Example with method overrides:
-
-```bash
-NXF_HOME=runtime/cache/nextflow \
-nextflow run . \
-  -profile docker \
-  --run_id qn_all_methods \
-  --accessions_file examples/accessions/my_accessions.txt \
-  --repeat_residues Q,N \
-  --run_pure true \
-  --run_threshold true \
-  --run_seed_extend true
-```
-
-Params files are supported with `-params-file`; see [`examples/params/`](./examples/params/).
-
-## Code Structure
-
-| Path | Role |
+| File | Use |
 | --- | --- |
-| [`main.nf`](./main.nf) | Top-level workflow, output publication, completion hook |
-| [`workflows/`](./workflows) | Stage-level Nextflow subworkflows |
-| [`modules/local/`](./modules/local) | Individual Nextflow process wrappers |
-| [`src/homorepeat/cli/`](./src/homorepeat/cli) | Python CLIs called by Nextflow |
-| [`src/homorepeat/acquisition/`](./src/homorepeat/acquisition) | NCBI package, GFF, translation, validation helpers |
-| [`src/homorepeat/detection/`](./src/homorepeat/detection) | Repeat detection, codon slicing, repeat context |
-| [`src/homorepeat/contracts/`](./src/homorepeat/contracts) | Shared table schemas and validators |
-| [`src/homorepeat/runtime/`](./src/homorepeat/runtime) | Run manifest, status ledgers, publish reducers |
-| [`src/homorepeat/db/`](./src/homorepeat/db) | SQLite import and validation |
-| [`src/homorepeat/reporting/`](./src/homorepeat/reporting) | Summary and HTML report generation |
-| [`tests/`](./tests) | Unit, CLI, and workflow regression tests |
+| `START_HERE.md` | Run-specific guide to settings and outputs |
+| `calls/repeat_calls.tsv` | Main repeat-call table |
+| `tables/accession_status.tsv` | Per-accession completed, failed, or no-call status |
+| `tables/accession_call_counts.tsv` | Number of calls per accession, method, and residue |
+| `tables/repeat_context.tsv` | Amino-acid and nucleotide context around each repeat |
+| `tables/repeat_call_codon_usage.tsv` | Codon counts for calls with validated codon slices |
+| `metadata/nextflow/report.html` | Runtime report for debugging |
 
-## Scientific Accuracy Boundaries
+A successful accession can produce zero repeat calls. Check
+`tables/accession_status.tsv` and `tables/accession_call_counts.tsv` before
+treating an empty or small `repeat_calls.tsv` as a failure.
 
-HomoRepeat reports amino-acid repeat tracts from translated annotated CDS records. It does not infer gene models, repair assemblies, or perform domain-level biological interpretation.
+## How It Works
 
-Accuracy controls implemented in code:
+At a high level, the workflow does this:
 
-- source-backed stable identifiers for genomes, sequences, proteins, and calls
-- conservative translation with supported NCBI translation tables
-- deterministic isoform retention
-- shared repeat-call schema across methods
-- codon slices only accepted when nucleotide translation exactly matches the call peptide
-- compact flanking context exported for downstream review without publishing full FASTA bodies
+```text
+assembly accessions
+  -> NCBI annotation packages
+  -> normalized CDS records
+  -> translated proteins
+  -> repeat calls
+  -> codon checks
+  -> published tables
+```
 
-See [Methods and Scientific Notes](./docs/methods.md) for algorithm details and limitations.
+The default search looks for glutamine (`Q`) repeats with the `pure` and
+`threshold` methods. Use `--repeat_residues Q,N` or another comma-separated
+list to search additional amino acids. Use `--run_seed_extend true` to enable
+the third repeat-detection method.
+
+The normal Docker profile uses published runtime images:
+
+- `rafaelmdc/homorepeat-acquisition:0.1.0`
+- `rafaelmdc/homorepeat-detection:0.1.0`
+
+The default taxonomy database is cached at:
+
+```text
+runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+```
+
+If it is missing and you did not pass `--taxonomy_db`, the workflow builds it
+automatically and reuses it on later runs. If you pass an explicit
+`--taxonomy_db /path/to/db.sqlite`, that file must already exist.
+
+## Common Options
+
+| Goal | Option |
+| --- | --- |
+| Validate inputs only | `--dry_run_inputs true` |
+| Name the result folder | `--run_id my_run_name` |
+| Search multiple residues | `--repeat_residues Q,N` |
+| Enable seed-and-extend calls | `--run_seed_extend true` |
+| Build SQLite and report artifacts | `--acquisition_publish_mode merged` |
+| Use an NCBI API key | `--ncbi_api_key "$NCBI_API_KEY"` |
+| Resume interrupted work | Add `-resume` to the same command |
+
+## Where To Read Next
+
+- [Quickstart](./docs/quickstart.md): shortest guided first run.
+- [Operations](./docs/operations.md): fuller runbook, troubleshooting, resume,
+  and output layout.
+- [Accession Examples](./examples/accessions/README.md): choosing and
+  validating assembly accession files.
+- [Output Examples](./examples/outputs/README.md): tiny example output snippets.
+- [Methods and Scientific Notes](./docs/methods.md): biological assumptions and
+  detection methods.
+- [Data Contracts](./docs/contracts.md): schemas for published files.
+- [Containers](./docs/containers.md): Docker images and local development
+  image workflow.
+- [Development Guide](./docs/development.md): contributor setup and tests.
 
 ## Development
 
-Useful checks:
+Only build local `:dev` Docker images when changing code or Dockerfiles:
+
+```bash
+bash scripts/build_dev_containers.sh
+nextflow run . -profile docker_dev --accessions_file examples/accessions/smoke_human.txt
+```
+
+Basic checks:
 
 ```bash
 nextflow config .
 env PYTHONPATH=src python -m unittest
 ```
-
-Focused publish-contract regression:
-
-```bash
-env PYTHONPATH=src python -m unittest \
-  tests.unit.test_publish_contract_v2 \
-  tests.unit.test_repeat_context \
-  tests.cli.test_export_publish_tables \
-  tests.cli.test_export_repeat_context \
-  tests.cli.test_merge_codon_usage_tables \
-  tests.cli.test_runtime_artifacts \
-  tests.workflow.test_publish_modes \
-  tests.workflow.test_workflow_output_failures
-```
-
-See [Development Guide](./docs/development.md) for repo conventions and test strategy.
-
-## Documentation
-
-- [Documentation Index](./docs/README.md)
-- [Operations](./docs/operations.md)
-- [Architecture](./docs/architecture.md)
-- [Methods and Scientific Notes](./docs/methods.md)
-- [Data Contracts](./docs/contracts.md)
-- [Development Guide](./docs/development.md)
-- [Containers](./docs/containers.md)
-- [Scale Guide](./docs/scale_guide.md)
-- [Benchmark Guide](./docs/benchmark_guide.md)
-- [Resume and Recovery](./docs/save_state_guide.md)
 
 ## License
 

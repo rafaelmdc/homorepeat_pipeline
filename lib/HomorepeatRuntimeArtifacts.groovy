@@ -98,32 +98,33 @@ class HomorepeatRuntimeArtifacts {
                 nextflowLog: nextflowLog,
                 runName: ctx.runName?.toString() ?: '',
                 success: !!ctx.success,
+                dryRunInputs: !!ctx.dryRunInputs,
                 resumeUsed: hasFlag(ctx.commandLine?.toString(), '-resume'),
                 acquisitionPublishMode: acquisitionPublishMode,
             ),
         )
 
-        writeJson(
-            metadataDir.resolve('run_manifest.json'),
-            buildRunManifest(
-                repoRoot: repoRoot,
-                runId: ctx.runId?.toString() ?: '',
-                runRoot: runRoot,
-                publishRoot: publishRoot,
-                profile: ctx.profile?.toString() ?: '',
-                accessionsFile: accessionsFile,
-                taxonomyDb: taxonomyDb,
-                paramsFile: paramsFile,
-                launchMetadata: launchMetadataPath,
-                startedAtUtc: formatUtc(ctx.startedAt),
-                finishedAtUtc: formatUtc(ctx.finishedAt),
-                status: ctx.status?.toString() ?: '',
-                acquisitionPublishMode: acquisitionPublishMode,
-                effectiveParams: ctx.effectiveParams instanceof Map ? ctx.effectiveParams as Map<String, Object> : null,
-            ),
+        Map<String, Object> runManifest = buildRunManifest(
+            repoRoot: repoRoot,
+            runId: ctx.runId?.toString() ?: '',
+            runRoot: runRoot,
+            publishRoot: publishRoot,
+            profile: ctx.profile?.toString() ?: '',
+            accessionsFile: accessionsFile,
+            taxonomyDb: taxonomyDb,
+            paramsFile: paramsFile,
+            launchMetadata: launchMetadataPath,
+            startedAtUtc: formatUtc(ctx.startedAt),
+            finishedAtUtc: formatUtc(ctx.finishedAt),
+            status: ctx.status?.toString() ?: '',
+            acquisitionPublishMode: acquisitionPublishMode,
+            dryRunInputs: !!ctx.dryRunInputs,
+            effectiveParams: ctx.effectiveParams instanceof Map ? ctx.effectiveParams as Map<String, Object> : null,
         )
+        writeJson(metadataDir.resolve('run_manifest.json'), runManifest)
+        writeStartHere(publishRoot.resolve('START_HERE.md'), runManifest)
 
-        if (ctx.success) {
+        if (ctx.success && !ctx.dryRunInputs) {
             updateLatestSymlink(repoRoot, ctx.runId?.toString() ?: '')
         }
     }
@@ -154,6 +155,7 @@ class HomorepeatRuntimeArtifacts {
             nextflow       : [
                 run_name   : ctx.runName,
                 success    : ctx.success,
+                dry_run_inputs: ctx.dryRunInputs,
                 resume_used: ctx.resumeUsed,
             ],
         ]
@@ -172,6 +174,7 @@ class HomorepeatRuntimeArtifacts {
             profile        : ctx.profile,
             publish_contract_version: CURRENT_PUBLISH_CONTRACT_VERSION,
             acquisition_publish_mode: normalizeAcquisitionPublishMode(ctx.acquisitionPublishMode?.toString() ?: 'raw'),
+            dry_run_inputs: !!ctx.dryRunInputs,
             git_revision   : gitRevision(repoRoot),
             inputs         : [
                 accessions_file: relativeOrAbsolute(ctx.accessionsFile as Path, repoRoot),
@@ -218,6 +221,95 @@ class HomorepeatRuntimeArtifacts {
         ]
 
         payload
+    }
+
+    private static void writeStartHere(Path path, Map<String, Object> manifest) {
+        Files.createDirectories(path.parent)
+        Files.writeString(path, buildStartHereMarkdown(manifest))
+    }
+
+    private static String buildStartHereMarkdown(Map<String, Object> manifest) {
+        Map<String, Object> inputs = manifest.inputs instanceof Map ? manifest.inputs as Map<String, Object> : [:]
+        Map<String, Object> params = manifest.params instanceof Map ? manifest.params as Map<String, Object> : [:]
+        Map<String, Object> effectiveValues = params.effective_values instanceof Map ? params.effective_values as Map<String, Object> : [:]
+        Map<String, Object> artifacts = manifest.artifacts instanceof Map ? manifest.artifacts as Map<String, Object> : [:]
+        Map<String, String> calls = artifacts.calls instanceof Map ? artifacts.calls as Map<String, String> : [:]
+        Map<String, String> tables = artifacts.tables instanceof Map ? artifacts.tables as Map<String, String> : [:]
+        Map<String, String> summaries = artifacts.summaries instanceof Map ? artifacts.summaries as Map<String, String> : [:]
+        Map<String, String> metadata = artifacts.metadata instanceof Map ? artifacts.metadata as Map<String, String> : [:]
+        Map<String, String> database = artifacts.database instanceof Map ? artifacts.database as Map<String, String> : [:]
+        Map<String, String> reports = artifacts.reports instanceof Map ? artifacts.reports as Map<String, String> : [:]
+
+        List<String> methods = manifest.enabled_methods instanceof List ? manifest.enabled_methods.collect { it.toString() } : []
+        List<String> residues = manifest.repeat_residues instanceof List ? manifest.repeat_residues.collect { it.toString() } : []
+        String fallbackResidues = effectiveValues.repeat_residues?.toString() ?: ''
+        String fallbackMethods = enabledMethodSummary(effectiveValues)
+
+        StringBuilder markdown = new StringBuilder()
+        markdown << "# HomoRepeat Run: ${manifest.run_id ?: ''}\n\n"
+        markdown << "## Run Summary\n\n"
+        markdown << "- Status: `${manifest.status ?: ''}`\n"
+        markdown << "- Run ID: `${manifest.run_id ?: ''}`\n"
+        markdown << "- Profile: `${manifest.profile ?: ''}`\n"
+        markdown << "- Acquisition publish mode: `${manifest.acquisition_publish_mode ?: ''}`\n"
+        markdown << "- Started: `${manifest.started_at_utc ?: ''}`\n"
+        markdown << "- Finished: `${manifest.finished_at_utc ?: ''}`\n"
+        markdown << "- Accessions file: `${inputs.accessions_file ?: ''}`\n"
+        markdown << "- Taxonomy DB: `${inputs.taxonomy_db ?: ''}`\n"
+        markdown << "- Repeat residues: `${residues ? residues.join(',') : fallbackResidues}`\n"
+        markdown << "- Detection methods: `${methods ? methods.join(',') : fallbackMethods}`\n\n"
+
+        markdown << "## Open These First\n\n"
+        appendArtifact(markdown, calls.repeat_calls_tsv, "Detected amino-acid repeat tracts. Start here for biological calls.")
+        appendArtifact(markdown, calls.run_params_tsv, "Detection parameters used for each method and residue.")
+        appendArtifact(markdown, tables.accession_status_tsv, "Per-accession status. Use this to separate failed accessions from valid no-call accessions.")
+        appendArtifact(markdown, tables.accession_call_counts_tsv, "Number of repeat calls per accession.")
+        appendArtifact(markdown, tables.repeat_context_tsv, "Compact flanking context around each repeat call.")
+        appendArtifact(markdown, tables.matched_proteins_tsv, "Protein sequences referenced by repeat calls.")
+        appendArtifact(markdown, tables.matched_sequences_tsv, "CDS nucleotide sequences referenced by repeat calls.")
+        appendArtifact(markdown, tables.repeat_call_codon_usage_tsv, "Codon counts for calls where codon validation succeeded.")
+        appendArtifact(markdown, summaries.status_summary_json, "Run-level status summary.")
+        appendArtifact(markdown, metadata.nextflow_report_html, "Nextflow runtime report for debugging failures or performance.")
+        markdown << "\n"
+
+        markdown << "## How To Interpret No Calls\n\n"
+        markdown << "A successful accession can produce zero repeat calls. Check `tables/accession_status.tsv` first, then `tables/accession_call_counts.tsv`. If an accession is marked successful with zero calls, that means the pipeline ran for that accession and did not find repeats matching the selected residue/method settings.\n\n"
+
+        if (database || reports) {
+            markdown << "## Optional Merged-Mode Artifacts\n\n"
+            appendArtifact(markdown, database.sqlite, "SQLite database for downstream querying.")
+            appendArtifact(markdown, database.sqlite_validation_json, "SQLite validation report.")
+            appendArtifact(markdown, reports.echarts_report_html, "HTML report.")
+            appendArtifact(markdown, reports.summary_by_taxon_tsv, "Summary table by taxon.")
+            markdown << "\n"
+        }
+
+        markdown << "## Full Metadata\n\n"
+        markdown << "- Manifest: `metadata/run_manifest.json`\n"
+        markdown << "- Launch metadata: `metadata/launch_metadata.json`\n"
+        markdown << "- Nextflow trace: `metadata/nextflow/trace.txt`\n"
+        markdown << "\n"
+        markdown.toString()
+    }
+
+    private static void appendArtifact(StringBuilder markdown, String relativePath, String description) {
+        if (relativePath) {
+            markdown << "- `${relativePath}` - ${description}\n"
+        }
+    }
+
+    private static String enabledMethodSummary(Map<String, Object> effectiveValues) {
+        List<String> methods = []
+        if (effectiveValues.run_pure?.toString() == 'true') {
+            methods << 'pure'
+        }
+        if (effectiveValues.run_threshold?.toString() == 'true') {
+            methods << 'threshold'
+        }
+        if (effectiveValues.run_seed_extend?.toString() == 'true') {
+            methods << 'seed_extend'
+        }
+        methods.join(',')
     }
 
     private static List<String> enabledMethods(Path publishRoot) {

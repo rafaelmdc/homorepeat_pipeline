@@ -9,9 +9,22 @@ from pathlib import Path
 from homorepeat.contracts.publish_contract_v2 import MATCHED_PROTEINS_FIELDNAMES, MATCHED_SEQUENCES_FIELDNAMES
 from homorepeat.contracts.repeat_features import CALL_FIELDNAMES, build_call_row
 from homorepeat.contracts.warnings import WARNING_FIELDNAMES
+from homorepeat.io.fasta_io import write_fasta
 from homorepeat.io.tsv_io import read_tsv, write_tsv
 
 from tests.test_support import CLI_ENV, REPO_ROOT, cli_command
+
+
+SOURCE_SEQUENCE_FIELDNAMES = [
+    fieldname
+    for fieldname in MATCHED_SEQUENCES_FIELDNAMES[1:]
+    if fieldname != "nucleotide_sequence"
+]
+SOURCE_PROTEIN_FIELDNAMES = [
+    fieldname
+    for fieldname in MATCHED_PROTEINS_FIELDNAMES[1:]
+    if fieldname != "amino_acid_sequence"
+]
 
 
 class ExportPublishTablesCliTest(unittest.TestCase):
@@ -316,10 +329,12 @@ class ExportPublishTablesCliTest(unittest.TestCase):
                 [(row["batch_id"], row["sequence_id"]) for row in matched_sequence_rows],
                 [("batch_0001", "seq_GCF_A.1_1")],
             )
+            self.assertEqual(matched_sequence_rows[0]["nucleotide_sequence"], "ATGCAACAACAATAG")
             self.assertEqual(
                 [(row["batch_id"], row["protein_id"], row["sequence_id"]) for row in matched_protein_rows],
                 [("batch_0001", "protein_GCF_A.1_1", "seq_GCF_A.1_1")],
             )
+            self.assertEqual(matched_protein_rows[0]["amino_acid_sequence"], "MQQQ")
             self.assertEqual([row["taxon_id"] for row in taxonomy_rows], ["10090", "9606"])
             self.assertEqual([row["assembly_accession"] for row in manifest_rows], ["GCF_A.1", "GCF_B.1"])
             self.assertEqual(len(warning_rows), 1)
@@ -421,7 +436,14 @@ class ExportPublishTablesCliTest(unittest.TestCase):
                 "partial_status": "",
             },
         ]
-        write_tsv(batch_dir / "sequences.tsv", sequence_rows, fieldnames=MATCHED_SEQUENCES_FIELDNAMES[1:])
+        write_tsv(batch_dir / "sequences.tsv", sequence_rows, fieldnames=SOURCE_SEQUENCE_FIELDNAMES)
+        write_fasta(
+            batch_dir / "cds.fna",
+            [
+                (f"seq_{accession}_1", "ATGCAACAACAATAG"),
+                (f"seq_{accession}_unmatched", "ATGCAATAG"),
+            ],
+        )
         protein_rows = [
             {
                 "protein_id": f"protein_{accession}_1",
@@ -452,7 +474,14 @@ class ExportPublishTablesCliTest(unittest.TestCase):
                 "protein_external_id": "protein-unmatched",
             },
         ]
-        write_tsv(batch_dir / "proteins.tsv", protein_rows, fieldnames=MATCHED_PROTEINS_FIELDNAMES[1:])
+        write_tsv(batch_dir / "proteins.tsv", protein_rows, fieldnames=SOURCE_PROTEIN_FIELDNAMES)
+        write_fasta(
+            batch_dir / "proteins.faa",
+            [
+                (f"protein_{accession}_1", "MQQQ"),
+                (f"protein_{accession}_unmatched", "MQ"),
+            ],
+        )
         write_tsv(
             batch_dir / "download_manifest.tsv",
             [

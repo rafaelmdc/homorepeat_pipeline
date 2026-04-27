@@ -15,6 +15,7 @@ from homorepeat.contracts.publish_contract_v2 import (
     validate_accession_call_count_row,
     validate_accession_status_row,
     validate_download_manifest_row,
+    validate_matched_protein_row,
     validate_matched_sequence_row,
     validate_repeat_call_codon_usage_row,
     validate_repeat_context_row,
@@ -37,6 +38,29 @@ class PublishContractV2Test(unittest.TestCase):
         self.assertEqual(GENOMES_FIELDNAMES[0], "batch_id")
         self.assertEqual(MATCHED_SEQUENCES_FIELDNAMES[0], "batch_id")
         self.assertEqual(MATCHED_PROTEINS_FIELDNAMES[0], "batch_id")
+        self.assertEqual(
+            MATCHED_SEQUENCES_FIELDNAMES[:6],
+            [
+                "batch_id",
+                "sequence_id",
+                "genome_id",
+                "sequence_name",
+                "sequence_length",
+                "nucleotide_sequence",
+            ],
+        )
+        self.assertEqual(
+            MATCHED_PROTEINS_FIELDNAMES[:7],
+            [
+                "batch_id",
+                "protein_id",
+                "sequence_id",
+                "genome_id",
+                "protein_name",
+                "protein_length",
+                "amino_acid_sequence",
+            ],
+        )
 
     def test_validate_matched_sequence_row_accepts_minimal_valid_row(self) -> None:
         row = {
@@ -45,6 +69,7 @@ class PublishContractV2Test(unittest.TestCase):
             "genome_id": "genome_001",
             "sequence_name": "tx1",
             "sequence_length": "42",
+            "nucleotide_sequence": "ATGCAACAA",
             "gene_symbol": "",
             "transcript_id": "",
             "isoform_id": "",
@@ -67,6 +92,7 @@ class PublishContractV2Test(unittest.TestCase):
             "genome_id": "genome_001",
             "sequence_name": "tx1",
             "sequence_length": "42",
+            "nucleotide_sequence": "ATGCAACAA",
             "gene_symbol": "",
             "transcript_id": "",
             "isoform_id": "",
@@ -81,6 +107,50 @@ class PublishContractV2Test(unittest.TestCase):
         }
 
         with self.assertRaisesRegex(ContractError, "empty required fields: batch_id"):
+            validate_matched_sequence_row(row)
+
+    def test_validate_matched_protein_row_accepts_sequence_body(self) -> None:
+        row = {
+            "batch_id": "batch_001",
+            "protein_id": "prot_001",
+            "sequence_id": "seq_001",
+            "genome_id": "genome_001",
+            "protein_name": "protein1",
+            "protein_length": "3",
+            "amino_acid_sequence": "MQQ",
+            "gene_symbol": "",
+            "translation_method": "local_cds_translation",
+            "translation_status": "translated",
+            "assembly_accession": "GCF_TEST_1.1",
+            "taxon_id": "9606",
+            "gene_group": "",
+            "protein_external_id": "",
+        }
+
+        validate_matched_protein_row(row)
+
+    def test_validate_matched_sequence_row_rejects_non_string_sequence_body(self) -> None:
+        row = {
+            "batch_id": "batch_001",
+            "sequence_id": "seq_001",
+            "genome_id": "genome_001",
+            "sequence_name": "tx1",
+            "sequence_length": "42",
+            "nucleotide_sequence": 42,
+            "gene_symbol": "",
+            "transcript_id": "",
+            "isoform_id": "",
+            "assembly_accession": "GCF_TEST_1.1",
+            "taxon_id": "9606",
+            "source_record_id": "",
+            "protein_external_id": "",
+            "translation_table": "1",
+            "gene_group": "",
+            "linkage_status": "",
+            "partial_status": "",
+        }
+
+        with self.assertRaisesRegex(ContractError, "non-string nucleotide_sequence"):
             validate_matched_sequence_row(row)
 
     def test_validate_repeat_call_codon_usage_row_rejects_invalid_fraction(self) -> None:

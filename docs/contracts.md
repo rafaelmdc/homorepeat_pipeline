@@ -27,7 +27,33 @@ Behavior:
 
 ### `--taxonomy_db`
 
-Path to an existing `taxon-weaver` SQLite database. This is required for taxonomy lineage materialization.
+Path to the `taxon-weaver` SQLite database used for taxonomy lineage
+materialization.
+
+When `--taxonomy_db` is omitted, the workflow uses
+`runtime/cache/taxonomy/ncbi_taxonomy.sqlite` and builds it automatically if it
+is missing. When `--taxonomy_db` is supplied explicitly, the file must already
+exist.
+
+### `--taxonomy_auto_build`
+
+Defaults to `true`. Allows the workflow to build the default taxonomy database
+when `--taxonomy_db` was not explicitly supplied.
+
+### `--taxonomy_cache_dir`
+
+Defaults to `runtime/cache/taxonomy`. Controls where the auto-built taxonomy
+database, source taxdump, and build report are cached.
+
+### `--dry_run_inputs`
+
+Defaults to `false`. When set to `true`, the workflow validates input paths,
+accession-file content, repeat-residue values, detection-mode settings,
+acquisition publish mode, and taxonomy DB policy, then stops before acquisition
+or detection tasks.
+
+Dry runs publish only orientation and metadata artifacts. They do not publish
+`calls/`, `tables/`, or `summaries/` analysis outputs.
 
 ### `-params-file`
 
@@ -78,6 +104,7 @@ Default public outputs live under `runs/<run_id>/publish/`:
 
 ```text
 publish/
+  START_HERE.md
   calls/
     repeat_calls.tsv
     run_params.tsv
@@ -196,6 +223,8 @@ Columns:
 ### `tables/matched_sequences.tsv`
 
 Row unit: one normalized CDS sequence referenced by at least one repeat call.
+The table includes the full retained nucleotide sequence body so importers do
+not need public `cds.fna`.
 
 Columns:
 
@@ -204,6 +233,7 @@ Columns:
 - `genome_id`
 - `sequence_name`
 - `sequence_length`
+- `nucleotide_sequence`
 - `gene_symbol`
 - `transcript_id`
 - `isoform_id`
@@ -219,6 +249,8 @@ Columns:
 ### `tables/matched_proteins.tsv`
 
 Row unit: one translated protein referenced by at least one repeat call.
+The table includes the full retained amino-acid sequence body so importers do
+not need public `proteins.faa`.
 
 Columns:
 
@@ -228,6 +260,7 @@ Columns:
 - `genome_id`
 - `protein_name`
 - `protein_length`
+- `amino_acid_sequence`
 - `gene_symbol`
 - `translation_method`
 - `translation_status`

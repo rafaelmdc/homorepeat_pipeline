@@ -11,6 +11,10 @@ The main Nextflow workflow is accession-driven. Although the Python package
 contains reusable helpers, the workflow does not currently expose taxon-name
 driven acquisition or local FASTA/GFF manifests as first-class runtime inputs.
 
+For a plain-language explanation of terms such as accession, CDS, taxonomy
+database, codon validation, Nextflow, and SQLite, see
+[Background and Glossary](./background.md).
+
 ## Acquisition and Normalization
 
 ### Accession planning
@@ -186,6 +190,10 @@ artifacts. Default runs publish:
 - `publish/tables/accession_call_counts.tsv`
 - `publish/summaries/status_summary.json`
 - `publish/summaries/acquisition_validation.json`
+
+The matched sequence and protein tables carry the retained nucleotide and
+amino-acid sequence bodies directly, while broad public FASTA files remain
+outside the default v2 contract.
 
 The reporting layer is deliberately simple and residue-neutral. In
 `--acquisition_publish_mode merged`, the workflow also builds SQLite and report

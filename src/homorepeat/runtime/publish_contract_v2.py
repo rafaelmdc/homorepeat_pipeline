@@ -26,10 +26,21 @@ from homorepeat.contracts.publish_contract_v2 import (
     validate_normalization_warning_row,
     validate_taxonomy_row,
 )
+from homorepeat.io.fasta_io import iter_fasta
 from homorepeat.io.tsv_io import ContractError, iter_tsv, open_tsv_writer, read_tsv, write_tsv
 from homorepeat.runtime.accession_status import BATCH_TABLE_REQUIRED
 
 
+SOURCE_SEQUENCE_FIELDNAMES = [
+    fieldname
+    for fieldname in MATCHED_SEQUENCES_FIELDNAMES[1:]
+    if fieldname != "nucleotide_sequence"
+]
+SOURCE_PROTEIN_FIELDNAMES = [
+    fieldname
+    for fieldname in MATCHED_PROTEINS_FIELDNAMES[1:]
+    if fieldname != "amino_acid_sequence"
+]
 ACQUISITION_VALIDATION_COUNT_KEYS = (
     "n_selected_assemblies",
     "n_downloaded_packages",
@@ -92,6 +103,16 @@ def export_publish_tables(
     ):
         for batch_id in ordered_batch_ids:
             batch_dir = batch_dir_by_id[batch_id]
+            retained_nucleotide_sequences = _read_retained_fasta_sequences(
+                batch_dir / "cds.fna",
+                retained_ids=retained_sequence_ids,
+                label="cds.fna",
+            )
+            retained_amino_acid_sequences = _read_retained_fasta_sequences(
+                batch_dir / "proteins.faa",
+                retained_ids=retained_protein_ids,
+                label="proteins.faa",
+            )
 
             for genome_row in iter_tsv(batch_dir / "genomes.tsv"):
                 export_row = {
@@ -111,14 +132,21 @@ def export_publish_tables(
 
             for sequence_row in iter_tsv(
                 batch_dir / "sequences.tsv",
-                required_columns=MATCHED_SEQUENCES_FIELDNAMES[1:],
+                required_columns=SOURCE_SEQUENCE_FIELDNAMES,
             ):
                 sequence_id = sequence_row.get("sequence_id", "")
                 if sequence_id not in retained_sequence_ids:
                     continue
                 if sequence_id in matched_sequence_ids:
                     raise ContractError(f"matched_sequences.tsv would contain duplicate sequence_id {sequence_id}")
-                export_row = {"batch_id": batch_id, **sequence_row}
+                nucleotide_sequence = retained_nucleotide_sequences.get(sequence_id)
+                if nucleotide_sequence is None:
+                    raise ContractError(f"cds.fna is missing matched sequence_id {sequence_id}")
+                export_row = {
+                    "batch_id": batch_id,
+                    **sequence_row,
+                    "nucleotide_sequence": nucleotide_sequence,
+                }
                 validate_matched_sequence_row(export_row)
                 matched_sequences_writer.write_row(export_row)
                 matched_sequence_ids.add(sequence_id)
@@ -126,14 +154,21 @@ def export_publish_tables(
 
             for protein_row in iter_tsv(
                 batch_dir / "proteins.tsv",
-                required_columns=MATCHED_PROTEINS_FIELDNAMES[1:],
+                required_columns=SOURCE_PROTEIN_FIELDNAMES,
             ):
                 protein_id = protein_row.get("protein_id", "")
                 if protein_id not in retained_protein_ids:
                     continue
                 if protein_id in matched_protein_ids:
                     raise ContractError(f"matched_proteins.tsv would contain duplicate protein_id {protein_id}")
-                export_row = {"batch_id": batch_id, **protein_row}
+                amino_acid_sequence = retained_amino_acid_sequences.get(protein_id)
+                if amino_acid_sequence is None:
+                    raise ContractError(f"proteins.faa is missing matched protein_id {protein_id}")
+                export_row = {
+                    "batch_id": batch_id,
+                    **protein_row,
+                    "amino_acid_sequence": amino_acid_sequence,
+                }
                 validate_matched_protein_row(export_row)
                 matched_proteins_writer.write_row(export_row)
                 matched_protein_ids.add(protein_id)
@@ -284,6 +319,19 @@ def _read_retained_ids(path: Path, *, id_field: str, label: str) -> set[str]:
             raise ContractError(f"{label} contains an empty {id_field}")
         retained_ids.add(retained_id)
     return retained_ids
+
+
+def _read_retained_fasta_sequences(path: Path, *, retained_ids: set[str], label: str) -> dict[str, str]:
+    sequences: dict[str, str] = {}
+    if not retained_ids:
+        return sequences
+    for record_id, sequence in iter_fasta(path):
+        if record_id not in retained_ids:
+            continue
+        if record_id in sequences:
+            raise ContractError(f"{label} contains duplicate matched record {record_id}")
+        sequences[record_id] = sequence
+    return sequences
 
 
 def _ordered_batch_ids(batch_table_rows: Sequence[dict[str, str]]) -> list[str]:

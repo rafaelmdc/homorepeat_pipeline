@@ -1,6 +1,7 @@
 nextflow.enable.dsl = 2
 
 include { PLAN_ACCESSION_BATCHES } from '../modules/local/planning/plan_accession_batches'
+include { BUILD_TAXONOMY_DB } from '../modules/local/acquisition/build_taxonomy_db'
 include { DOWNLOAD_NCBI_BATCH } from '../modules/local/acquisition/download_ncbi_batch'
 include { NORMALIZE_CDS_BATCH } from '../modules/local/acquisition/normalize_cds_batch'
 include { TRANSLATE_CDS_BATCH } from '../modules/local/acquisition/translate_cds_batch'
@@ -8,7 +9,7 @@ include { MERGE_ACQUISITION_BATCHES } from '../modules/local/acquisition/merge_a
 
 workflow ACQUISITION_FROM_ACCESSIONS {
     if( !params.accessions_file ) {
-        error "params.accessions_file is required"
+        error "params.accessions_file is required. Provide a text file with one NCBI assembly accession per line, for example --accessions_file examples/accessions/smoke_human.txt"
     }
     if( !params.taxonomy_db ) {
         error "params.taxonomy_db is required"
@@ -18,8 +19,28 @@ workflow ACQUISITION_FROM_ACCESSIONS {
         error "params.acquisition_publish_mode must be one of: raw, merged"
     }
 
-    def accessionsFile = file(params.accessions_file, checkIfExists: true)
-    def taxonomyDb = file(params.taxonomy_db, checkIfExists: true)
+    def accessionsFile = file(params.accessions_file)
+    if( !accessionsFile.exists() ) {
+        error "accessions file not found: ${params.accessions_file}. Provide a text file with one NCBI assembly accession per line."
+    }
+    def requestedAccessions = accessionsFile.toFile().readLines('UTF-8')
+        .collect { it.trim() }
+        .findAll { it && !it.startsWith('#') }
+    if( requestedAccessions.isEmpty() ) {
+        error "accessions file has no usable accession lines: ${params.accessions_file}. Add one NCBI assembly accession per non-comment line, for example GCF_000001405.40."
+    }
+    def requestedTaxonomyDb = file(params.taxonomy_db)
+    def taxonomyDbSupplied = params.taxonomy_db_supplied.toString().toBoolean()
+    def taxonomyAutoBuild = params.taxonomy_auto_build.toString().toBoolean()
+    def taxonomyDbCh
+    if( requestedTaxonomyDb.exists() ) {
+        taxonomyDbCh = Channel.value(requestedTaxonomyDb)
+    } else if( taxonomyDbSupplied || !taxonomyAutoBuild ) {
+        error "taxonomy database not found: ${params.taxonomy_db}. Use an existing file with --taxonomy_db, or omit --taxonomy_db so the default cache can be built automatically."
+    } else {
+        taxonomy = BUILD_TAXONOMY_DB()
+        taxonomyDbCh = taxonomy.taxonomy_db.first()
+    }
 
     planning = PLAN_ACCESSION_BATCHES(Channel.value(accessionsFile))
     batchManifestCh = planning.batch_manifests_dir.flatMap { manifestsDir ->
@@ -28,7 +49,7 @@ workflow ACQUISITION_FROM_ACCESSIONS {
         manifestFiles.collect { file(it) }
     }
     downloaded = DOWNLOAD_NCBI_BATCH(batchManifestCh)
-    normalized = NORMALIZE_CDS_BATCH(downloaded.raw_batch, Channel.value(taxonomyDb))
+    normalized = NORMALIZE_CDS_BATCH(downloaded.raw_batch, taxonomyDbCh)
     translated = TRANSLATE_CDS_BATCH(normalized.normalized_batch)
     batchRows = normalized.normalized_batch.join(translated.translated_batch)
     batchInputs = batchRows.toList().map { rows ->

@@ -1,0 +1,2 @@
+call_id	method	genome_id	taxon_id	sequence_id	protein_id	start	end	length	repeat_residue	repeat_count	non_repeat_count	purity	aa_sequence	codon_sequence	codon_metric_name	codon_metric_value	window_definition	template_name	merge_rule	score
+pure__example_protein__Q__15_20	pure	genome_gcf_000001405_40	9606	seq_example	protein_example	15	20	6	Q	6	0	1.0000000000	QQQQQQ	CAGCAGCAGCAGCAGCAG	codon_validation	1.0000000000	pure:Q6	example	none	6

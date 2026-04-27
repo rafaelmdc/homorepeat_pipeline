@@ -13,14 +13,18 @@ source .venv/bin/activate
 python -m pip install -e .
 ```
 
-For workflow runs with the `docker` profile, build the runtime images:
+The default `docker` profile uses published release images. When you are
+changing code or Dockerfiles, build local development images:
 
 ```bash
 bash scripts/build_dev_containers.sh
 ```
 
-The workflow expects a taxonomy SQLite database at
-`runtime/cache/taxonomy/ncbi_taxonomy.sqlite` unless `--taxonomy_db` is set.
+Run local development images with `-profile docker_dev`.
+
+Default workflow runs auto-build
+`runtime/cache/taxonomy/ncbi_taxonomy.sqlite` if it is missing. Explicit
+`--taxonomy_db` paths are treated as existing user-managed inputs.
 
 ## Repository Map
 
@@ -67,7 +71,7 @@ NXF_HOME=runtime/cache/nextflow \
 nextflow \
   -log runs/dev_smoke/internal/nextflow/nextflow.log \
   run . \
-  -profile docker \
+  -profile docker_dev \
   -params-file examples/params/smoke_default.json \
   --run_id dev_smoke \
   --accessions_file examples/accessions/smoke_human.txt

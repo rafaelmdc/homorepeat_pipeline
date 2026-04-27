@@ -1,21 +1,52 @@
 # Documentation
 
-This directory contains the maintained documentation for the current HomoRepeat pipeline. It is the source of truth for users and contributors. Planning notes under `docs/implementation/`, if present, are historical or forward-looking material and should not override these current-state docs.
+This directory contains the maintained documentation for the current HomoRepeat
+pipeline. Start with the biologist-facing run instructions, then use the
+background and contract docs when you need details.
+
+Planning notes under `docs/implementation/`, if present, are historical or
+forward-looking material and should not override these current-state docs.
 
 ## Start Here
 
-- [Operations](./operations.md): install, build images, run the workflow, and inspect output.
-- [Architecture](./architecture.md): how Nextflow, Python CLIs, reducers, and metadata fit together.
+If you only read one page, use [Quickstart](./quickstart.md).
+
+- [Quickstart](./quickstart.md): shortest first-run path with preflight validation.
+- [Project README](../README.md): overview plus common commands and output pointers.
+- [Operations](./operations.md): copy-paste setup, taxonomy behavior, runs, outputs, and troubleshooting.
+- [Background and Glossary](./background.md): plain-language explanations of biological and informatics terms.
 - [Methods and Scientific Notes](./methods.md): biological assumptions, detection methods, codon validation, and limitations.
-- [Data Contracts](./contracts.md): v2 published files, identifiers, schemas, and manifest behavior.
-- [Development Guide](./development.md): contributor workflow, testing strategy, and code organization.
+- [Data Contracts](./contracts.md): published files, identifiers, schemas, and manifest behavior.
+- [Containers](./containers.md): published Docker images, local development images, and release publishing.
 
 ## Supporting Guides
 
+- [Architecture](./architecture.md): how Nextflow, Python CLIs, reducers, and metadata fit together.
 - [Containers](./containers.md): runtime image split and Docker profile details.
 - [Scale Guide](./scale_guide.md): fan-out/fan-in model, resource defaults, and larger-run advice.
 - [Benchmark Guide](./benchmark_guide.md): benchmark inputs and trace summarization.
 - [Resume and Recovery](./save_state_guide.md): Nextflow `-resume`, metadata, and accession-level diagnostics.
+- [Development Guide](./development.md): contributor workflow, testing strategy, and code organization.
+- [Accession Examples](../examples/accessions/README.md): choosing and validating assembly accession files.
+- [Output Examples](../examples/outputs/README.md): tiny representative snippets of the publish layout.
+
+## Taxonomy Database Behavior
+
+When `--taxonomy_db` is omitted, the main pipeline uses the default path:
+
+```text
+runtime/cache/taxonomy/ncbi_taxonomy.sqlite
+```
+
+If that file is missing, the workflow builds it automatically and reuses it on
+later runs. To use a database you already built, pass:
+
+```bash
+--taxonomy_db /path/to/ncbi_taxonomy.sqlite
+```
+
+Explicit `--taxonomy_db` paths must already exist. See
+[Operations](./operations.md#taxonomy-database) for details.
 
 ## Current Public Contract
 
@@ -23,6 +54,7 @@ HomoRepeat now publishes contract version `2`.
 
 Default public outputs are compact and table-oriented:
 
+- `publish/START_HERE.md`
 - `publish/calls/repeat_calls.tsv`
 - `publish/calls/run_params.tsv`
 - `publish/tables/*.tsv`
