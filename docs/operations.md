@@ -350,6 +350,38 @@ or an error that the path passed with `--taxonomy_db` does not exist.
 Fix: pass an existing `--taxonomy_db` path, or omit `--taxonomy_db` and let the
 pipeline build the default cache automatically.
 
+### Accessions file has no usable accessions
+
+Symptom:
+
+```text
+accessions file has no usable accession lines
+```
+
+Fix: add one NCBI assembly accession per line. Blank lines and lines beginning
+with `#` are ignored.
+
+Example:
+
+```text
+GCF_000001405.40
+GCF_000001635.27
+```
+
+### Invalid repeat residues
+
+Symptom:
+
+```text
+params.repeat_residues contains invalid residue code
+```
+
+Fix: use comma-separated standard one-letter amino-acid codes, such as:
+
+```bash
+--repeat_residues Q,N
+```
+
 ### Docker image missing
 
 Symptom: Nextflow says it cannot find `homorepeat-acquisition:dev` or

@@ -26,7 +26,12 @@ workflow DETECTION_FROM_ACQUISITION {
         .unique()
 
     if( repeatResidues.isEmpty() ) {
-        error "params.repeat_residues must contain at least one residue symbol"
+        error "params.repeat_residues must contain at least one standard one-letter amino-acid code, for example Q or Q,N"
+    }
+    def validResidues = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y'] as Set
+    def invalidResidues = repeatResidues.findAll { residue -> residue.size() != 1 || !validResidues.contains(residue) }
+    if( invalidResidues ) {
+        error "params.repeat_residues contains invalid residue code(s): ${invalidResidues.join(',')}. Use comma-separated standard one-letter amino-acid codes, for example Q,N."
     }
 
     def finalizedCallCh = Channel.empty()

@@ -9,7 +9,7 @@ include { MERGE_ACQUISITION_BATCHES } from '../modules/local/acquisition/merge_a
 
 workflow ACQUISITION_FROM_ACCESSIONS {
     if( !params.accessions_file ) {
-        error "params.accessions_file is required"
+        error "params.accessions_file is required. Provide a text file with one NCBI assembly accession per line, for example --accessions_file examples/accessions/smoke_human.txt"
     }
     if( !params.taxonomy_db ) {
         error "params.taxonomy_db is required"
@@ -19,7 +19,16 @@ workflow ACQUISITION_FROM_ACCESSIONS {
         error "params.acquisition_publish_mode must be one of: raw, merged"
     }
 
-    def accessionsFile = file(params.accessions_file, checkIfExists: true)
+    def accessionsFile = file(params.accessions_file)
+    if( !accessionsFile.exists() ) {
+        error "accessions file not found: ${params.accessions_file}. Provide a text file with one NCBI assembly accession per line."
+    }
+    def requestedAccessions = accessionsFile.toFile().readLines('UTF-8')
+        .collect { it.trim() }
+        .findAll { it && !it.startsWith('#') }
+    if( requestedAccessions.isEmpty() ) {
+        error "accessions file has no usable accession lines: ${params.accessions_file}. Add one NCBI assembly accession per non-comment line, for example GCF_000001405.40."
+    }
     def requestedTaxonomyDb = file(params.taxonomy_db)
     def taxonomyDbSupplied = params.taxonomy_db_supplied.toString().toBoolean()
     def taxonomyAutoBuild = params.taxonomy_auto_build.toString().toBoolean()

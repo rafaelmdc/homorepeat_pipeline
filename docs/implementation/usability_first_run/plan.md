@@ -17,6 +17,7 @@ Implementation status:
 - Phase 3 README and operations simplification has been completed in this
   branch.
 - Phase 4 generated `START_HERE.md` has been started in this branch.
+- Phase 5 accession/residue preflight has been started in this branch.
 - Docker Hub image publishing remains planned but is not implemented here
   because the Docker Hub namespace and tag policy still need a project decision.
 
@@ -435,10 +436,20 @@ Preferred order:
 3. Consider a Python preflight CLI only if Nextflow guard logic becomes
    awkward.
 
+Initial implementation scope:
+
+- Validate that `--accessions_file` exists and contains at least one
+  non-comment accession before staging it into planning.
+- Validate that `--repeat_residues` contains comma-separated standard
+  one-letter amino-acid codes.
+- Keep Docker image availability checks deferred until Docker Hub image policy
+  is decided.
+
 Validation:
 
 ```bash
 env PYTHONPATH=src python -m unittest tests.workflow.test_pipeline_config
+env PYTHONPATH=src python -m unittest tests.workflow.test_preflight
 ```
 
 Expected outcome:
