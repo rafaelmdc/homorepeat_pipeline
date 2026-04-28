@@ -123,7 +123,7 @@ class WorkflowPublishModesTest(unittest.TestCase):
             self.assertFalse((publish_root / "database").exists())
             self.assertFalse((publish_root / "reports").exists())
             start_here = (publish_root / "START_HERE.md").read_text(encoding="utf-8")
-            self.assertIn("# HomoRepeat Run: run_raw", start_here)
+            self.assertIn("# PAASTA Run: run_raw", start_here)
             self.assertIn("calls/repeat_calls.tsv", start_here)
             self.assertIn("tables/accession_status.tsv", start_here)
             self.assertIn("metadata/nextflow/report.html", start_here)

@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outdir", required=True, help="Output directory for HTML report artifacts")
     parser.add_argument(
         "--report-title",
-        default="HomoRepeat ECharts Report",
+        default="PAASTA ECharts Report",
         help="HTML title to use in the rendered report",
     )
     parser.add_argument("--log-file", help="Reserved log file path")

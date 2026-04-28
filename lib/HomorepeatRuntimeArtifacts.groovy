@@ -246,7 +246,7 @@ class HomorepeatRuntimeArtifacts {
         String fallbackMethods = enabledMethodSummary(effectiveValues)
 
         StringBuilder markdown = new StringBuilder()
-        markdown << "# HomoRepeat Run: ${manifest.run_id ?: ''}\n\n"
+        markdown << "# PAASTA Run: ${manifest.run_id ?: ''}\n\n"
         markdown << "## Run Summary\n\n"
         markdown << "- Status: `${manifest.status ?: ''}`\n"
         markdown << "- Run ID: `${manifest.run_id ?: ''}`\n"

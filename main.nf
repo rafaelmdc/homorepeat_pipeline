@@ -83,7 +83,7 @@ def validateDryRunInputs = { acquisitionPublishMode ->
 
   def repeatResidues = validateRepeatResidues()
   [
-    "HomoRepeat input dry run passed.",
+    "PAASTA input dry run passed.",
     "Accessions file: ${params.accessions_file}",
     "Usable accessions: ${requestedAccessions.size()}",
     "Repeat residues: ${repeatResidues.join(',')}",

@@ -50,7 +50,7 @@ def render_echarts_report(
     options: dict[str, object],
     metadata: dict[str, object],
     *,
-    title: str = "HomoRepeat ECharts Report",
+    title: str = "PAASTA ECharts Report",
     echarts_asset_path: str = "./echarts.min.js",
 ) -> str:
     """Render one minimal HTML report around a validated ECharts bundle."""

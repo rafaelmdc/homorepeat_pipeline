@@ -1,10 +1,8 @@
-# HomoRepeat
+# PAASTA
 
-HomoRepeat finds single-amino-acid repeat tracts in proteins from annotated
-NCBI assemblies. You give it NCBI assembly accessions such as
-`GCF_000001405.40`; it downloads the annotation packages, translates CDS
-records, calls amino-acid repeats, checks codons where possible, and writes
-plain tables for downstream analysis.
+**PAASTA** (Poly-Amino Acid Sequence Tract Analyzer) finds single-amino-acid repeat tracts in proteins from annotated NCBI assemblies. You give it NCBI assembly accessions such as `GCF_000001405.40`; it downloads the annotation packages, translates CDS records, calls amino-acid repeats, checks codons where possible, and writes plain tables for downstream analysis.
+
+PAASTA cooks for [PAARTA](../homorepeat) — its published output is what the PAARTA web browser imports and serves.
 
 ## Quick Start
 
@@ -24,7 +22,7 @@ nextflow run . \
 Success looks like:
 
 ```text
-HomoRepeat input dry run passed.
+PAASTA input dry run passed.
 Usable accessions: 1
 Repeat residues: Q
 ```

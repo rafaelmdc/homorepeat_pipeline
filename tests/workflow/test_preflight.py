@@ -81,7 +81,7 @@ class WorkflowPreflightTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             combined_output = result.stdout + result.stderr
-            self.assertIn("HomoRepeat input dry run passed.", combined_output)
+            self.assertIn("PAASTA input dry run passed.", combined_output)
             self.assertIn("Usable accessions: 1", combined_output)
             self.assertIn("Taxonomy DB:", combined_output)
             self.assertIn("will_auto_build", combined_output)
